@@ -41,3 +41,4 @@ pipeline decorator.
 | document | status |
 | --- | --- |
 | [`input-policy-seam.md`](input-policy-seam.md) | parked — specified but not proposed upstream; no third swap ships |
+| [`dual-path-render-extension.md`](dual-path-render-extension.md) | proposed — a `SceneRenderer` extension SPI (zero-copy texture import and inline command injection). Nothing of it is implemented, and `SceneRenderer` has no bootstrap to install it through, so the bootstrap is the prerequisite |
