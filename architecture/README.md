@@ -9,7 +9,7 @@ that crosses each boundary.
 | --- | --- |
 | [`layer-stack.md`](layer-stack.md) | the layer map with measured sizes, the dependency direction, the two deliberate edges, and the rulings that decide where a new item goes |
 | [`frame-flow.md`](frame-flow.md) | one frame from the platform asking for it to pixels on the glass, the seam each stage is entered through, and what a pipeline can and cannot reach |
-| [`reactive-layer.md`](reactive-layer.md) | how a state change becomes a frame: `notify`, the effect queue that runs observers, and the invalidator that decides whether a window is dirty and whether the platform is woken |
+| [`reactive-layer.md`](reactive-layer.md) | how a state change becomes a frame: `notify`, the effect queue that runs observers, the invalidator that decides whether a window is dirty, and the entity-granular cache that decides which subtrees are not rebuilt at all |
 
 ## Belongs here
 

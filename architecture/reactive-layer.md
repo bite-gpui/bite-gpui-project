@@ -99,6 +99,72 @@ observer runs and one dirty window.
 cache — but they do not re-dirty the window or wake the platform, because the frame
 already in flight is the thing that will act on them.
 
+## The other half: what is *not* rebuilt
+
+The chain above explains when a frame happens. It does not explain why a frame is
+cheap: a dirty window still replays almost all of its subtrees. That is the
+fine-grained half of the layer, and it is a separate mechanism — entity-granular cache
+invalidation, not whole-window re-rendering.
+
+### Reuse is opt-in, through an extension trait
+
+| API | for |
+| --- | --- |
+| `entity.cached(style)`, `any_view.cached(style)` (`view.rs:233`, `view.rs:39`) | a type that implements `Render` |
+| `entity.slot(id, builder)` — `EntitySlotExt` (`crates/gpui_authoring/src/elements/slot.rs:16`) | state with no renderer of its own, or rendered differently in different places |
+
+Both funnel into `prepaint_cached_view` (`view.rs:467`). `EntitySlotExt` is an extension
+trait rather than a method on `Entity`, which is the ruling in
+[`layer-stack.md`](layer-stack.md): decorate the trait, do not widen it.
+
+A plain `.child(entity)` is the **uncached** path — the subtree is rebuilt every frame.
+Reuse is something a view asks for.
+
+### The decision the cache makes
+
+```mermaid
+flowchart TD
+    reach["prepaint reaches a cached view or a slot"] --> hit{"same element id, bounds, content mask and text style, entity not in dirty_views, and not refreshing?"}
+    hit -->|"hit"| replay["replay the previous frame's prepaint range and re-register the entities it read"]
+    hit -->|"miss"| build["build the subtree, recording the entities it reads"]
+    replay --> scene["the scene still gets the content either way"]
+    build --> scene
+```
+
+On a hit the builder is never called: `reuse_prepaint` (`window.rs:4113`) replays the
+previous frame's prepaint range, and `extend_accessed` (`entity_map.rs:174`) re-registers
+the entities the cached subtree had read, so what the window depends on stays accurate
+without re-running anything.
+
+### The contract that comes with it
+
+**A cached subtree is laid out from its own style, and is never measured from its
+contents.** Measuring would mean building it, which is the thing being avoided. So a
+slot has to be given a definite size — `.size_full()`, or an explicit one — and a view
+that only works out its size from what it contains cannot be cached. This is stated on
+both APIs and is the trap in the mechanism.
+
+### `refresh` is the coarse escape hatch
+
+`refreshing` is part of the cache-hit test, so a window refresh rebuilds everything.
+`App::refresh_windows` queues it (`app.rs:1051`), `apply_refresh_effect` marks every
+window dirty and sets the flag (`app.rs:1830`), and `ViewElement::cached`'s own doc says
+`Window::refresh` *"ignores caching"*. When the cache is wrong, that is the way out —
+and it is why the cache-hit condition has to name the flag.
+
+### The two halves are one design
+
+The entities a subtree reads are recorded when it is built (`detect_accessed_entities`,
+`app.rs:1090`) and re-registered when it is replayed. That is what populates
+`tracked_entities` — the map step 2 of the chain filters `App::notify` through. So an
+entity is rebuilt because it notified, and it is notified only in the windows whose
+cached subtrees actually read it. The cache and the fan-out are the same mechanism seen
+from its two ends.
+
+One exception worth knowing: when the inspector is picking, a slot builds its subtree
+even on a cache hit (`slot.rs:128`), because the inspector picks through a tree it can
+see and a replayed subtree is not a tree it can see.
+
 ## What this means for the seams
 
 - **`is_dirty` is born here and is a boolean, not a count.** A `FramePipeline` is told
