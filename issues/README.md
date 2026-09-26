@@ -25,4 +25,6 @@ questions get re-argued.
 
 ## Index
 
-*(none yet)*
+| issue | status | subject |
+| --- | --- | --- |
+| [`0001-check-citations.md`](0001-check-citations.md) | open | 67 citations carry a line number and nothing verifies them; one session caught ten wrong by hand |
