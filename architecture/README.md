@@ -9,6 +9,7 @@ that crosses each boundary.
 | --- | --- |
 | [`layer-stack.md`](layer-stack.md) | the layer map with measured sizes, the dependency direction, the two deliberate edges, and the rulings that decide where a new item goes |
 | [`frame-flow.md`](frame-flow.md) | one frame from the platform asking for it to pixels on the glass, the seam each stage is entered through, and what a pipeline can and cannot reach |
+| [`reactive-layer.md`](reactive-layer.md) | how a state change becomes a frame: `notify`, the effect queue that runs observers, and the invalidator that decides whether a window is dirty and whether the platform is woken |
 
 ## Belongs here
 
@@ -43,15 +44,13 @@ this repository's own convention.
 
 ## Still owed here
 
-[`frame-flow.md`](frame-flow.md) answers the frame's data flow and its interception
-points, which were two of the three items this list used to carry.
+1. **The bootstrap order, in the detail the seams need.** What `Application` applies in
+   what order, and what is already fixed by the time the first window opens — the
+   question that decides whether a seam can still be changed at runtime, and the one the
+   governor investigation kept running into. [`frame-flow.md`](frame-flow.md) records each
+   seam's lifetime but not the order they are applied in.
 
-1. **The bootstrap order, in the detail the seams need.** `frame-flow.md` records each
-   seam's lifetime — process-wide or per window — but not the order `Application`
-   applies them in, nor what is already fixed by the time the first window opens. That
-   order is what decides whether a seam can still be changed at runtime, and it is the
-   question the governor investigation kept running into.
-2. **The reactive layer.** The diagram has a single node for "reactive state changes",
-   and that is the whole of the documentation for it: entities, `notify`, the effect
-   flush that coalesces a burst of invalidations into one, and how any of it reaches
-   `is_dirty`. Every other seam sits on top of that machinery and nothing describes it.
+Everything else this directory was missing now exists: the layer map in
+[`layer-stack.md`](layer-stack.md), the frame and its interception points in
+[`frame-flow.md`](frame-flow.md), and the state-to-frame chain in
+[`reactive-layer.md`](reactive-layer.md).
