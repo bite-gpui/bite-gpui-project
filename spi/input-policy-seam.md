@@ -287,10 +287,13 @@ Stated so a reviewer can shoot it down cheaply:
 
 - **If an input-rate problem is not reproducible**, there is nothing to gate. The
   motivating cases (8000 Hz pointer, PTY dumps, watcher storms) are all *plausible*,
-  and none has been measured here. Two of them are also partly handled already:
-  notify is coalesced per entity (`pending_notifications` is a set; `apply_notify_effect`
-  removes from it — `crates/gpui_authoring/src/app.rs:1810-1816`), and pointer input
-  already drives the VRR sustain above rather than being throttled.
+  and none has been measured here. Two of them are also partly handled already: a
+  notify burst coalesces to one dirty window, because the wake is edge-triggered on
+  `dirty` and `dirty_views` is a set — though the observer effect is queued per notify
+  call on the path where a window does display the entity, which
+  [`../architecture/reactive-layer.md`](../architecture/reactive-layer.md) describes in
+  full. And pointer input already drives the VRR sustain above rather than being
+  throttled.
 - **If a `Platform` decorator turns out cheap in practice**, the seam is unnecessary.
   It is not cheap in the trait's size, but nobody has tried it, and a prototype would
   settle the question better than this document.
