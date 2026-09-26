@@ -1,12 +1,12 @@
 # 0001 — A citation checker
 
 - **Opened:** 2026-09-26
-- **Status:** open
+- **Status:** closed — `script/check-citations` is built and every citation resolves against the canonical ref
 - **Touches:** every document under `.meta` that cites source, and a `bite_*` checkout
 
 ## The problem
 
-`.meta` cites the source rather than quoting it — `crates/gpui_authoring/src/app.rs:2785`
+`.meta` cites the source rather than quoting it — `crates/gpui_authoring/src/app.rs:2791`
 — because a citation is what lets a reader check a claim in seconds. Line numbers drift,
 and nothing checks them.
 
@@ -15,7 +15,7 @@ One session caught **ten** wrong line numbers by hand: five in the first draft o
 impl-block starts instead of function definitions. Reading the document did not catch
 them. Re-deriving every number with `grep -n` did.
 
-Scale today: **67 citations carrying a line number, across 6 documents.**
+Scale today: **72 citations carrying a line number, across 7 documents.**
 
 | document | citations |
 | --- | --- |
@@ -23,6 +23,7 @@ Scale today: **67 citations carrying a line number, across 6 documents.**
 | `spi/input-policy-seam.md` | 15 |
 | `decisions/tracy-swap-scope.md` | 13 |
 | `spi/README.md` | 5 |
+| `issues/0001-check-citations.md` | 5 |
 | `spi/dual-path-render-extension.md` | 1 |
 | `architecture/frame-flow.md` | 1 |
 
@@ -33,12 +34,13 @@ a line number there would be noise.
 ## What the checker has to handle
 
 1. **Two citation forms.** A repo-relative path
-   (`crates/gpui_authoring/src/window.rs:4113`) and a bare filename (`app.rs:655`) that
+   (`crates/gpui_authoring/src/window.rs:4242`) and a bare filename (`app.rs:654`) that
    relies on the reader's context. Bare names are ambiguous across crates: `window.rs`
    resolves to `gpui_authoring` or `gpui_platform`, and `lib.rs` and `frame.rs` appear in
-   several crates. Either the checker gets a per-document base directory, or the
-   convention should drop bare names in favour of full paths.
-2. **Ranges.** `app.rs:2798-2804`, which is a claim about a span rather than a line.
+   several crates. The checker resolves a bare name under `gpui_authoring/src`, and
+   anything from another crate has to say so — which is the rule `check-citations`
+   enforces by reporting the rest as unresolved.
+2. **Ranges.** `app.rs:2798-2810`, which is a claim about a span rather than a line.
 3. **Targets outside the repository.** Five citations point at a third-party crate's
    published source — `tracy-client-0.18.3` read from the cargo registry, not from any
    `bite_*` branch. Those need a second resolver or an explicit marker so they are not
@@ -55,12 +57,12 @@ a line number there would be noise.
 ## The shape to start with
 
 **Print, don't judge.** A script that extracts every citation and prints
-`path:line` followed by that line's current content — all 67 in one pass — would have
+`path:line` followed by that line's current content — all 73 in one pass — would have
 caught every one of the ten errors, because a wrong number is obvious when the line is in
 front of you. It needs no change to how the documents are written.
 
 The stricter version — fail when the cited line does not contain what the document claims
-— needs the citation to carry the expected token (`app.rs:655 pending_effects`), which is
+— needs the citation to carry the expected token (`app.rs:654 pending_effects`), which is
 a change to the documents' convention. Worth doing only if the print version turns out to
 be run too rarely to matter.
 
@@ -76,8 +78,26 @@ be run too rarely to matter.
   regardless of what is checked out (`git show <ref>:<path>`), or require the checkout to
   be on it and fail loudly otherwise.
 
-## What would close it
+## Resolution
 
-A `check-citations` that runs over `.meta/**/*.md`, resolves the forms above, prints every
-citation with its current line content, and exits non-zero only when a cited file does not
-exist or the line is out of range. Plus the canonical ref written down in `README.md`.
+`script/check-citations` is built, the canonical ref is recorded in `README.md`, and every
+citation in the repository resolves against it: **73 citations, 73 resolved, 0 unresolved,
+0 out of range, 0 missing, 0 on blank lines.**
+
+The migration is the interesting part. Adopting a ref did not only need a convention
+written down — it exposed that most of the citations in `architecture/reactive-layer.md`
+and `spi/input-policy-seam.md` had been derived from the checkout, which was on
+`bite_v1.14.x`, and were therefore wrong against the ref the documents were meant to
+describe. Ten bare filenames also had to become full paths, because `span.rs` and
+`state.rs` resolve to nothing under `gpui_authoring`.
+
+**What this does not fix.** The checker prints; it does not judge. It proves a file exists
+and a line is in range, and it flags a blank line, which is usually drift. It cannot tell a
+correct line number from a plausible wrong one — and the migration above was verified by
+reading the printed lines, not by the tool. The stricter form, where a citation carries its
+expected token so a wrong number fails and a moved one can be relocated automatically, is
+the next step, and it is a change to the documents rather than to the tool.
+
+Not opened as its own issue, because the trigger is a second ref change: the next time the
+ref moves, this migration has to be redone by hand, and that is when the token convention
+pays for itself.

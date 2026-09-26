@@ -59,11 +59,11 @@ this crate drives rather than contains" (`crates/gpui_runtime/src/gpui_runtime.r
 
 Input enters at `PlatformWindow::on_input`, whose callback signature is
 `Box<dyn FnMut(PlatformInput) -> DispatchEventResult>`
-(`crates/gpui_platform/src/platform_window.rs:130-135`). The window host wires it
+(`crates/gpui_platform/src/platform_window.rs:132-133`). The window host wires it
 straight through:
 
 ```rust
-// crates/gpui_authoring/src/window.rs:2157-2165
+// crates/gpui_authoring/src/window.rs:2164-2172
 platform_window.on_input({
     let mut cx = cx.to_async();
     Box::new(move |event| {
@@ -83,7 +83,7 @@ closure has no policy in it, and nothing on `Application` can put one there.
 `Platform` is the broadest trait in the layer — executors, text system, displays,
 `open_window`, menus, dock menus, clipboard, credentials, keyboard layout and mapper,
 notifications, prompts, thermal state, URL schemes
-(`crates/gpui_platform/src/platform.rs:59-276`). It also does not carry input: it
+(`crates/gpui_platform/src/platform.rs:59-274`). It also does not carry input: it
 only *creates* the window (`fn open_window`, `:93`), and input lives on the
 `PlatformWindow` it returns. Filtering a mouse coordinate would therefore mean
 delegating two large traits for a single callback. This is why the frame-pipeline
@@ -91,7 +91,7 @@ approach was rejected and why a dedicated seam is worth proposing instead.
 
 ### 2.4 The existing input hook is not this
 
-`Context::observe_pending_input` (`crates/gpui_authoring/src/app/context.rs:552-562`)
+`Context::observe_pending_input` (`crates/gpui_authoring/src/app/context.rs:521`)
 subscribes to *pending* input — IME and dead-key state — not to raw arrival, and it
 observes rather than filters. `WindowMetrics` carries geometry and window state and no
 event information at all.
@@ -127,7 +127,7 @@ pub enum InputDecision {
 
 Facade hook, mirroring `with_frame_pipeline` (`crates/gpui_runtime/src/application.rs:105-109`)
 and its `App::set_frame_pipeline_factory` counterpart
-(`crates/gpui_authoring/src/app.rs:2904-2908`):
+(`crates/gpui_authoring/src/app.rs:2937`):
 
 ```rust
 impl Application {
@@ -159,7 +159,7 @@ Box::new(move |event| {
 ```
 
 `WindowHost` would call `flush` where it already has a per-frame hook —
-`should_render_frame` (`crates/gpui_authoring/src/window.rs:1328-1334`) is the
+`should_render_frame` (`crates/gpui_authoring/src/window.rs:1341`) is the
 narrowest existing one.
 
 ## 4. Semantics the sketch leaves open
@@ -188,12 +188,12 @@ These need answers before this is implementable, and none is obvious.
 This is the finding that makes the seam more than a one-liner, and it is measurable
 in the current code.
 
-`InputRateTracker` (`crates/gpui_authoring/src/window.rs:1451-1491`) latches a
+`InputRateTracker` (`crates/gpui_authoring/src/window.rs:1464`) latches a
 one-second "high rate" sustain when enough input has arrived recently, and the frame
 source uses it to keep presenting:
 
 ```rust
-// crates/gpui_authoring/src/window.rs:2000-2002
+// crates/gpui_authoring/src/window.rs:2015-2017
 let needs_present = request_frame_options.require_presentation
     || needs_present.get()
     || input_rate_tracker.borrow_mut().is_high_rate();
@@ -218,7 +218,7 @@ and would have made the scheme look far more aggressive than it is.)
 **The trap.** The count is fed from dispatch, not arrival:
 
 ```rust
-// crates/gpui_authoring/src/window.rs:6004-6006
+// crates/gpui_authoring/src/window.rs:6111-6113
 let caused_invalidation = self.core.invalidator.update_count() > update_count_before;
 if caused_invalidation {
     self.core.input_rate_tracker.borrow_mut().record_input();

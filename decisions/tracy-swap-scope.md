@@ -136,14 +136,14 @@ impl Client {
 ```
 
 and a `SpanLocation` comes from the `span_location!` macro
-(`span.rs:207`), which caches one `Lazy` per call site:
+(`tracy-client-0.18.3/src/span.rs:207`), which caches one `Lazy` per call site:
 
 ```rust
 let location: &'static tracy_client::SpanLocation =
     tracy_client::span_location!("some name");
 ```
 
-`Span` is an RAII guard — `impl Drop for Span` (`span.rs:181`) emits the span end — so
+`Span` is an RAII guard — `impl Drop for Span` (`tracy-client-0.18.3/src/span.rs:181`) emits the span end — so
 the binding **must be named and must outlive the pass it measures**. Binding it to
 `_` drops it immediately and the span measures nothing:
 
@@ -160,20 +160,20 @@ fn begin_frame(&mut self, window: &mut Window<'_>, cx: &mut App) {
 Other pinned facts worth having:
 
 - `Client::start() -> Client` and `Client::running() -> Option<Client>`
-  (`state.rs:27`, `state.rs:38`). The `Option` is what makes a disconnected client
+  (`tracy-client-0.18.3/src/state.rs:27`, `tracy-client-0.18.3/src/state.rs:38`). The `Option` is what makes a disconnected client
   cheap: no span is created at all.
-- `frame_mark()` is a free function (`frame.rs:171`), re-exported at the crate root
-  (`lib.rs:30`), alongside `Frame::frame_mark(&self)` (`frame.rs:61`).
+- `frame_mark()` is a free function (`tracy-client-0.18.3/src/frame.rs:171`), re-exported at the crate root
+  (`tracy-client-0.18.3/src/lib.rs:30`), alongside `Frame::frame_mark(&self)` (`tracy-client-0.18.3/src/frame.rs:61`).
 - `frame_mark()` *closes* a frame in Tracy's timeline, so it belongs at the end of a
   frame — `end_frame`, not `begin_frame` as sketched — if the marker bars are to line
   up with the passes they contain.
 - `Client` is passed by value to `span` and derives nothing, so it is **not** `Copy` —
   but `Client::running()` constructs a fresh `Client(())` on each call
-  (`state.rs:38-44`), so calling it per pass costs a unit construction behind a boolean
+  (`tracy-client-0.18.3/src/state.rs:38-44`), so calling it per pass costs a unit construction behind a boolean
   check rather than a clone. There is no handle to hold on to and nothing to cache.
-- `Span::emit_value` / `emit_text` / `emit_color` (`span.rs:150-171`) are available if a
+- `Span::emit_value` / `emit_text` / `emit_color` (`tracy-client-0.18.3/src/span.rs:150-171`) are available if a
   pass wants to attach numbers (node counts, layout iterations) to its own span.
-- `ProfiledAllocator<T>` (`lib.rs:220`) is a separate capability (allocation tracking)
+- `ProfiledAllocator<T>` (`tracy-client-0.18.3/src/lib.rs:220`) is a separate capability (allocation tracking)
   and is out of scope for a pipeline decorator.
 
 ## 5. Benchmark design

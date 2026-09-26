@@ -55,7 +55,7 @@ the presentation pacing, and it lives below the pipeline, not in it.
 | `FramePipeline` | `Application::with_frame_pipeline(impl Fn(WindowId) -> Box<dyn FramePipeline>)` | **per window** — a factory | `should_render`, and every pass |
 | `SceneRenderer` | **no `Application` bootstrap.** Reached through `PlatformWindow::with_renderer` and `PlatformWindow::present`, so it is swapped by supplying a `Platform` | per window, owned by the platform | `PlatformWindow::present` |
 
-The first four are held on `App` (`crates/gpui_authoring/src/app.rs:623`). The fifth is
+The first four are held on `App` (`crates/gpui_authoring/src/app.rs:622`). The fifth is
 not on `App` at all — which is why `spi/README.md` lists it as the one seam with no
 facade hook, and why a renderer-level feature such as
 [`../spi/dual-path-render-extension.md`](../spi/dual-path-render-extension.md) is a

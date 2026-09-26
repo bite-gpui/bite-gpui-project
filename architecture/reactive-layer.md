@@ -38,28 +38,28 @@ flowchart TD
 
 | what | where | what it is for |
 | --- | --- | --- |
-| `Effect` | `app.rs:3055` | the queue's item: `Notify`, `Emit`, `RefreshWindows`, `NotifyGlobalObservers`, `Defer`, `EntityCreated` |
-| `pending_effects: VecDeque<Effect>` | `app.rs:655` | what the next flush will drain. Effects cause effects, so the queue is drained to quiescence |
-| `pending_notifications: FxHashSet<EntityId>` | `app.rs:691` | dedupes a notify from an entity nothing is displaying |
-| `observers: SubscriberSet<EntityId, Handler>` | `app.rs:657` | who to run when an entity notifies |
-| `tracked_entities: FxHashMap<WindowId, FxHashSet<EntityId>>` | `app.rs:700` | the entities a window *actually renders right now*, rebuilt per frame by `record_entities_accessed` (`app.rs:1106`) |
-| `window_invalidators_by_entity` | `app.rs:698` | an entity's invalidator per window. **Monotonic** — an entry alone does not mean the window still displays the entity, which is why the lookup is filtered |
-| `WindowInvalidator` | `window.rs:172` | per window: `dirty`, `dirty_views`, `update_count`, the platform waker |
-| `update_count` | `window.rs:270` | how many invalidations this window has seen. Read by `Window::dispatch_event` to ask whether an input event *caused* one (`window.rs:6004`), which is what feeds the input-rate tracker |
-| `dirty_views` | `window.rs:152` | the views invalidated since the last draw. `finish_frame` clears it (`window.rs:3507`) |
+| `Effect` | `app.rs:3089` | the queue's item: `Notify`, `Emit`, `RefreshWindows`, `NotifyGlobalObservers`, `Defer`, `EntityCreated` |
+| `pending_effects: VecDeque<Effect>` | `app.rs:654` | what the next flush will drain. Effects cause effects, so the queue is drained to quiescence |
+| `pending_notifications: FxHashSet<EntityId>` | `app.rs:690` | dedupes a notify from an entity nothing is displaying |
+| `observers: SubscriberSet<EntityId, Handler>` | `app.rs:656` | who to run when an entity notifies |
+| `tracked_entities: FxHashMap<WindowId, FxHashSet<EntityId>>` | `app.rs:699` | the entities a window *actually renders right now*, rebuilt per frame by `record_entities_accessed` (`app.rs:1113`) |
+| `window_invalidators_by_entity` | `app.rs:697` | an entity's invalidator per window. **Monotonic** — an entry alone does not mean the window still displays the entity, which is why the lookup is filtered |
+| `WindowInvalidator` | `window.rs:173` | per window: `dirty`, `dirty_views`, `update_count`, the platform waker |
+| `update_count` | `window.rs:271` | how many invalidations this window has seen. Read by `Window::dispatch_event` to ask whether an input event *caused* one (`window.rs:6111`), which is what feeds the input-rate tracker |
+| `dirty_views` | `window.rs:153` | the views invalidated since the last draw. `finish_frame` clears it (`window.rs:3636`) |
 
 ## The chain, step by step
 
-1. **`Context::notify`** (`context.rs:230`) forwards to **`App::notify`** (`app.rs:2785`)
+1. **`Context::notify`** (`context.rs:221`) forwards to **`App::notify`** (`app.rs:2791`)
    with the entity's id. `notify` is the only thing that means "this entity changed";
    there is no diffing anywhere.
 2. **`App::notify` fans out to windows, not to the world.** It looks up the entity's
-   invalidators, then filters them through `tracked_entities` (`app.rs:2798-2804`) with
+   invalidators, then filters them through `tracked_entities` (`app.rs:2798-2810`) with
    the comment that the map is monotonic and an entry alone does not mean the window is
    rendering the entity. So a change reaches only the windows that display it.
 3. **With no window displaying it**, the notify is deduped against
    `pending_notifications` and queued as `Effect::Notify` — observers still run.
-4. **With a window displaying it**, `WindowInvalidator::invalidate_view` (`window.rs:193`)
+4. **With a window displaying it**, `WindowInvalidator::invalidate_view` (`window.rs:194`)
    runs per window: `update_count += 1`, the view goes into `dirty_views`, and then it
    branches on `draw_phase`.
 5. **Outside a draw**, the window is marked dirty, the platform waker fires **only on
@@ -67,15 +67,15 @@ flowchart TD
    observers run.
 6. **Inside a draw** (`DrawPhase::Prepaint`/`Paint`/`Focus`), none of that happens: the
    invalidation is counted and recorded and the function returns `false`. The frame in
-   progress absorbs it — `mark_view_dirty` (`window.rs:2374`) puts the view and its
+   progress absorbs it — `mark_view_dirty` (`window.rs:2381`) puts the view and its
    ancestors into the frame's `dirty_views`, which is what keeps a cached view from
-   being reused after something under it changed (`view.rs:479`).
-7. **`flush_effects`** (`app.rs:1691`) drains the queue one effect at a time. A `Notify`
-   runs the emitter's observers (`app.rs:1810`); an observer that notifies queues another
+   being reused after something under it changed (`view.rs:442`).
+7. **`flush_effects`** (`app.rs:1698`) drains the queue one effect at a time. A `Notify`
+   runs the emitter's observers (`app.rs:1817`); an observer that notifies queues another
    effect, which is why the loop exists and why it terminates only at quiescence.
-   `RefreshWindows` marks every window dirty (`app.rs:1830`).
+   `RefreshWindows` marks every window dirty (`app.rs:1837`).
 8. **When the queue is empty**, every window that is dirty, needs a present, or has
-   next-frame callbacks calls `PlatformWindow::schedule_frame` (`app.rs:1743-1758`).
+   next-frame callbacks calls `PlatformWindow::schedule_frame` (`app.rs:1750-1765`).
 9. **The platform delivers a frame request**, the frame source throttles, and
    `should_render` is asked — [`frame-flow.md`](frame-flow.md) takes it from there.
 
@@ -110,10 +110,10 @@ invalidation, not whole-window re-rendering.
 
 | API | for |
 | --- | --- |
-| `entity.cached(style)`, `any_view.cached(style)` (`view.rs:233`, `view.rs:39`) | a type that implements `Render` |
+| `entity.cached(style)`, `any_view.cached(style)` (`view.rs:242`, `view.rs:43`) | a type that implements `Render` |
 | `entity.slot(id, builder)` — `EntitySlotExt` (`crates/gpui_authoring/src/elements/slot.rs:16`) | state with no renderer of its own, or rendered differently in different places |
 
-Both funnel into `prepaint_cached_view` (`view.rs:467`). `EntitySlotExt` is an extension
+Both funnel into `prepaint_cached_view` (`view.rs:426`). `EntitySlotExt` is an extension
 trait rather than a method on `Entity`, which is the ruling in
 [`layer-stack.md`](layer-stack.md): decorate the trait, do not widen it.
 
@@ -131,8 +131,8 @@ flowchart TD
     build --> scene
 ```
 
-On a hit the builder is never called: `reuse_prepaint` (`window.rs:4113`) replays the
-previous frame's prepaint range, and `extend_accessed` (`entity_map.rs:174`) re-registers
+On a hit the builder is never called: `reuse_prepaint` (`window.rs:4242`) replays the
+previous frame's prepaint range, and `extend_accessed` (`entity_map.rs:180`) re-registers
 the entities the cached subtree had read, so what the window depends on stays accurate
 without re-running anything.
 
@@ -147,22 +147,22 @@ both APIs and is the trap in the mechanism.
 ### `refresh` is the coarse escape hatch
 
 `refreshing` is part of the cache-hit test, so a window refresh rebuilds everything.
-`App::refresh_windows` queues it (`app.rs:1051`), `apply_refresh_effect` marks every
-window dirty and sets the flag (`app.rs:1830`), and `ViewElement::cached`'s own doc says
+`App::refresh_windows` queues it (`app.rs:1056`), `apply_refresh_effect` marks every
+window dirty and sets the flag (`app.rs:1837`), and `ViewElement::cached`'s own doc says
 `Window::refresh` *"ignores caching"*. When the cache is wrong, that is the way out —
 and it is why the cache-hit condition has to name the flag.
 
 ### The two halves are one design
 
 The entities a subtree reads are recorded when it is built (`detect_accessed_entities`,
-`app.rs:1090`) and re-registered when it is replayed. That is what populates
+`app.rs:1097`) and re-registered when it is replayed. That is what populates
 `tracked_entities` — the map step 2 of the chain filters `App::notify` through. So an
 entity is rebuilt because it notified, and it is notified only in the windows whose
 cached subtrees actually read it. The cache and the fan-out are the same mechanism seen
 from its two ends.
 
 One exception worth knowing: when the inspector is picking, a slot builds its subtree
-even on a cache hit (`slot.rs:128`), because the inspector picks through a tree it can
+even on a cache hit (`crates/gpui_authoring/src/elements/slot.rs:128`), because the inspector picks through a tree it can
 see and a replayed subtree is not a tree it can see.
 
 ## What this means for the seams

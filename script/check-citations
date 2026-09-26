@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""Check the `path:line` citations in this repository's documents.
+
+Print, don't judge. Every citation is resolved against a ref and printed with the
+line it currently points at, so a wrong number is visible rather than hidden.
+Exits non-zero only when a cited file is missing, an unresolved citation is
+found, or a line number is out of range -- the cases that are unambiguously
+wrong rather than merely stale.
+
+    script/check-citations                  # against the canonical ref
+    script/check-citations --ref regenerated
+    script/check-citations --worktree       # against this checkout
+    script/check-citations --problems       # only the ones that need attention
+
+The ref is the whole point. Line numbers are per-branch, and there are twelve
+`bite_*` branches that differ, so a citation means nothing until one is chosen.
+See README.md, "Conventions".
+"""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+# The ref the documents are written against. Changing it invalidates every
+# citation in the repository and means a pass over all of them.
+CANONICAL_REF = "bite_v1.22.0-pre"
+
+# A citation is a Rust source path followed by a line, or a line range.
+CITATION = re.compile(r"([A-Za-z0-9_][A-Za-z0-9_/.-]*\.rs):(\d+)(?:-(\d+))?")
+
+# Where a bare filename is looked up, in order. Every bare citation in the
+# documents today is `gpui_authoring`'s; anything from another crate has to say
+# so, because `window.rs` and `lib.rs` are not unique across the tree.
+BARE_BASES = ("crates/gpui_authoring/src", "crates/gpui_authoring/src/app")
+
+# A citation of the form `crate-1.2.3/src/file.rs` is a published dependency's
+# source, not this repository's. It is read from the cargo registry cache.
+VERSIONED = re.compile(r"^[A-Za-z0-9_.-]+-\d+\.\d+")
+REGISTRY = Path.home() / ".cargo/registry/src"
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def run(args: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(args, capture_output=True, text=True)
+
+
+def exists_at(root: Path, ref: str | None, path: str) -> bool:
+    if ref is None:
+        return (root / path).is_file()
+    result = run(["git", "-C", str(root), "cat-file", "-e", f"{ref}:{path}"])
+    return result.returncode == 0
+
+
+def read_at(root: Path, ref: str | None, path: str) -> list[str] | None:
+    if ref is None:
+        file = root / path
+        return file.read_text().splitlines() if file.is_file() else None
+    result = run(["git", "-C", str(root), "show", f"{ref}:{path}"])
+    return result.stdout.splitlines() if result.returncode == 0 else None
+
+
+def read_registry(path: str) -> list[str] | None:
+    matches = sorted(glob.glob(str(REGISTRY / "*" / path)))
+    if not matches:
+        return None
+    return Path(matches[-1]).read_text().splitlines()
+
+
+def resolve(root: Path, ref: str | None, cited: str) -> tuple[str, str]:
+    """Return (kind, path): 'repo', 'registry', or 'unresolved'."""
+    head = cited.split("/", 1)[0]
+    if "/" in cited:
+        if VERSIONED.match(head):
+            return "registry", cited
+        return ("repo", cited) if exists_at(root, ref, cited) else ("unresolved", cited)
+    for base in BARE_BASES:
+        candidate = f"{base}/{cited}"
+        if exists_at(root, ref, candidate):
+            return "repo", candidate
+    return "unresolved", cited
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--ref", default=CANONICAL_REF,
+                        help=f"the ref to resolve against (default: {CANONICAL_REF})")
+    parser.add_argument("--worktree", action="store_true",
+                        help="resolve against this checkout instead of a ref")
+    parser.add_argument("--problems", action="store_true",
+                        help="print only the citations that need attention")
+    parser.add_argument("documents", nargs="*",
+                        help="documents to check (default: every .md here)")
+    args = parser.parse_args()
+
+    root = repo_root()
+    ref = None if args.worktree else args.ref
+    where = "the working tree" if ref is None else f"ref {ref}"
+
+    docs = [Path(d) for d in args.documents] or sorted(
+        p for p in (root / ".meta").glob("**/*.md") if ".git" not in p.parts
+    )
+
+    checked = unresolved = missing = out_of_range = blanks = 0
+    failing = False
+    for doc in docs:
+        if not doc.is_file():
+            print(f"{doc}: no such document", file=sys.stderr)
+            failing = True
+            continue
+        lines = doc.read_text().splitlines()
+        relative = doc.relative_to(root)
+        for number, text in enumerate(lines, start=1):
+            for match in CITATION.finditer(text):
+                cited, first, last = match.group(1), int(match.group(2)), match.group(3)
+                last = int(last) if last else first
+                checked += 1
+
+                kind, path = resolve(root, ref, cited)
+                if kind == "unresolved":
+                    unresolved += 1
+                    failing = True
+                    print(f"{relative}:{number}  {cited}:{first}  UNRESOLVED")
+                    print(f"    not found under {', '.join(BARE_BASES)}"
+                          if "/" not in cited else "    no such file at this ref")
+                    continue
+
+                content = (read_registry(path) if kind == "registry"
+                           else read_at(root, ref, path))
+                if content is None:
+                    missing += 1
+                    failing = True
+                    print(f"{relative}:{number}  {path}:{first}  MISSING")
+                    continue
+                if last > len(content):
+                    out_of_range += 1
+                    failing = True
+                    print(f"{relative}:{number}  {path}:{first}-{last}  OUT OF RANGE"
+                          f" (file is {len(content)} lines)")
+                    continue
+
+                shown = content[first - 1].strip()
+                if not shown:
+                    blanks += 1
+                if args.problems and shown:
+                    continue
+                print(f"{relative}:{number}  {path}:{first}"
+                      f"{'-' + str(last) if last != first else ''}  {shown or '<blank>'}")
+
+    resolved = checked - unresolved - missing - out_of_range
+    print(f"\n{checked} citations against {where}: "
+          f"{resolved} resolved, {blanks} on blank lines, {unresolved} unresolved, "
+          f"{out_of_range} out of range, {missing} missing.")
+    print("A blank line is not proof of drift, and a non-blank one is not proof of "
+          "agreement: read the lines. Only the last three kinds fail.")
+    return 1 if failing else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

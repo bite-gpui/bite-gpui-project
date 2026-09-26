@@ -27,4 +27,4 @@ questions get re-argued.
 
 | issue | status | subject |
 | --- | --- | --- |
-| [`0001-check-citations.md`](0001-check-citations.md) | open | 67 citations carry a line number and nothing verifies them; one session caught ten wrong by hand |
+| [`0001-check-citations.md`](0001-check-citations.md) | closed | 73 citations carry a line number and nothing verified them; `script/check-citations` now resolves every one against `bite_v1.22.0-pre` |

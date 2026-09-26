@@ -37,9 +37,14 @@ being committed to any of them.
 - **Decisions are numbered and dated.** A record says what was decided, why, and what
   would reopen it. Unnumbered documents in `decisions/` are *evidence* for a numbered
   record, not decisions themselves.
-- **Every claim about the code cites it** — `crate/file.rs:line`, against the source in
-  a `bite_*` branch. Line numbers go stale; the citation is still the fastest way for a
-  reader to check.
+- **Every claim about the code cites it** — `crate/file.rs:line`. Line numbers go stale,
+  so they are resolved against **one ref**, not against whatever a checkout happens to be
+  on: `bite_v1.22.0-pre`, which was `0ff0532eb7` when this convention was written.
+  `script/check-citations` prints every citation with the line it currently points at.
+  Changing the ref means re-deriving every citation in the repository. A bare filename
+  (`app.rs:654`) resolves under `crates/gpui_authoring/src`; anything from another crate
+  or a published dependency must be a full path, because `window.rs` and `lib.rs` are not
+  unique across the tree.
 - **Do not restate what is already specified once elsewhere.** Naming, versions and the
   crate table live in `.dist/`; link to them. A second copy of a fact is a second copy
   to keep in sync.
