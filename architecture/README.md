@@ -8,6 +8,7 @@ that crosses each boundary.
 | document | what it is |
 | --- | --- |
 | [`layer-stack.md`](layer-stack.md) | the layer map with measured sizes, the dependency direction, the two deliberate edges, and the rulings that decide where a new item goes |
+| [`frame-flow.md`](frame-flow.md) | one frame from the platform asking for it to pixels on the glass, the seam each stage is entered through, and what a pipeline can and cannot reach |
 
 ## Belongs here
 
@@ -42,16 +43,15 @@ this repository's own convention.
 
 ## Still owed here
 
-1. **The bootstrap order, and what is sealed.** Which parts of an application are fixed
-   at `Application` construction and which can still vary per window.
-   `with_frame_pipeline` takes a factory because a pipeline is per window;
-   `with_text_system` takes a shared `Arc` because it is not; `with_platform` is not
-   chained onto the builder at all. Nothing states this in one place, and the governor
-   investigation needed it repeatedly.
-2. **The frame's data flow, with its interception points.** Where a rate, a filter or a
-   meter can be inserted — and, more usefully, which of those the current seams can and
-   cannot reach. [`../spi/`](../spi/README.md) answers the second half; this is the map
-   it hangs on.
-3. **The seam inventory as a diagram.** `spi/` lists the five boundaries as a table,
-   which says what each one is but not how a frame moves through them. That is the
-   picture a new contributor needs first, and it is the one nobody has drawn.
+[`frame-flow.md`](frame-flow.md) answers the frame's data flow and its interception
+points, which were two of the three items this list used to carry.
+
+1. **The bootstrap order, in the detail the seams need.** `frame-flow.md` records each
+   seam's lifetime — process-wide or per window — but not the order `Application`
+   applies them in, nor what is already fixed by the time the first window opens. That
+   order is what decides whether a seam can still be changed at runtime, and it is the
+   question the governor investigation kept running into.
+2. **The reactive layer.** The diagram has a single node for "reactive state changes",
+   and that is the whole of the documentation for it: entities, `notify`, the effect
+   flush that coalesces a burst of invalidations into one, and how any of it reaches
+   `is_dirty`. Every other seam sits on top of that machinery and nothing describes it.
