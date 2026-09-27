@@ -335,10 +335,12 @@ The factory seam only. Every line is additive.
 | 07 | `crates/gpui_windows/src/window.rs` | as 04, else `DirectXRenderer::new` (`:145`) | ~20 LOC |
 
 **Factory footprint: ~180 LOC across four backends.** The dual-path primitives are *not*
-in this budget: Path A adds a real arm to three renderers — wgpu's is empty today,
-`crates/gpui_wgpu/src/wgpu_renderer.rs:1546` — and Path B adds pause/restore to each.
-Neither is a patch to a `window.rs`, and keeping the two budgets separate is what the
-drafts' single "<150 LOC" claim obscured.
+in this budget: Path A adds a fragment path and a pipeline to two renderers — wgpu's batch arm
+is empty today (`crates/gpui_wgpu/src/wgpu_renderer.rs:1546`) and the only surface fragment
+that samples a non-atlas texture is a YCbCr one
+(`crates/gpui_wgpu/src/shaders.wgsl:1350`) — and Path B adds pause/restore to each. Neither is
+a patch to a `window.rs`, and keeping the two budgets separate is what the drafts' single
+"<150 LOC" claim obscured.
 
 Two things patch 07 needs that the factory does not cover, both measured after this section
 was written. `gpui_wgpu`'s instance is `Backends::VULKAN | Backends::GL`

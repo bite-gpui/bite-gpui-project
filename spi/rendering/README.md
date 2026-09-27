@@ -59,7 +59,7 @@ what each proposed, and what became of it.
 | --- | --- |
 | `dual-path-render-extension.md` — the RFC, transcribed as received | the shape of `foreign-texture.md` and `inline-commands.md` |
 | `scene-renderer-seam.md` | `renderer-seam.md` — its §3 (native hooks) and its migration order are kept; its §1 (widen the trait) and its process-wide factory (§2, §4, §5) are not |
-| `dual-path-ioc-architecture.md` | `renderer-seam.md` for the factory, the target and the trait, `foreign-texture.md` for the primitive; its finding that `PaintSurface` already half-exists is why Path A is not a new primitive |
+| `dual-path-ioc-architecture.md` | `renderer-seam.md` for the factory, the target and the trait, `foreign-texture.md` for the primitive; its finding that `PaintSurface` already half-exists is why Path A keeps that variant's shape rather than inventing one — though not its macOS-only YCbCr drawing, which [`foreign-texture.md`](foreign-texture.md) §1 states once |
 | `dual-path-implementation-spec.md` | `renderer-seam.md` (recovery), `foreign-texture.md` (colour space), `inline-commands.md` (state isolation), `verification.md` |
 | `wgpu-target-adaptors.md` | `renderer-seam.md` (the typed target), `foreign-texture.md` (HAL extraction), `inline-commands.md` (the coordinate bridge) |
 | `gpu-canvas-dx.md` | `../authoring/gpu-canvas.md`, nearly whole |
@@ -135,10 +135,12 @@ RFC's "≈16.0 GB/s at 4K120" is its own formula miscounted — `W × H × 4 × 
 
 Each of these was decided on evidence and is not reopened by re-reading the drafts.
 
-- **Path A completes an existing primitive, it does not add one.** `PaintSurface`
-  (`crates/gpui_engine/src/scene.rs:749`) is already "content produced outside GPUI,
-  composited into the window", already a scene variant with its own batch, and already
-  drawn by two of three renderers. The wgpu arm is a no-op to write.
+- **Path A reuses `PaintSurface`'s machinery, and not its drawing.** The variant, its batch,
+  its ordering and its content-mask handling are what the primitive is shaped after
+  (`crates/gpui_engine/src/scene.rs:749`); the drawing is new, because `PaintSurface` is
+  itself macOS-only video with a YCbCr fragment path, drawn by one renderer, and every sprite
+  and path fragment samples the atlas instead of a texture of its own.
+  [`foreign-texture.md`](foreign-texture.md) §1 states it once.
 - **The texture handle is erased; the target is not.** They are not the same kind of
   value: a handle has one counterparty, the application and the renderer it chose, so a
   `dyn Any` payload is a private agreement between them; the target is read by any

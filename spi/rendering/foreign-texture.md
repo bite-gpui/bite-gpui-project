@@ -29,19 +29,29 @@ pub struct PaintSurface {
 }
 ```
 
-It is a variant of the scene's primitive enum (`crates/gpui_engine/src/scene.rs:228`),
-with its own batch (`crates/gpui_engine/src/scene.rs:475`), its own accumulation list
-(`crates/gpui_engine/src/scene.rs:50`, pushed at `:132`), and **two of three renderers
-already draw it**: Metal (`crates/gpui_apple/src/metal_renderer.rs:1133`) and DirectX
-(`crates/gpui_windows/src/directx_renderer.rs:830`). In wgpu it is a no-op —
-`PrimitiveBatch::Surfaces(_surfaces) => {}`
-(`crates/gpui_wgpu/src/wgpu_renderer.rs:1546`).
+It is a variant of the scene's primitive enum (`crates/gpui_engine/src/scene.rs:228`), with
+its own batch (`crates/gpui_engine/src/scene.rs:475`) and its own accumulation list
+(`crates/gpui_engine/src/scene.rs:50`, pushed at `:132`) — and it is **macOS-only video**.
+Its only payload is a `CVPixelBuffer`, behind `#[cfg(target_os = "macos")]`
+(`crates/gpui_engine/src/scene.rs:749`); its only producer is
+`MacWindowExt::paint_surface` (`crates/gpui_authoring/src/window/mac.rs:21`); it is drawn by
+**one** renderer rather than two — DirectX's `draw_surfaces` returns `Ok(())` without
+drawing (`crates/gpui_windows/src/directx_renderer.rs:830`) and wgpu's arm is `{}` under the
+comment that surfaces "are macOS-only for video playback and are not implemented by the WGPU
+renderer" (`crates/gpui_wgpu/src/wgpu_renderer.rs:1544`) — and that one renders **YCbCr**,
+not RGBA: Metal's `surface_fragment` returns `ycbcrToRGBTransform * ycbcr`
+(`crates/gpui_apple/src/shaders.metal:884`), and wgpu's `fs_surface` does the same over two
+planes, `t_y` and `t_cb_cr` (`crates/gpui_wgpu/src/shaders.wgsl:1350`).
 
-So the proposal is to complete that variant rather than invent one: the same batch, the
-same three arms, one of which has to be written. `PaintSurface` also supplies two things
-the drafts omitted — the precedent for a backend payload (`image_buffer` is a `#[cfg]`
-field with a `#[cfg]` dependency, not a foreign type in the engine), and the `order` and
-`content_mask` fields a primitive needs to sit correctly in the batch list.
+So the proposal **reuses that variant's machinery — its batch, its ordering, its content-mask
+handling — and not its drawing.** An imported texture is RGBA, and no fragment path in the
+tree samples one: the sprite and path fragments sample the atlas, and `fs_surface` is the only
+one that samples a texture the atlas does not own. What has to be written is therefore a
+fragment path and a pipeline, in two renderers, which is what
+[`renderer-seam.md`](renderer-seam.md) §6's budget means by "a real arm". `PaintSurface` also
+supplies two things the drafts omitted — the precedent for a backend payload (`image_buffer`
+is a `#[cfg]` field with a `#[cfg]` dependency, not a foreign type in the engine), and the
+`order` and `content_mask` fields a primitive needs to sit correctly in the batch list.
 
 ## 2. The device constraint
 
@@ -195,7 +205,9 @@ Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:359`) — so a Windows wind
 neither path. The presentation probe measured the DX12 surface offering `Bgra8UnormSrgb` and
 `Bgra8Unorm` alike, so the choice is not one the platform makes
 ([`../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md)).
-The fixture in [`verification.md`](verification.md) §1 is what verifies the rule itself.
+The fixture in [`verification.md`](verification.md) §1 is what verifies the rule itself — and
+that has to wait for the fragment path §1 describes, because until it exists there is no
+consumer to read the format from.
 
 ## 5. Extracting the handle
 
