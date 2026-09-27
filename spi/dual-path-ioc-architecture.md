@@ -255,47 +255,49 @@ where
 The newtype is what keeps coherence honest (E0119): `impl RendererFactory for F where
 F: Fn(..)` would collide with any other blanket impl the moment one appears.
 
-### 4.2 The target, type-erased
+### 4.2 The target: typed, not erased
 
-The draft's best idea, and the reason `gpui_platform` needs no `raw-window-handle`
-dependency and no knowledge of `wayland_client` or `windows::Win32`:
+**Revised** by [`wgpu-target-adaptors.md`](wgpu-target-adaptors.md) §1. The draft erases
+the target (`raw: &'a dyn Any`) on the theory that it keeps `gpui_platform` free of
+`raw-window-handle` and of backend types. Two things are wrong with it, and the second
+is fatal:
+
+- `gpui_platform` **already** depends on `raw-window-handle` (workspace `0.6`), so the
+  abstraction buys nothing.
+- A renderer can only use the erased target by downcasting to the backend's concrete
+  type — `gpui_linux::LinuxRendererTarget` and its siblings — which requires the
+  renderer crate to depend on the backend crate. `gpui_linux` already depends on
+  `gpui_wgpu`, so that is a cycle.
+
+The payload and the target are not the same kind of erased value. A texture handle has
+one counterparty — the application and the renderer it chose — so erasure is right
+there. The target is read by *any* renderer the application installs, including one
+whose author has never seen the backend crates, so its cross-platform facts must be
+typed:
 
 ```rust
 // crates/gpui_platform/src/platform_renderer.rs
 pub struct RendererTarget<'a> {
-    raw: &'a dyn std::any::Any,
-}
-
-impl<'a> RendererTarget<'a> {
-    pub fn new(raw: &'a dyn std::any::Any) -> Self { Self { raw } }
-    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> { self.raw.downcast_ref::<T>() }
-}
-```
-
-Each backend keeps its concrete target private and passes `&concrete as &dyn Any`:
-
-```rust
-// crates/gpui_linux/src/linux/platform_renderer.rs
-pub enum LinuxRendererTarget<'a> {
-    Wayland {
-        raw_window: &'a RawWindow,
-        gpu_context: gpui_wgpu::GpuContext,
-        config: gpui_wgpu::WgpuSurfaceConfig,
-        compositor_gpu: Option<gpui_wgpu::CompositorGpuHint>,
-    },
-    #[cfg(feature = "x11")]
-    X11 { /* as above */ },
-    Recovery(&'a RawWindow),
+    pub window_handle: Option<RawWindowHandle>,
+    pub display_handle: Option<RawDisplayHandle>,
+    pub size: Size<Pixels>,
+    pub scale_factor: f32,
+    pub transparent: bool,
+    /// Backend-specific extras, for that backend's own renderer only. `Any` is
+    /// `'static`, so this must point at owned data.
+    pub backend: Option<&'a dyn Any>,
 }
 ```
 
-with `MacRendererTarget` (`renderer::Context`, native view, size) and
-`WindowsRendererTarget` (`HWND`, devices, composition flag) the same way.
+Each backend fills the typed fields from its own handles and, if its default renderer
+needs more, lends it through `backend`. Surface creation is then a plain
+`create_surface_unsafe` over the two typed handles — no downcast, no backend crate, and
+no cycle.
 
 ### 4.3 `PlatformRenderer`
 
 The renderer contract, extending `SceneRenderer` with the lifecycle the window needs.
-`set_viewport_size` is omitted pending correction 5; the recovery target is the erased
+`set_viewport_size` is omitted pending correction 5; the recovery target is the typed
 one.
 
 ```rust
@@ -335,12 +337,16 @@ pub enum CustomRenderPrimitive {
         opacity: f32,
         flip_v: bool,
     },
-    /// Path B: commands executed into the window's active pass.
+    /// Path B: a registered command block, executed into the window's active pass.
+    /// The closure lives in the renderer, not here: a live encoder cannot cross an
+    /// `Any` boundary (`Any: 'static`), and naming its type would put `wgpu` in the
+    /// engine. The scene carries a token the renderer resolves. See
+    /// [`wgpu-target-adaptors.md`](wgpu-target-adaptors.md) §4.
     Inline {
-        order: DrawOrder,              // PaintSurface carries one; interleaving needs it
+        order: DrawOrder,              // assigned by Scene::insert_primitive
+        token: InlineToken,            // renderer-owned; not an erased callback
         bounds: Bounds<ScaledPixels>,
         content_mask: ContentMask<ScaledPixels>,
-        callback: Box<dyn Fn(&mut DrawContext) + Send + Sync>,
     },
 }
 ```
@@ -392,8 +398,9 @@ draft's single "<150 LOC" claim obscures.
 ## What this settles, and what it leaves open
 
 **Settled by this revision:** the factory is per window and lives on
-`WindowOptions`/`WindowParams`; the target is type-erased; the closure needs a
-`Debug` newtype; Path A generalises an existing primitive rather than inventing one.
+`WindowOptions`/`WindowParams`; the target is typed, with only backend extras erased;
+the closure needs a `Debug` newtype; Path A generalises an existing primitive rather
+than inventing one; Path B carries a token, not a callback.
 
 **Open, and worth a decision before implementing:**
 

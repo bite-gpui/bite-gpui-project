@@ -165,20 +165,22 @@ pub struct RendererTarget<'a> {
     pub bounds: Bounds<Pixels>,
     pub scale_factor: f32,
     pub transparent: bool,
-    /// For backends whose surface is a view rather than a handle: the NSView on
-    /// macOS, the canvas on wasm.
-    pub native_view: Option<&'a mut dyn Any>,
+    /// Backend-specific extras, for that backend's own default renderer only. `Any`
+    /// cannot carry borrowed data, so whatever this points at must be owned and
+    /// `'static`; a backend with nothing to add passes `None`.
+    pub backend: Option<&'a dyn Any>,
 }
 
 pub type RendererFactory =
     Rc<dyn for<'a> Fn(RendererTarget<'a>) -> anyhow::Result<Box<dyn PlatformRenderer>>>;
 ```
 
-`gpui_platform` gains a `raw-window-handle` dependency to name the handles; the crates
-that already take `HasWindowHandle` (`gpui_wgpu::WgpuRenderer::new`,
-`crates/gpui_wgpu/src/wgpu_renderer.rs:268`) speak the same vocabulary. `native_view`
-is the escape hatch for the genuinely-native case without teaching the shared trait
-what a view is.
+`gpui_platform` already depends on `raw-window-handle` (workspace `0.6`), so naming the
+handles costs nothing and `wgpu` still does not enter the platform layer. The typed
+fields are the point, and [`wgpu-target-adaptors.md`](wgpu-target-adaptors.md) §2 shows
+why the `dyn Any`-only alternative fails: a renderer cannot downcast to a backend's
+target type without depending on that backend crate, which cycles. `backend` is only
+for extras, and because `Any` is `'static`, whatever it points at must be owned.
 
 ### 3. Native hooks stay on the platform
 
