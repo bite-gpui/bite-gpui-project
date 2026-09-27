@@ -59,7 +59,7 @@ pub struct GpuCanvas {
 }
 
 enum GpuRenderMode {
-    Texture(Box<dyn FnOnce(Bounds<Pixels>, &mut Window, &mut App) -> ForeignTextureHandle>),
+    Texture(Box<dyn FnOnce(Bounds<Pixels>, &mut Window, &mut App) -> ImportedTextureHandle>),
     Inline(Box<dyn FnOnce(Bounds<Pixels>, &mut TransactionalDrawContext)>),
 }
 ```
@@ -99,7 +99,7 @@ GpuCanvas::new()
     .flip_y(true)           // whether the producer's UVs are inverted
     .on_render_texture(move |bounds, window, cx| {
         // Path A: an offscreen VRAM surface — wgpu passes, a decoder, a camera
-        engine.render_frame(bounds.size).to_foreign_handle()
+        engine.render_frame(bounds.size).to_imported_handle()
     })
 ```
 
@@ -130,9 +130,11 @@ no counterpart in this fork:
   (`crates/gpui_authoring/src/element.rs:164`, `:180`).
 - **Painting is a `Window` capability, not a `cx` one.** `paint_quad`
   (`crates/gpui_authoring/src/window.rs:4972`) and `paint_image` (`:5365`) both insert
-  into the frame's scene, so the hooks are `window.register_foreign_texture` and
-  `window.paint_custom_primitive` / `window.paint_with_callback`, beside them in the same
-  phase.
+  into the frame's scene, so the hooks are `window.paint_imported_texture` and
+  `window.paint_with_callback`, beside them in the same phase. The drafts' separate
+  `register_foreign_texture` step between them is gone — it existed to name the texture for
+  a registry, and there is no registry
+  ([`foreign-texture.md`](foreign-texture.md) §3).
 - **`Styled::style` returns `&mut StyleRefinement`**
   (`crates/gpui_authoring/src/styled.rs:26`), not `&mut Style`.
 - **The radii type is `Corners<Pixels>`** (`crates/gpui_types/src/geometry.rs:2235`,

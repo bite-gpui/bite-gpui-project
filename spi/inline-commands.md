@@ -47,6 +47,10 @@ resources from its own device would fail inside the pass, so the callback belong
 renderer, where the device already is. The whole of it is
 [`../decisions/0002-render-extension-device-model.md`](../decisions/0002-render-extension-device-model.md).
 
+Which is where the two paths differ in kind, and in what they share: Path A shares the
+device and the *queue*, and orders by submission; Path B shares the *encoder* itself, and
+orders by the command's position in the pass ([`foreign-texture.md`](foreign-texture.md) §6).
+
 **`order` is the scene's, not the element's.** `Scene::insert_primitive` assigns it
 (`crates/gpui_engine/src/scene.rs:85`, `:95`) and overwrites each primitive's field
 (`:102`–`:131`). An earlier draft had the element call `cx.current_paint_order()`, which

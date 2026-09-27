@@ -18,7 +18,7 @@ Each row is an assertion a test can make, not a thing to look at:
 | DPI / scale factor | a half- or double-scale viewport | `bounds * scale_factor` rounds to the coordinates the platform target reports |
 | premultiplied alpha | fringes at rounded corners and antialiased edges | a known RGBA fixture composites to a known pixel on readback |
 | Path A colour space | a washed-out composite | an sRGB fixture round-trips without a ≈2.2 gamma shift |
-| Path A foreign-texture id | an atlas id reused for a foreign texture | the registry rejects an id it did not hand out |
+| Path A ordering | a texture sampled before the pass that fills it | a frame whose producer submits in its paint callback composites the texture; the same frame with that submission removed does not |
 | Path A device identity | a texture from a second device | the bind fails, and the failure names the mismatch |
 | Path B state isolation | UI corruption *after* an injected draw | a quad drawn after an injected command matches the same quad with no injection |
 | Path B scissor | drawing outside the element | an injected command cannot paint outside its device scissor rect |

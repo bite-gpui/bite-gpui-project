@@ -102,7 +102,7 @@ recommendation for Path A as designed.
 - **Synchronisation.** Even where sharing works, D3D11 reading while D3D12 writes tears a
   frame unless there is a keyed mutex or a fence handshake. Nothing in the current design
   carries one; Outcome A would add a synchronisation requirement to the
-  `ForeignTextureHandle` contract.
+  `ImportedTextureHandle` contract.
 - **Colour space, not yet pinned.** GPUI's Windows target is `…_UNORM`, not `…_SRGB`
   (`crates/gpui_windows/src/directx_renderer.rs:32`), so whether a foreign texture should
   be `Bgra8UnormSrgb` or plain `Bgra8Unorm` depends on what GPUI's sampler and shader do
@@ -111,7 +111,7 @@ recommendation for Path A as designed.
 
 ## 5. What Outcome B changes in the design
 
-- **Drop the Windows arm of `ForeignTextureHandle`.** The drafts' `DirectX(*const c_void)`
+- **Drop the Windows arm of `ImportedTextureHandle`.** The drafts' `DirectX(*const c_void)`
   variant rests on the false premise that a wgpu producer can feed GPUI's D3D11 renderer.
   With the payload erased, the enum simply does not have a Windows variant.
 - **Make the D3D11 renderer say so.** `draw_surfaces`

@@ -136,7 +136,7 @@ what was proposed, and what each got wrong — rather than as specification, the
    (`crates/gpui_platform/src/window.rs:356`, `:429`), which a closure cannot satisfy and
    a trait object cannot derive. The `FnRendererFactory` adapter keeps the closure
    spelling for the common case.
-6. **The Windows arm of `ForeignTextureHandle`.** **Removed.** A wgpu texture cannot be
+6. **The Windows arm of `ImportedTextureHandle`.** **Removed.** A wgpu texture cannot be
    read by GPUI's Direct3D 11 renderer, and wgpu offers no shareable resource — see
    `foreign-texture.md` and the spike. The payload is the wgpu `TextureView` on every
    platform wgpu renders, and the raw Metal handle on macOS.
@@ -152,9 +152,11 @@ what was proposed, and what each got wrong — rather than as specification, the
    one argument and returns a `Result`
    (`wgpu-29.0.4/src/api/adapter.rs:58`), and `Instance::request_adapter` returns a
    `Result`, not an `Option` (`wgpu-29.0.4/src/api/instance.rs:167`).
-10. **The drafts' authoring names.** `WindowContext` and `ViewContext` do not exist
-    here; `CornerRadii` is `Corners<Pixels>`; and painting is a `window.` capability, not
-    a `cx.` one. Corrected throughout.
+10. **The drafts' authoring names, and their texture API.** `WindowContext` and
+    `ViewContext` do not exist here; `CornerRadii` is `Corners<Pixels>`; painting is a
+    `window.` capability, not a `cx.` one; and there is no registry to `register` a
+    texture into, so it is one `paint` call and not a `register`-then-name pair
+    ([`foreign-texture.md`](foreign-texture.md) §3). Corrected throughout.
 
 ### Settled
 
