@@ -6,9 +6,9 @@
   [`../spi/rendering/renderer-seam.md`](../spi/rendering/renderer-seam.md) §6's patch 07.
 - **The question:** can `gpui_wgpu::WgpuRenderer` own a Windows window's presentation?
   **Answered: yes — on Direct3D 12, and not on the backends `gpui_wgpu` asks for today.**
-- **The probe** is the crate at `probes/windows-wgpu-present`, on the branch
-  `bite_v1.22.0-pre-wgpu-present-probe` (PR #2). Its job answered and was removed, so the
-  printout in §2 is the durable record and the crate is the reproduction.
+- **The probe** is the crate at `probes/windows-wgpu-present`, on `bite_v1.22.0-pre`
+  (PR #2). Its job answered and was removed, so the printout in §2 is the durable record
+  and the crate is the reproduction.
 
 ## 1. What it answered
 

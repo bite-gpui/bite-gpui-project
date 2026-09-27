@@ -28,5 +28,5 @@ questions get re-argued.
 | issue | status | subject |
 | --- | --- | --- |
 | [`0001-check-citations.md`](0001-check-citations.md) | closed | 73 citations carry a line number and nothing verified them; `script/check-citations` now resolves every one against `bite_v1.22.0-pre` |
-| [`0002-ci-for-fork-prs.md`](0002-ci-for-fork-prs.md) | open | the CI in `bite-gpui/distribution` never runs on `bite-gpui/bite-gpui` pull requests; the ruleset rule proposed to fix it does not exist, and the real options are a thin driver in the fork or a pull-request entry point in `distribution` |
+| [`0002-ci-for-fork-prs.md`](0002-ci-for-fork-prs.md) | open | the CI in `bite-gpui/distribution` never runs on `bite-gpui/bite-gpui` pull requests; a thin caller into `distribution`'s `pr-checks` entry point answers it and is on `bite_v1.22.0-pre`, leaving the ruleset gate and the other branches |
 | [`0003-scheduled-builds.md`](0003-scheduled-builds.md) | open | the pull-request gate is deliberately minimal; what it leaves out — `--all-features`, wasm32, clippy, the tests, the packaging checks — needs a scheduled build to run on |

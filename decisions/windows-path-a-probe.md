@@ -9,9 +9,9 @@
   Path A and Path B on Windows require installing `gpui_wgpu::WgpuRenderer`.
 - **The other three platforms are out of scope** — macOS has Metal on both sides, Linux has
   wgpu on both.
-- **The probe** is the crate at `probes/windows-path-a`, on the branch
-  `bite_v1.22.0-pre-path-a-probe` (PR #1). It is not on any release branch, so the printout
-  in §4 is the durable record and the crate is the reproduction.
+- **The probe** is the crate at `probes/windows-path-a`, on `bite_v1.22.0-pre` (landed with
+  PR #2). Its job answered and was removed, so the printout in §4 is the durable record and
+  the crate is the reproduction.
 
 ## 1. The prior, and the three readings that settled it
 
