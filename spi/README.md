@@ -61,4 +61,5 @@ thermal pressure. A pipeline's answer is not the last word on a window's rate.
 | document | status |
 | --- | --- |
 | [`input-policy-seam.md`](input-policy-seam.md) | parked — specified but not proposed upstream; no third swap ships |
+| [`scene-renderer-seam.md`](scene-renderer-seam.md) | proposed — the prerequisite below: giving `SceneRenderer` a bootstrap so a renderer is installable through `Application`, with each backend's own renderer as the default and no change when the call is omitted |
 | [`dual-path-render-extension.md`](dual-path-render-extension.md) | proposed — a `SceneRenderer` extension SPI (zero-copy texture import and inline command injection). Nothing of it is implemented; the seam it extends has no `Application` hook, so reaching it means supplying a `Platform` |
