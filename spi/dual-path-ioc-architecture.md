@@ -7,6 +7,10 @@
   It supersedes the *factory* design in the seam document's §2–§5 and the sketches in
   the RFC's Chapters 4–6; both stay for provenance, and one part of the seam document
   is still load-bearing — see "What the seam document still owns" below.
+- **Detailed by** [`dual-path-implementation-spec.md`](dual-path-implementation-spec.md):
+  the initialisation sequence, the colour-space and pipeline-state-isolation invariants,
+  the device-loss protocol, and the verification matrix. That document assumes this
+  one's corrections instead of restating them.
 - **Target crates:** `gpui_engine`, `gpui_platform`, `gpui_authoring`, `gpui_linux`,
   `gpui_macos`, `gpui_windows`, `gpui_wgpu`.
 - **Ecosystem:** the `gpui` facade and `gpui_authoring`. **Not** `gpui_animotion` — see
