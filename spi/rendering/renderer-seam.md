@@ -167,19 +167,35 @@ pub trait WinSceneRenderer: SceneRenderer {
     fn set_background_appearance(&mut self, appearance: WindowBackgroundAppearance);
 }
 
-// One trait, three definitions: the cfg-selected native hook is a supertrait, so
-// `&dyn PlatformRenderer` upcasts to it and no backend downcasts to reach its own.
+// The native hook as a supertrait, without a second copy of the lifecycle: a trait's
+// supertraits cannot be cfg-selected, so this is the trait that can be, and the blanket
+// implementation is why no renderer writes this one by hand.
 #[cfg(target_os = "macos")]
-pub trait PlatformRenderer: MacSceneRenderer { /* … as 5.1 … */ }
+pub trait NativeSceneHooks: MacSceneRenderer {}
 #[cfg(target_os = "windows")]
-pub trait PlatformRenderer: WinSceneRenderer { /* … as 5.1 … */ }
+pub trait NativeSceneHooks: WinSceneRenderer {}
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-pub trait PlatformRenderer: SceneRenderer { /* … as 5.1 … */ }
+pub trait NativeSceneHooks: SceneRenderer {}
+
+#[cfg(target_os = "macos")]
+impl<T: MacSceneRenderer + ?Sized> NativeSceneHooks for T {}
+#[cfg(target_os = "windows")]
+impl<T: WinSceneRenderer + ?Sized> NativeSceneHooks for T {}
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+impl<T: SceneRenderer + ?Sized> NativeSceneHooks for T {}
+
+// `&dyn PlatformRenderer` upcasts to `MacSceneRenderer` through this, so no backend
+// downcasts to reach its own — the upcast being transitive is what makes one definition
+// enough.
+pub trait PlatformRenderer: NativeSceneHooks { /* … as 5.1 … */ }
 ```
 
-A `WgpuRenderer` on macOS would implement `MacSceneRenderer` by returning the
-`CAMetalLayer` it renders through, which is what a wgpu surface on macOS is. This is the
-one part of the seam draft's §3 that is still load-bearing; it put the alias
+A `WgpuRenderer` on macOS implements `MacSceneRenderer`, and the probe that asked found it does
+not have to return a `CAMetalLayer` that matters: wgpu downcasts the view's root layer and
+inserts its own when the downcast fails, so what `layer_ptr` returns decides only what the
+window's `-[NSView makeBackingLayer]` has to return — the one corner that probe leaves open
+([`../../decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md)). This is
+the one part of the seam draft's §3 that is still load-bearing; it put the alias
 `PlatformRenderer = dyn MacSceneRenderer` in place of the trait, and the supertrait is the
 one change that makes it compose with the lifecycle.
 
@@ -234,7 +250,7 @@ pub trait RendererFactory: 'static {
 }
 
 #[derive(Clone)]
-pub struct DynRendererFactory(Rc<dyn RendererFactory>);
+pub struct DynRendererFactory(pub Rc<dyn RendererFactory>);
 
 impl std::fmt::Debug for DynRendererFactory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -244,6 +260,15 @@ impl std::fmt::Debug for DynRendererFactory {
 
 /// The spelling for the common case: a closure is a factory.
 pub struct FnRendererFactory<F>(pub F);
+
+impl<F> RendererFactory for FnRendererFactory<F>
+where
+    F: Fn(RendererTarget<'_>) -> anyhow::Result<Box<dyn PlatformRenderer>> + 'static,
+{
+    fn create(&self, target: RendererTarget<'_>) -> anyhow::Result<Box<dyn PlatformRenderer>> {
+        (self.0)(target)
+    }
+}
 ```
 
 The newtype is also what keeps coherence honest: `impl RendererFactory for F where F:
