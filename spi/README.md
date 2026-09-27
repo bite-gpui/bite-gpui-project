@@ -10,6 +10,12 @@ permanent commitment. Once a swap is on crates.io there is an implementation out
 the tree that has to keep compiling, which constrains the trait in a way an internal
 trait is not constrained.
 
+A crate can extend the engine without being a swap, though. A **wrap** decorates the
+frame pipeline instead of replacing anything, and the two tiers commit to different
+things — which is why only one of the five seams can host a wrap, and why publishing one
+is not the same decision as publishing a swap. See
+[`../architecture/extension-tiers.md`](../architecture/extension-tiers.md).
+
 ## The boundaries
 
 Verified 2026-09-26 against the source in a `bite_*` branch.
@@ -18,7 +24,7 @@ Verified 2026-09-26 against the source in a `bite_*` branch.
 | --- | --- | --- | --- |
 | `TextSystem` | `crates/gpui_engine/src/text_system.rs:33` | `Application::with_text_system(Arc<dyn TextSystem>)` | **published** — `bite-gp-parley` |
 | `LayoutEngine` | `crates/gpui_engine/src/layout.rs:53` | `Application::with_layout_engine(impl Fn() -> Box<dyn LayoutEngine>)` | **published** — `bite-gp-morphorm` |
-| `FramePipeline` | `crates/gpui_authoring/src/window/frame_pipeline.rs` | `Application::with_frame_pipeline(impl Fn(WindowId) -> Box<dyn FramePipeline>)` | none ships — [`../decisions/0001-no-third-swap.md`](../decisions/0001-no-third-swap.md) |
+| `FramePipeline` | `crates/gpui_authoring/src/window/frame_pipeline.rs:28` | `Application::with_frame_pipeline(impl Fn(WindowId) -> Box<dyn FramePipeline>)` | **no swap ships** — a *wrap* decorates it instead: `bite-gp-pass`, see [`../architecture/extension-tiers.md`](../architecture/extension-tiers.md). Why no third *swap*: [`../decisions/0001-no-third-swap.md`](../decisions/0001-no-third-swap.md) |
 | `Platform` | `crates/gpui_platform/src/platform.rs:59` | `Application::with_platform(Rc<dyn Platform>)` | none out-of-tree; host-selected by `cfg(target_os)` |
 | `SceneRenderer` | `crates/gpui_engine/src/renderer.rs:16` | **no `Application` hook.** Reached through `PlatformWindow::with_renderer` and `PlatformWindow::present`, so it is swapped by supplying a `Platform` | none |
 
@@ -30,6 +36,12 @@ Two of five seams have a published second implementation, and both replace a rea
 algorithm — a shaper, a constraint solver. The rest are host-bound (`Platform`), reached
 only through another seam (`SceneRenderer`, through `PlatformWindow`), or open for a
 reason worth reading before adding anything to them (`FramePipeline`).
+
+The fourth of those is the one a *wrap* answers, and it is worth separating the two
+questions: no second **swap** implements `FramePipeline`, and `bite-gp-pass` is a
+**wrap** on it rather than one — a decorator that decides and observes without
+replacing what lays out or paints. [`../architecture/extension-tiers.md`](../architecture/extension-tiers.md)
+has the distinction.
 
 `SceneRenderer` owns presentation timing: its `fn draw(&mut self, scene: &Scene) -> bool`
 returns whether it presented, and `PlatformWindow::present` hands that result back to

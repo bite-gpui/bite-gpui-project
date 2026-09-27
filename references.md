@@ -17,17 +17,19 @@ arrives at `.meta` first.
 | **the website** | marketing and user-level documentation | `.website` — `bite-gpui/bite-gpui.github.io` | `design/DESIGN-SYSTEM.md`, `src/` (Astro) |
 | **actual uses** | outside-in exercises: a demo app, a text system, a layout engine, an out-of-tree renderer, pipeline/runtime experiments | `.uses` (a directory, not a repository) and separate repositories | `README.md` (the measurement policy), `parley-demo/`, `scroll-demo/`, each with a `benchmarks/` record |
 
-### The published swaps
+### The out-of-tree crates
 
-| crate | what it replaces | repository | here |
-| --- | --- | --- | --- |
-| `bite-gp-parley` | `TextSystem` | `bite-gpui/gpui_parley` | `.parley/` |
-| `bite-gp-morphorm` | `LayoutEngine` | `bite-gpui/gpui_morphorm` | `.morphorm/` |
+| crate | tier | what it is | repository | here |
+| --- | --- | --- | --- | --- |
+| `bite-gp-parley` | swap | replaces `TextSystem` | `bite-gpui/gpui_parley` | `.parley/` |
+| `bite-gp-morphorm` | swap | replaces `LayoutEngine` | `bite-gpui/gpui_morphorm` | `.morphorm/` |
+| `bite-gp-pass` | wrap | throttles the frame pipeline by a rate policy and keeps a ledger of what its passes cost — published as `1.21.3` | `bite-gpui/gpui_pass` | `.pass/` |
 
 Each carries `src/`, `tests/`, `examples/`, `benches/` and a dated `benchmarks/` record.
-See [`spi/README.md`](spi/README.md) for the seam each one implements, and
-[`decisions/0001-no-third-swap.md`](decisions/0001-no-third-swap.md) for why there is no
-third.
+See [`architecture/extension-tiers.md`](architecture/extension-tiers.md) for the two
+tiers, [`spi/README.md`](spi/README.md) for the seams a swap implements, and
+[`decisions/0001-no-third-swap.md`](decisions/0001-no-third-swap.md) for why the swap
+tier stops at two.
 
 ### Inside `.tools`
 
@@ -63,20 +65,24 @@ would go stale:
 ## The working copies, and what is excluded
 
 `.dist/`, `.tools/`, `.website/`, `.uses/`, `.parley/`, `.morphorm/`, `.meta/` and
-`.governor/` are excluded in the zed clone via `.git/info/exclude`. Each is a separate
+`.pass/` are excluded in the zed clone via `.git/info/exclude`. Each is a separate
 concern, and committing any of them to a `bite_*` branch would duplicate it across twelve
 branches.
 
 | directory | its own repository? |
 | --- | --- |
-| `.dist/`, `.tools/`, `.website/`, `.parley/`, `.morphorm/`, `.meta/` | yes |
+| `.dist/`, `.tools/`, `.website/`, `.parley/`, `.morphorm/`, `.meta/`, `.pass/` | yes |
 | `.uses/` | no — a directory in the clone |
-| `.governor/` | no — untracked, holds no published artifact |
 
-`.governor/` is the working copy of the swap that
-[`decisions/0001-no-third-swap.md`](decisions/0001-no-third-swap.md) decided against
-shipping. Worth knowing what lives there and nowhere else: `.governor/tests/` is the
-**only executable evidence** for that decision's numbers — 61 frames per two seconds for
-the limiter at 24 fps, against 60 and 40 for the shipped rule transcribed onto the same
-clock. If the directory is deleted the record survives, but its figures become
-unverifiable. That is a choice to make deliberately.
+`.pass/` is the wrap's repository — `gpui_pass`, which throttles a window's frame rate
+and keeps a ledger of what its passes cost. It was renamed from `gpui_governor` when the
+rate limiter it was first built on turned out to be the wrong tool for the seam, and grew
+the ledger half afterwards; it is the crate in the second tier of
+[`architecture/extension-tiers.md`](architecture/extension-tiers.md), and it is why
+[`decisions/0001-no-third-swap.md`](decisions/0001-no-third-swap.md) reads as a decision
+about *swaps* specifically. `.pass/tests/` holds the numbers that decision's "What would
+reopen this" rests on — 121 frames in five seconds for the pass at 24 fps on a 60Hz ask
+grid, against 150 (30 fps) and 100 (20 fps) for the shipped rule transcribed onto the same
+clock — and `.pass/benchmarks/2026-09-27-frame-pass.md` records the run. If the
+directory is deleted the record survives, but its figures become unverifiable. That is a
+choice to make deliberately.

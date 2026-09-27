@@ -10,6 +10,7 @@ that crosses each boundary.
 | [`layer-stack.md`](layer-stack.md) | the layer map with measured sizes, the dependency direction, the two deliberate edges, and the rulings that decide where a new item goes |
 | [`frame-flow.md`](frame-flow.md) | one frame from the platform asking for it to pixels on the glass, the seam each stage is entered through, and what a pipeline can and cannot reach |
 | [`reactive-layer.md`](reactive-layer.md) | how a state change becomes a frame: `notify`, the effect queue that runs observers, the invalidator that decides whether a window is dirty, and the entity-granular cache that decides which subtrees are not rebuilt at all |
+| [`extension-tiers.md`](extension-tiers.md) | the two ways a crate extends the engine — a *swap* replacing a seam's implementation, a *wrap* decorating the frame pipeline — and what each can do, cannot do, and commits to |
 
 ## Belongs here
 
@@ -47,10 +48,11 @@ this repository's own convention.
 1. **The bootstrap order, in the detail the seams need.** What `Application` applies in
    what order, and what is already fixed by the time the first window opens — the
    question that decides whether a seam can still be changed at runtime, and the one the
-   governor investigation kept running into. [`frame-flow.md`](frame-flow.md) records each
+   frame-pipeline investigation kept running into. [`frame-flow.md`](frame-flow.md) records each
    seam's lifetime but not the order they are applied in.
 
 Everything else this directory was missing now exists: the layer map in
 [`layer-stack.md`](layer-stack.md), the frame and its interception points in
-[`frame-flow.md`](frame-flow.md), and the state-to-frame chain in
-[`reactive-layer.md`](reactive-layer.md).
+[`frame-flow.md`](frame-flow.md), the state-to-frame chain in
+[`reactive-layer.md`](reactive-layer.md), and the two extension tiers in
+[`extension-tiers.md`](extension-tiers.md).

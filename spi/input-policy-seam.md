@@ -269,14 +269,14 @@ is the case, the flush hook is mandatory rather than optional.
 
 ## 7. If this lands, what `bite-gp-gate` becomes
 
-Thin. With `InputPolicy` in place, a governor-backed policy is a `filter_event` that
-consults a `RateLimiter` and a `flush` that releases the latest held event — on the
-order of the `GovernedPipeline` that this investigation already wrote and tested
-(`.governor/src/gpui_governor.rs`), and the pacing tests carry over because the
-decision is the same GCRA cell check.
+Thin. With `InputPolicy` in place, a rate-controlled policy is a `filter_event` that
+consults a rate schedule and a `flush` that releases the latest held event — on the
+order of the `PassPipeline` that this investigation already wrote and tested
+(`.pass/src/gpui_pass.rs`), and the rate tests carry over because the decision
+is the same arrival check.
 
 With the §6 declarative option instead, **no crate is needed at all**, and the honest
-answer to "where does GCRA belong here?" is "nowhere in this design". That is worth
+answer to "where does a rate limiter belong here?" is "nowhere in this design". That is worth
 weighing before adding a seam: a seam is a permanent commitment, and this one would
 exist principally to host a limiter whose measured benefit is narrower than its
 apparent scope.

@@ -7,9 +7,13 @@ opened for it. The note is kept as the record of what the swap would have been a
 why it stops here, so the ground is not re-covered.
 
 If the objection is specifically to C++ rather than to telemetry-as-a-swap, `puffin`
-is the pure-Rust alternative (in-process, no `-sys` crate) — but it would need these
-same decisions re-made, including the version slot, and its advantage still would not
-be exercisable in CI. Read §1 and §6 before starting it.
+is the pure-Rust alternative (in-process, no `-sys` crate). It would still need the
+version-slot decision, and as a **swap** its advantage could not be exercised in CI.
+But it has since been pursued as a **wrap** instead, where both objections fall away:
+`.pass`'s `PuffinPipeline`, behind an off-by-default `puffin` feature, emits a scope per
+pass and a frame boundary between frames, and `tests/puffin.rs` drives real frames with
+the scopes on and reads them back through `puffin::GlobalFrameView` — the CI gate a swap
+could not have had. Read §1 and §6 before starting it as a swap.
 
 **Original scope follows.** Written after the `InputPolicy` seam proposal, per the
 same investigation.
@@ -34,7 +38,7 @@ part is only its **cost**: nanoseconds per span, which is a number you pay, not 
 number you win.
 
 That matters for CI. Morphorm's facade test is what caught a transparent window; the
-governor's rate tests are what caught a wrong burst preset. A tracy swap has no
+throttle's rate tests are what caught a wrong burst preset. A tracy swap has no
 equivalent gate, because it is only useful with an external GUI attached, and a
 disconnected client is a no-op. So a published artefact whose advantage cannot be
 exercised in CI needs a different entry argument than the first two swaps.
@@ -62,7 +66,7 @@ test-support = ["dep:gpui", "gpui/platform", "gpui/test-support"]
 
 **The version slot is undecided.** §6 of the contract is
 `major.minor.(patch * 100 + amendment)`, which gives 1.21.1 to parley and 1.21.2 to
-morphorm. 1.21.3 was reserved for `bite-gp-governor`. If governor does not ship,
+morphorm. 1.21.3 was reserved for `bite-gp-pass`. If the throttle does not ship,
 tracy should take 1.21.3; if it does, tracy takes 1.21.4. Do not pick one until that
 is settled — a published version cannot be reused.
 
@@ -196,7 +200,7 @@ always `None`, and the two tracy columns are identical to the floor.
 
 Reported as ns per frame and ns per span. The harness is a headless frame loop — the
 pipeline's decision is measurable through `WindowMetrics` without a display, which is
-how the governor crate's benchmark was kept buildable here.
+how the throttle crate's benchmark was kept buildable here.
 
 What this cannot produce is a figure analogous to morphorm's, and the README should
 not pretend otherwise. The claim is: *adds N ns per frame disconnected; gives back a
@@ -231,7 +235,8 @@ case, and the swap should not ship. That is the honest test of "earns its spot".
   per frame, or the connected column is more than a few µs, a telemetry decorator is
   competing with the thing it measures. Measure before publishing.
 - **The C++ dependency is unacceptable for the distribution.** Then the swap cannot
-  ship as a `bite-gp-*` crate at all, whatever its merits.
+  ship as a `bite-gp-*` crate at all, whatever its merits. (A pure-Rust client would
+  clear this bar — `puffin` did, as the wrap in `.pass`.)
 - **`InstrumentedPipeline` is enough in practice**, per §6.
 
 ## 8. Recommendation
@@ -241,4 +246,4 @@ overhead measurement *first* — it is one benchmark file and it decides the cra
 Then, if it proceeds: scaffold `src/`, `tests/facade.rs` (the swap installs and a
 frame still draws — the check that caught morphorm's invisible window), and the
 benchmark record. The demo is the only part that cannot be verified here, for the
-same reason the governor demo could not: no display.
+the same reason the throttle demo could not: no display.
