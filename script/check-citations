@@ -30,8 +30,9 @@ from pathlib import Path
 # citation in the repository and means a pass over all of them.
 CANONICAL_REF = "bite_v1.22.0-pre"
 
-# A citation is a Rust source path followed by a line, or a line range.
-CITATION = re.compile(r"([A-Za-z0-9_][A-Za-z0-9_/.-]*\.rs):(\d+)(?:-(\d+))?")
+# A citation is a source path followed by a line, or a line range. Rust is the bulk of
+# them; the shaders are why the extension list is not just `rs`.
+CITATION = re.compile(r"([A-Za-z0-9_][A-Za-z0-9_/.-]*\.(?:rs|wgsl|metal|hlsl)):(\d+)(?:-(\d+))?")
 
 # Where a bare filename is looked up, in order. Every bare citation in the
 # documents today is `gpui_authoring`'s; anything from another crate has to say
