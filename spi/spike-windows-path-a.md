@@ -99,24 +99,30 @@ The binding constraint on this host is **disk, not the toolchain**: 1.2 GB free.
 `cargo clean`, and five unused rustup toolchains (≈1.5 GB each; the clone pins 1.95.0
 and the out-of-tree crates pin 1.98.1).
 
-### The two CI jobs
+### The CI jobs
 
-```yaml
-cross-check:
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v4
-    - run: rustup target add x86_64-pc-windows-msvc aarch64-apple-darwin wasm32-unknown-unknown
-    - run: cargo check --target x86_64-pc-windows-msvc -p gpui_windows -p gpui_authoring
-    - run: cargo check --target aarch64-apple-darwin -p gpui_apple -p gpui_macos
-    - run: cargo check --target wasm32-unknown-unknown -p gpui_web
+The compile checks that matter are per backend, because each backend is
+`#![cfg(target_os = "…")]`-gated and a Linux build compiles it to nothing. What the
+fork runs, in `.github/workflows/bite-ci.yml`:
 
-path-a-probes:
-  runs-on: windows-latest
-  steps:
-    - uses: actions/checkout@v4
-    - run: cargo test --test path_a_probes
-```
+| job | runner | why there |
+| --- | --- | --- |
+| `checks` | ubuntu | the target table and the naming rule, from `bite-gpui/distribution` |
+| `cargo check -p gpui` | macos-14 | the Metal backend; the build script compiles the shaders |
+| `cargo check --release -p gpui` | windows-latest | the Direct3D backend; release is the profile whose build script compiles the HLSL |
+
+Standard hosted runners are free for a public repository, so the real platforms cost
+wall-clock and nothing else.
+
+A single Linux cross-check job covered Windows and Apple first. It was right for
+Windows and wrong for Apple: `crates/gpui_apple/src/metal_renderer.rs:36` includes
+`OUT_DIR/shaders.metallib` unconditionally, only a macOS host produces it, and the lib
+is gated on the target while `build.rs` is compiled for the host — so checking Apple off
+macOS needs the build script's stub and checks the Rust without the shaders. The stub
+stays for local cross-checking.
+
+The wasm leg that sketch had (`cargo check --target wasm32-unknown-unknown -p gpui_web`)
+is not in the file yet.
 
 Probe 1 is the one that needs `wgpu`; probes 2 and 3 need only the `windows` crate. It
 is worth splitting them into two test binaries so the compile gate stays cheap.
@@ -164,7 +170,8 @@ Three hazards to fold into whichever probe runs first:
 
 - **Probe 2 — `interop OK` on `windows-latest`.** The probe is on the branch
   `bite_v1.22.0-pre-path-a-probe`, at `probes/windows-path-a` (PR #1), where a
-  `windows-latest` job runs it. It printed, in order: a D3D12 device; a shared-heap
+  `windows-latest` job ran it until it answered; the job is gone and the crate stays.
+  It printed, in order: a D3D12 device; a shared-heap
   texture; `CreateSharedHandle -> HANDLE(0x284)`; `OpenSharedResource1 -> texture`; an
   SRV; `PROBE 2: interop OK`. So a D3D12 texture on `D3D12_HEAP_FLAG_SHARED` **can** be
   opened on a D3D11 device and sampled. The run is on WARP — the hosted runner has no
