@@ -4,6 +4,12 @@
   `gpui_windows`, `gpui_wgpu`), ecosystem extension crate (`bite_gpui_render_ext`)
 - **Status:** proposed. Not implemented, not accepted.
 - **Author:** community extension architecture proposal, transcribed as received.
+- **Revised by:** [`dual-path-ioc-architecture.md`](dual-path-ioc-architecture.md),
+  which merges this RFC with [`scene-renderer-seam.md`](scene-renderer-seam.md) and
+  corrects the sketches against this fork. Its first finding is that this RFC's Path A
+  already half-exists in the tree: `PaintSurface`
+  (`crates/gpui_engine/src/scene.rs:749`) is drawn by Metal and DirectX and is a no-op
+  in wgpu.
 
 ## Where this stands against this fork
 

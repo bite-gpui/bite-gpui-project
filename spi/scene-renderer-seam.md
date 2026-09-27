@@ -8,6 +8,10 @@
   [`dual-path-render-extension.md`](dual-path-render-extension.md). That RFC extends
   what a renderer can be handed; this one makes the renderer itself *installable*.
   Neither replaces the other.
+- **Revised by** [`dual-path-ioc-architecture.md`](dual-path-ioc-architecture.md): it
+  keeps this document's §3 (the native hooks, which it has no place for) and replaces
+  §2–§5's process-wide factory with a per-window one and a type-erased target. Read the
+  two together.
 
 ## The gap, in one sentence
 

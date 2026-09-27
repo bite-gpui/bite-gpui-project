@@ -61,6 +61,7 @@ thermal pressure. A pipeline's answer is not the last word on a window's rate.
 | document | status |
 | --- | --- |
 | [`input-policy-seam.md`](input-policy-seam.md) | parked — specified but not proposed upstream; no third swap ships |
-| [`scene-renderer-seam.md`](scene-renderer-seam.md) | proposed — the prerequisite for the two below: giving `SceneRenderer` a bootstrap so a renderer is installable through `Application`, with each backend's own renderer as the default and no change when the call is omitted |
-| [`dual-path-render-extension.md`](dual-path-render-extension.md) | proposed — a `SceneRenderer` extension SPI (zero-copy texture import and inline command injection). Nothing of it is implemented; reaching the seam it extends needs the document above |
-| [`gpu-canvas-dx.md`](gpu-canvas-dx.md) | proposed — the authoring surface the two above exist to serve: a chainable `GpuCanvas` component, built on `div` and `canvas`, so an application renders a GPU viewport in a `div()` without implementing `Element` |
+| [`scene-renderer-seam.md`](scene-renderer-seam.md) | proposed — giving `SceneRenderer` a bootstrap so a renderer is installable through `Application`. Its factory design (§2–§5) is revised by the entry two rows below; its §3, the native hooks, still stands |
+| [`dual-path-render-extension.md`](dual-path-render-extension.md) | proposed — the zero-copy texture import and inline command injection RFC, transcribed as received. Its factory-free framing is superseded by the revision below |
+| [`dual-path-ioc-architecture.md`](dual-path-ioc-architecture.md) | proposed — the fork's revision of the render extension, merging the two above: the IoC factory, the type-erased target, and the primitive, with the corrections each needs at this ref. Its first finding is that Path A already half-exists as `PaintSurface` |
+| [`gpu-canvas-dx.md`](gpu-canvas-dx.md) | proposed — the authoring surface the three above exist to serve: a chainable `GpuCanvas` component, built on `div` and `canvas`, so an application renders a GPU viewport in a `div()` without implementing `Element` |
