@@ -204,6 +204,10 @@ checkout, which is worth having locally — but CI no longer depends on it.
   `checks / target table and naming rule`, `cargo check -p gpui (macos-14)` and
   `cargo check --release -p gpui (windows-latest)`.
   Organization rulesets need Team or Enterprise and are out.
+- **The wider checks.** The pull-request gate is deliberately small: three jobs, the
+  cheapest that catch what nothing else reaches. What it leaves out — `--all-features`,
+  wasm32, clippy, the tests, the packaging checks — is [issue 0003](0003-scheduled-builds.md),
+  which asks for the scheduled build they belong on rather than adding them here.
 - **Widening it.** `verify.yml`'s `preflight` and `code-checks` are not in the entry
   point, for two separate reasons. `preflight` reads the stage report, which only
   `stage.py` writes and a pull request cannot run. And the composite actions cannot be
