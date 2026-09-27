@@ -3,6 +3,10 @@
 Where each piece lives, and what is in it. Remotes as configured on 2026-09-26, read
 with `git remote -v` in each directory.
 
+This is where everything lives as a *repository*. Where the same pieces live *online* —
+the crates.io packages, the GitHub repositories and the Pages site, with the description
+and topics each carries — is [`online-resources.md`](online-resources.md).
+
 ## What lives where
 
 The project is five efforts in five places. This framing is the tools repository's

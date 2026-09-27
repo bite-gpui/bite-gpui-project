@@ -31,6 +31,7 @@ being committed to any of them.
 | [`decisions/`](decisions/README.md) | dated decision records: what was decided, on what evidence, and what was rejected |
 | [`issues/`](issues/README.md) | the issue tracker, for work that spans repositories |
 | [`references.md`](references.md) | the other repositories, branches and published names, and what each is for |
+| [`online-resources.md`](online-resources.md) | the crates.io packages, GitHub repositories and Pages site, with the description and topics each carries |
 
 ## Conventions
 
