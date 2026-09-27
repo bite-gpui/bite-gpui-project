@@ -22,7 +22,8 @@ with no `Application::with_renderer` — see [`README.md`](README.md). Chapter 8
 through the facade today, so this SPI could not be *installed* even once implemented.
 That is the first thing to fix, and it is an upstream-facing change rather than an
 out-of-tree one — specified in [`scene-renderer-seam.md`](scene-renderer-seam.md),
-which this RFC depends on.
+which this RFC depends on. The authoring half — the chainable component that keeps an
+application author out of `Element` — is [`gpu-canvas-dx.md`](gpu-canvas-dx.md).
 
 **The authoring sketches use upstream's names.** Chapter 5's element code takes
 `cx: &mut WindowContext`. This fork has no `WindowContext`: an element's methods take

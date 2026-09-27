@@ -61,5 +61,6 @@ thermal pressure. A pipeline's answer is not the last word on a window's rate.
 | document | status |
 | --- | --- |
 | [`input-policy-seam.md`](input-policy-seam.md) | parked — specified but not proposed upstream; no third swap ships |
-| [`scene-renderer-seam.md`](scene-renderer-seam.md) | proposed — the prerequisite below: giving `SceneRenderer` a bootstrap so a renderer is installable through `Application`, with each backend's own renderer as the default and no change when the call is omitted |
-| [`dual-path-render-extension.md`](dual-path-render-extension.md) | proposed — a `SceneRenderer` extension SPI (zero-copy texture import and inline command injection). Nothing of it is implemented; the seam it extends has no `Application` hook, so reaching it means supplying a `Platform` |
+| [`scene-renderer-seam.md`](scene-renderer-seam.md) | proposed — the prerequisite for the two below: giving `SceneRenderer` a bootstrap so a renderer is installable through `Application`, with each backend's own renderer as the default and no change when the call is omitted |
+| [`dual-path-render-extension.md`](dual-path-render-extension.md) | proposed — a `SceneRenderer` extension SPI (zero-copy texture import and inline command injection). Nothing of it is implemented; reaching the seam it extends needs the document above |
+| [`gpu-canvas-dx.md`](gpu-canvas-dx.md) | proposed — the authoring surface the two above exist to serve: a chainable `GpuCanvas` component, built on `div` and `canvas`, so an application renders a GPU viewport in a `div()` without implementing `Element` |
