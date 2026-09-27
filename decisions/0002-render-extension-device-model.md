@@ -96,6 +96,16 @@ because `create_texture_from_hal` takes a `hal::*::Texture` whose fields are pri
 (`wgpu-hal-29.0.4/src/dx12/mod.rs:979`). So Tier 2 only ever works for a producer that
 owns the native API **and is not wgpu** — which is not what this feature is for.
 
+**None of that makes the bridges exotic.** Every compositor consumes its clients' buffers
+through exactly these mechanisms — a dma-buf on Wayland, a DXGI surface for DWM, a
+`CAMetalDrawable`'s storage for Core Animation — which is how a window reaches the screen at
+all. What is rejected is the *counterparty*, not the mechanism: the producer at this seam's
+other end is a texture wgpu made, and wgpu offers no way to make one shareable. And it is the
+**device**, not the process, that forces a bridge — two devices in one process need one as much
+as two processes do, and sharing inside one device needs none at all, only two views of the
+same resource. That is why tier 3's condition is "a device it does not control" and "a separate
+process" is only one way to arrive at it.
+
 Three costs that Tier 2 would have added, each absent from the chosen design:
 
 - **Synchronisation.** A second device means a second queue, so the consumer has to wait

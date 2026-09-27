@@ -179,3 +179,9 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
   shape, §10's first trigger does not fire, and transparency is available here where the DX12
   surface refuses it. The corner it leaves open is a `makeBackingLayer` that returns nil.
   [`../../decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md).
+- **Egress, if it is wanted.** Every chapter here is about a producer reaching *into* GPUI. The
+  other direction — handing GPUI's own output to a foreign consumer — is unspecified, and the
+  device rule already fixes its shape: on our device it is two views of one resource and needs
+  no handle at all, on another device it is the bridge 0002 rejects, and otherwise it is a
+  readback. What is *not* missing is the OS compositor: it is already a consumer of our surface
+  through exactly those bridges, which is how a window reaches the screen.
