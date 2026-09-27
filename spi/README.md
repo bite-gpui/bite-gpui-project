@@ -63,7 +63,7 @@ One document per seam, plus the chapters of the one that has more than a trait.
 | document | status |
 | --- | --- |
 | [`input-policy-seam.md`](input-policy-seam.md) | parked — specified but not proposed upstream; no third swap ships |
-| [`renderer-seam.md`](renderer-seam.md) | proposed — giving `SceneRenderer` a bootstrap, and the three contracts that follow: the widened trait, the typed target a renderer is built against, and the factory a window consults |
+| [`renderer-seam.md`](renderer-seam.md) | proposed — giving `SceneRenderer` a bootstrap, and the three contracts that follow: the trait a window holds, the typed target a renderer is built against, and the factory the window consults |
 
 ## The render extension
 
@@ -87,7 +87,7 @@ window's pass. Where the four candidates land:
 | scale ceiling | fails past ~500k vertices | high | **max** | high |
 | shader freedom | GPUI's SDFs only | full | **full** | full |
 
-Six chapters, because this is the only feature that needs a primitive, a renderer contract
+Five chapters, because this is the only feature that needs a primitive, a renderer contract
 and an authoring surface at once. Read them in order; each assumes the one before it.
 
 | chapter | subject |
@@ -97,7 +97,6 @@ and an authoring surface at once. Read them in order; each assumes the one befor
 | [`inline-commands.md`](inline-commands.md) | Path B: drawing into the window's own pass, the pipeline-state isolation matrix, and the coordinate bridge |
 | [`gpu-canvas.md`](gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 | [`verification.md`](verification.md) | what a test can assert, and which platform each check needs |
-| [`spike-windows-path-a.md`](spike-windows-path-a.md) | the one question the documents above could not settle, and what the probe answered |
 
 ## How this set was reconciled
 
@@ -118,7 +117,7 @@ is the provenance: what each proposed, and what became of it.
 | `wgpu-target-adaptors.md` | `renderer-seam.md` (the typed target), `foreign-texture.md` (HAL extraction), `inline-commands.md` (the coordinate bridge) |
 | `gpu-canvas-dx.md` | `gpu-canvas.md`, nearly whole |
 | cross-device texture sharing (never committed) | `foreign-texture.md` §"The device constraint" and [decision 0002](../decisions/0002-render-extension-device-model.md); its Tier 2 is rejected there |
-| [`spike-windows-path-a.md`](spike-windows-path-a.md) | kept as a spike |
+| `spike-windows-path-a.md` | neither a chapter nor a removal: it is the measurement [decision 0002](../decisions/0002-render-extension-device-model.md) rests on, so it was refiled as [`../decisions/windows-path-a-probe.md`](../decisions/windows-path-a-probe.md) |
 
 Two claims in the drafts are worth naming, because they are the kind that get copied: the
 RFC's "≈16.0 GB/s at 4K120" is its own formula miscounted — `W × H × 4 × fps × 2` is ≈8.0
@@ -226,8 +225,6 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
 
 ## Spikes
 
-A question a document cannot settle, and the probe that settles it.
-
-| document | question |
-| --- | --- |
-| [`spike-windows-path-a.md`](spike-windows-path-a.md) | whether a texture rendered by `wgpu` can reach GPUI's Direct3D 11 Windows renderer, or whether Path A and Path B on Windows require installing `WgpuRenderer` |
+None open. A question a document cannot settle, and the probe that settles it, is recorded
+the way [`../decisions/windows-path-a-probe.md`](../decisions/windows-path-a-probe.md) is:
+as *evidence* beside the decision it produced, in [`decisions/`](../decisions/README.md).

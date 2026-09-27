@@ -3,7 +3,7 @@
 - **Decided:** 2026-09-27
 - **Status:** decided
 - **Evidence:** [`../spi/foreign-texture.md`](../spi/foreign-texture.md) §2 and §5,
-  [`../spi/spike-windows-path-a.md`](../spi/spike-windows-path-a.md),
+  [`windows-path-a-probe.md`](windows-path-a-probe.md),
   [`../spi/renderer-seam.md`](../spi/renderer-seam.md) §5.5,
   [`../spi/verification.md`](../spi/verification.md) §4
 
@@ -117,7 +117,7 @@ Probe 2 on `windows-latest` established that the *raw* D3D path works: a D3D12 t
 a shared heap can be opened on a D3D11 device and sampled. That is the part that looked
 like it might rescue Tier 2. It does not, because it requires the producer to create its
 own D3D12 texture — the direction probes 1 and 3 close for wgpu. The full record, and the
-one probe still pending, are in [`../spi/spike-windows-path-a.md`](../spi/spike-windows-path-a.md).
+one probe still pending, are in [`windows-path-a-probe.md`](windows-path-a-probe.md).
 
 ## What would reopen it
 

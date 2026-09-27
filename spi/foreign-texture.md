@@ -61,7 +61,7 @@ D3D12 resource is invisible to a D3D11 device unless it was created shareable �
 `D3D12_HEAP_FLAG_SHARED`, a *heap* flag set at creation. wgpu never sets it
 (wgpu-hal's DX12 backend passes `D3D12_HEAP_FLAG_NONE`), and wgpu 29 exposes no
 external-memory API on any backend, so there is no way to ask. The full probe record is
-[`spike-windows-path-a.md`](spike-windows-path-a.md).
+[`../decisions/windows-path-a-probe.md`](../decisions/windows-path-a-probe.md).
 
 Three consequences, each of which the drafts got wrong in the other direction:
 
@@ -185,6 +185,12 @@ Two rules, and getting either wrong is a visible defect rather than a crash:
 
 `to_imported_handle` should validate both and fail early: the format is a property of the
 view, and the usage flags must include `TextureUsages::TEXTURE_BINDING`.
+
+**Not yet pinned on Windows.** GPUI's Windows render target is
+`DXGI_FORMAT_B8G8R8A8_UNORM` (`crates/gpui_windows/src/directx_renderer.rs:32`), not a
+`…_SRGB` format, so whether a foreign texture there should be `Bgra8UnormSrgb` or plain
+`Bgra8Unorm` depends on what GPUI's sampler and shader do with it — and that has not been
+read. Settle it by sampling a known fixture rather than by assumption.
 
 ## 5. Extracting the handle
 

@@ -20,6 +20,7 @@ Each row is an assertion a test can make, not a thing to look at:
 | Path A colour space | a washed-out composite | an sRGB fixture round-trips without a ≈2.2 gamma shift |
 | Path A ordering | a texture sampled before the pass that fills it | a frame whose producer submits in its paint callback composites the texture; the same frame with that submission removed does not |
 | Path A device identity | a texture from a second device | the bind fails, and the failure names the mismatch |
+| Outcome B end to end | a Windows configuration nothing has ever composited | on `windows-latest`, a window with `WgpuRenderer` installed composites a pushed texture, and the same window with the default renderer reports it unsupported |
 | Path B state isolation | UI corruption *after* an injected draw | a quad drawn after an injected command matches the same quad with no injection |
 | Path B scissor | drawing outside the element | an injected command cannot paint outside its device scissor rect |
 | device loss | a `SurfaceLost` panic | `device_lost()` → `recover()` → a frame draws |
@@ -85,7 +86,8 @@ all. A release receipt therefore says nothing about Direct3D.
 ## 4. What is not verifiable here, and what a probe is for
 
 - **Real hardware.** The Windows probes run on WARP, which is why
-  [`spike-windows-path-a.md`](spike-windows-path-a.md) records its result as "mechanically
+  [`../decisions/windows-path-a-probe.md`](../decisions/windows-path-a-probe.md) records its
+  result as "mechanically
   possible on one adapter" rather than "works".
 - **Adapter identity.** Sharing requires the same physical adapter, and the LUIDs of two
   independently created devices are not comparable from inside either one.

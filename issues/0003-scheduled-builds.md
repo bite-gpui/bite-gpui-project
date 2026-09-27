@@ -56,7 +56,7 @@ Everything expensive is left out of it, and each omission is a real gap:
 2. **Cadence.** Nightly catches drift on `bite_master` — which follows upstream's `main`
    — sooner and costs queue time every day; weekly keeps it quiet.
 3. **Scope.** At least the four omissions above, and the Path A probe if it becomes a
-   regression test rather than the question it was (`spi/spike-windows-path-a.md`).
+   regression test rather than the question it was (`decisions/windows-path-a-probe.md`).
 4. **Report or gate.** A scheduled run that reports and a check that blocks are
    different things, and making the scheduled result required is a separate decision
    from running it.
