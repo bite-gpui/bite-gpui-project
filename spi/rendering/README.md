@@ -31,19 +31,16 @@ its own folder, because it is a surface an application meets rather than part of
 | [`verification.md`](verification.md) | what a test can assert, and which platform each check needs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 
-Two documents outside this folder are part of the work rather than of the design:
+Three documents outside this folder are part of the work rather than of the design:
 [`../../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)
 decides which devices a producer may use,
 [`../../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) is the
-measurement that decision rests on, and
+measurement that decision rests on,
 [`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md)
-is the measurement its Windows clause rests on.
+is the measurement its Windows clause rests on, and
+[`../../decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md) is
+what §6's patch 06 and §10 rest on.
 [`rendering-project/`](../rendering-project/README.md) gathers symlinks to all of them.
-
-One spike is open: [`spike-macos-presentation.md`](spike-macos-presentation.md) — whether
-`WgpuRenderer` can present on a macOS window, and whose `CAMetalLayer` the view's backing
-layer is. Patch 06 needs it, and [`renderer-seam.md`](renderer-seam.md) §10 names it as the
-hard part.
 
 ## How this set was reconciled
 
@@ -168,13 +165,17 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
   other way — a cfg'd field with a cfg'd dependency, as macOS's `CVPixelBuffer` has.
 - **The native hooks' shape.** Should hold: the extension-trait form in
   [`renderer-seam.md`](renderer-seam.md). What would reopen it is in that document.
-- **macOS layer ownership.** If a non-Metal renderer on macOS cannot be handed the
-  window's layer, `MacSceneRenderer` is the wrong shape and the layer has to become a
-  platform-side resource.
 - **Whether `WgpuRenderer` should become the default on macOS and Windows**, retiring
-  Metal and DirectX to optional. The seam makes the question askable; nothing decides it.
+  Metal and DirectX to optional. The seam makes the question askable and nothing decides it —
+  though both halves are now measured rather than unknown, below.
 - **Windows presentation for a non-D3D11 renderer.** Measured: `WgpuRenderer` can present
   on a Windows window, on Direct3D 12 — which `gpui_wgpu` does not enable today, so patch 07
   is a backend change as well as plumbing — and the DX12 surface offers only `Opaque` alpha,
   so transparency is the one capability the default renderer has that this one does not.
   [`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md).
+- **macOS presentation for a non-Metal renderer, and the layer it needs.** Measured:
+  `WgpuRenderer` presents on a macOS view, on Metal, which `gpui_wgpu` does not enable either
+  — the same backend change, one step earlier in the call — so `MacSceneRenderer` keeps its
+  shape, §10's first trigger does not fire, and transparency is available here where the DX12
+  surface refuses it. The corner it leaves open is a `makeBackingLayer` that returns nil.
+  [`../../decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md).

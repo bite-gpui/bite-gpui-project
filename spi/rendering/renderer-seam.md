@@ -401,12 +401,11 @@ platform in CI.
 
 ## 10. What would reopen it
 
-- **The macOS layer ownership is the hard part.** If a non-Metal renderer on macOS cannot
-  be handed the window's layer — if the window must own the layer and the renderer only
-  borrow it — then the `MacSceneRenderer` supertrait is the wrong shape, and the layer has
-  to become a platform-side resource the renderer is given, which moves work into §5.5.
-  [`spike-macos-presentation.md`](spike-macos-presentation.md) is the probe for it, and §1
-  there is why it is closer to settled than this reads: the renderer owns the layer today.
+- **The macOS layer ownership was the hard part, and it is measured.** A non-Metal renderer on
+  macOS can be handed the window's layer and does not even need one: wgpu downcasts the view's
+  root layer and inserts its own `CAMetalLayer` when the downcast fails, so `MacSceneRenderer`
+  keeps its shape and the layer stays where it is. The one corner left is a `makeBackingLayer`
+  that returns nil — [macos-presentation-probe.md](../../decisions/macos-presentation-probe.md).
 - **If the target is not enough to build a surface.** `RendererTarget` carries the raw
   handles, the geometry and one erased extra. If a backend needs more of the window at
   construction, the factory's signature is the thing to revisit, not the trait.

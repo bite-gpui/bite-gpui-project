@@ -21,11 +21,11 @@ The subfolders mirror the sources — `rendering/`, `authoring/`, `decisions/`,
 | [`rendering/foreign-texture.md`](../rendering/foreign-texture.md) | Path A — importing a texture produced outside GPUI |
 | [`rendering/inline-commands.md`](../rendering/inline-commands.md) | Path B — drawing into the window's own pass |
 | [`rendering/verification.md`](../rendering/verification.md) | the matrix, and the platform each check needs |
-| [`rendering/spike-macos-presentation.md`](../rendering/spike-macos-presentation.md) | the open spike: whether `WgpuRenderer` can present on a macOS window |
 | [`authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface |
 | [`decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md) | decision 0002 — which devices a producer may use, and which it may not |
 | [`decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) | the measurement 0002 rests on |
 | [`decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md) | the measurement 0002's Windows clause rests on |
+| [`decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md) | the measurement patch 06 and renderer-seam §10 rest on |
 | [`architecture/frame-flow.md`](../../architecture/frame-flow.md) | where the seam is entered in a frame |
 | [`architecture/layer-stack.md`](../../architecture/layer-stack.md) | the ruling the extension has to clear |
 
