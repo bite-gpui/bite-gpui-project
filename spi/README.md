@@ -78,11 +78,9 @@ One document per seam, wherever it sits.
 
 ## Spikes
 
-One open:
-[`rendering/spike-windows-presentation.md`](rendering/spike-windows-presentation.md) — whether
-`gpui_wgpu::WgpuRenderer` can own a Windows window's presentation, and what the window must
-stop doing for it to. It gates patch 07 of
-[`rendering/renderer-seam.md`](rendering/renderer-seam.md) §6.
+None open. The last one — whether `gpui_wgpu::WgpuRenderer` can own a Windows window's
+presentation — ran on `windows-latest` and is now
+[`../decisions/windows-presentation-probe.md`](../decisions/windows-presentation-probe.md).
 
 A question a document cannot settle, and the probe that settles it, is recorded the way
 [`../decisions/windows-path-a-probe.md`](../decisions/windows-path-a-probe.md) is: as

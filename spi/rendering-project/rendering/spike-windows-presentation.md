@@ -1,1 +1,0 @@
-../../rendering/spike-windows-presentation.md

@@ -33,14 +33,12 @@ its own folder, because it is a surface an application meets rather than part of
 
 Two documents outside this folder are part of the work rather than of the design:
 [`../../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)
-decides which devices a producer may use, and
+decides which devices a producer may use,
 [`../../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) is the
-measurement that decision rests on.
+measurement that decision rests on, and
+[`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md)
+is the measurement its Windows clause rests on.
 [`rendering-project/`](../rendering-project/README.md) gathers symlinks to all of them.
-
-One spike is open: [`spike-windows-presentation.md`](spike-windows-presentation.md) —
-whether `WgpuRenderer` can present on Windows, which patch 07 needs and no measurement
-covers yet.
 
 ## How this set was reconciled
 
@@ -168,7 +166,8 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
   platform-side resource.
 - **Whether `WgpuRenderer` should become the default on macOS and Windows**, retiring
   Metal and DirectX to optional. The seam makes the question askable; nothing decides it.
-- **Windows presentation for a non-D3D11 renderer.** 0002 item 2 makes Path A and Path B on
-  Windows depend on `WgpuRenderer`, which has never run there. Whether it can own the
-  window's presentation — and what the window must stop doing for it to — is
-  [`spike-windows-presentation.md`](spike-windows-presentation.md).
+- **Windows presentation for a non-D3D11 renderer.** Measured: `WgpuRenderer` can present
+  on a Windows window, on Direct3D 12 — which `gpui_wgpu` does not enable today, so patch 07
+  is a backend change as well as plumbing — and the DX12 surface offers only `Opaque` alpha,
+  so transparency is the one capability the default renderer has that this one does not.
+  [`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md).
