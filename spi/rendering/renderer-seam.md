@@ -305,10 +305,10 @@ and a `PlatformWindow::install_renderer` called right after creation (touches no
 every backend must then defer building its default renderer until first use, or build one
 and throw it away).
 
-`WindowOptions` is not currently destructured exhaustively at this site — it is consumed
-field by field — so a field added to it can be silently dropped. The forwarding patch
-should be covered by a test that would fail if it were, and the destructure should be
-made exhaustive.
+`WindowOptions` is destructured **exhaustively** at this site
+(`crates/gpui_authoring/src/window.rs:1726`), so a field added to it stops the build until the
+line forwarding it is written: patch 02 does not compile without patch 03. That is better than
+a test — the compiler is the check — and it is why the two land as one commit.
 
 ### 5.6 Invoked once, so recovery must be self-sufficient
 
@@ -380,7 +380,10 @@ can. Both are in
 1. Add `PlatformRenderer` (with the cfg-selected native traits), `RendererTarget`, the
    factory types and the `Debug` newtype to `gpui_platform`.
 2. Change each backend window's renderer field to `Box<dyn PlatformRenderer>`, move the
-   inherent methods of §3 onto the trait, and port the call sites.
+   inherent methods of §3 onto the trait, and port the call sites. The Linux headless window
+   is the one that need not change: it holds a `HeadlessRenderer`
+   (`crates/gpui_linux/src/linux/headless/window.rs:57`) and never calls a method on it, and
+   a headless window has no native surface for a factory to be handed.
 3. Add `renderer_factory` to `WindowOptions`/`WindowParams` and the builder; forward it
    through `WindowHost::new`; each backend consults it before its default.
 4. Add a test that installs a custom renderer through the factory, asserts its `draw` was
