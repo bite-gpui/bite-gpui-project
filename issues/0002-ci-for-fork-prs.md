@@ -161,6 +161,29 @@ keep in step. A caller that names one reusable workflow and passes its own repos
 and ref is that file — changing *what* is checked then touches `distribution` alone. A
 driver that names the steps to run would put this decision in twelve places.
 
+### The file, as built
+
+One file, `.github/workflows/bite-ci.yml`, replaces the two, and it has four jobs:
+
+| job | what it checks |
+| --- | --- |
+| `checks` | the target table and the naming rule, called from `distribution` |
+| `cargo check --target x86_64-pc-windows-msvc` | the Direct3D backend, which no leg of `verify.yml` sees |
+| `cargo check --target aarch64-apple-darwin` | the Metal backend, the same gap |
+| `Path A probe (windows-latest)` | the D3D12 → D3D11 interop the render-extension design turns on |
+
+All four pass on PR #1, in about five minutes.
+
+The Metal check needed a source change to exist at all. The lib is gated on the
+*target* — `gpui_apple.rs` and `metal_renderer.rs` are `#![cfg(target_os = "macos")]` —
+while `build.rs` is compiled for the *host*, so checking the crate for a macOS target
+from Linux compiled the lib with nothing having run and
+`crates/gpui_apple/src/metal_renderer.rs:36`'s `include_bytes!` of
+`OUT_DIR/shaders.metallib` failed. The
+build script now writes that artifact, empty, when the target is macOS and the host is
+not. It type-checks the Rust and not the shaders: `xcrun` compiles those, and that
+needs a macOS runner.
+
 ## What is left
 
 - **One file per base branch.** The caller has to be committed to every `bite_*` branch
@@ -170,8 +193,13 @@ driver that names the steps to run would put this decision in twelve places.
   branch of `distribution` that can be deleted. Merge the entry point to `main` and
   switch the caller to `@main`.
 - **The gate.** A check that runs is a report, not a gate. A repository ruleset on
-  `bite-gpui/bite-gpui` — public, so available on Free — requiring *Distribution checks*
-  would make it one. Organization rulesets need Team or Enterprise and are out.
+  `bite-gpui/bite-gpui` — public, so available on Free — would make it one, and the
+  token has `admin`, so it can be created. It has to come *after* the file is on the
+  branch it guards: a required check that nothing reports blocks every pull request, and
+  the file is on no base branch yet. Three checks gate —
+  `checks / target table and naming rule`, `cargo check --target x86_64-pc-windows-msvc`
+  and `cargo check --target aarch64-apple-darwin`; the Path A probe is a probe.
+  Organization rulesets need Team or Enterprise and are out.
 - **Widening it.** `verify.yml`'s `preflight` and `code-checks` are not in the entry
   point, for two separate reasons. `preflight` reads the stage report, which only
   `stage.py` writes and a pull request cannot run. And the composite actions cannot be
