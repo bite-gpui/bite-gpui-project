@@ -401,6 +401,8 @@ platform in CI.
   be handed the window's layer — if the window must own the layer and the renderer only
   borrow it — then the `MacSceneRenderer` supertrait is the wrong shape, and the layer has
   to become a platform-side resource the renderer is given, which moves work into §5.5.
+  [`spike-macos-presentation.md`](spike-macos-presentation.md) is the probe for it, and §1
+  there is why it is closer to settled than this reads: the renderer owns the layer today.
 - **If the target is not enough to build a surface.** `RendererTarget` carries the raw
   handles, the geometry and one erased extra. If a backend needs more of the window at
   construction, the factory's signature is the thing to revisit, not the trait.

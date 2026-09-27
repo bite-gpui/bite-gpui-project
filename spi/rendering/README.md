@@ -40,6 +40,11 @@ measurement that decision rests on, and
 is the measurement its Windows clause rests on.
 [`rendering-project/`](../rendering-project/README.md) gathers symlinks to all of them.
 
+One spike is open: [`spike-macos-presentation.md`](spike-macos-presentation.md) — whether
+`WgpuRenderer` can present on a macOS window, and whose `CAMetalLayer` the view's backing
+layer is. Patch 06 needs it, and [`renderer-seam.md`](renderer-seam.md) §10 names it as the
+hard part.
+
 ## How this set was reconciled
 
 2026-09-27. Six drafts of the render extension arrived over two days, from two directions,

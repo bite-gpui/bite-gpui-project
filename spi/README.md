@@ -78,9 +78,11 @@ One document per seam, wherever it sits.
 
 ## Spikes
 
-None open. The last one — whether `gpui_wgpu::WgpuRenderer` can own a Windows window's
-presentation — ran on `windows-latest` and is now
-[`../decisions/windows-presentation-probe.md`](../decisions/windows-presentation-probe.md).
+One open:
+[`rendering/spike-macos-presentation.md`](rendering/spike-macos-presentation.md) — whether
+`gpui_wgpu::WgpuRenderer` can present on a macOS window, and whose `CAMetalLayer` the view's
+backing layer is. It gates patch 06 of
+[`rendering/renderer-seam.md`](rendering/renderer-seam.md) §6.
 
 A question a document cannot settle, and the probe that settles it, is recorded the way
 [`../decisions/windows-path-a-probe.md`](../decisions/windows-path-a-probe.md) is: as
