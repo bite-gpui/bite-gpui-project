@@ -29,6 +29,52 @@ GPU resources:
    `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
    (`crates/gpui_wgpu/src/wgpu_context.rs:9`).
 
+## What the constraint implies for a producer
+
+The constraint reads as a restriction; in practice it is a decision tree, and where a
+producer lands decides which mechanism it uses:
+
+1. **It can record its drawing into our pass → Path B.** No resource crosses anything and
+   no intermediate texture exists; the same device is required, but nothing is shared.
+   The fit for a producer that draws *commands* — a tessellator, a 3D view.
+2. **It can render into a texture on our device → Path A.** The application allocates the
+   texture and keeps ownership; the renderer samples it. The fit for a producer that can
+   only produce a *texture* — a decoder, a camera, an engine with its own pipeline.
+3. **Neither — a separate process, or a device it does not control → the host staging
+   copy.** Read the frame back and upload it, which is what a `RenderImage`-shaped path
+   already does, at the bandwidth the render extension exists to remove (≈1 GB/s at
+   1080p60). A GPU→GPU copy would avoid the host, but only within one device — which is
+   tier 2's condition rather than an alternative to it.
+
+On Windows with the default `DirectXRenderer`, tiers 1 and 2 are both closed and only
+tier 3 remains until `WgpuRenderer` is installed.
+
+## The rendezvous is one slot, and it works both ways
+
+"It has to be our device" does not mean GPUI has to be the one that creates it. The
+`GpuContext` slot is filled by whoever gets there first and adopted by everyone after:
+
+```rust
+let mut ctx_ref = gpu_context.borrow_mut();
+let context = match ctx_ref.as_mut() {
+    Some(context) => { context.check_compatible_with_surface(&surface)?; context }
+    None => ctx_ref.insert(WgpuContext::new(instance, &surface, compositor_gpu)?),
+};
+```
+
+(`crates/gpui_wgpu/src/wgpu_renderer.rs:308`-`:317`). So an application that already has a
+device, adapter and queue it wants to use can build the `WgpuContext`, put it in the slot
+from its own factory, and the renderer adopts it;
+`check_compatible_with_surface` is the guard that the adapter still presents to this
+window. The other direction needs no protocol at all — the first renderer to be built
+fills the slot, and every producer afterwards reads `device` and `queue` from it.
+
+The seam therefore does not need "GPUI provides a canvas/context to the application" and
+"the application provides GPUI a resource pool" as separate designs. It needs the one
+rendezvous, which exists today for device recovery, and the erased payload above it. What
+it cannot do is accept a resource from a *second* device, which is what §"What was
+rejected" is about.
+
 ## What was rejected
 
 A cross-device draft proposed a tiered model — share the device (Tier 1), bridge with OS
