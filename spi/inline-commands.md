@@ -38,6 +38,15 @@ cross an `Any` boundary because `Any: 'static`, and naming its type would put `w
 resolves it — the callback stays in the renderer, where the encoder is, and the engine
 transports a handle exactly as it does for a texture.
 
+The same device model as [`foreign-texture.md`](foreign-texture.md) §2 applies here, and
+more sharply: the injected commands execute in *GPUI's* pass, so every resource they bind
+— vertex buffer, pipeline, bind group — must belong to that pass's device. Path B is
+therefore a window-owner capability too, and on Windows it too requires installing
+`WgpuRenderer`. That is what makes the token more than a convenience: a callback holding
+resources from its own device would fail inside the pass, so the callback belongs in the
+renderer, where the device already is. The whole of it is
+[`../decisions/0002-render-extension-device-model.md`](../decisions/0002-render-extension-device-model.md).
+
 **`order` is the scene's, not the element's.** `Scene::insert_primitive` assigns it
 (`crates/gpui_engine/src/scene.rs:85`, `:95`) and overwrites each primitive's field
 (`:102`–`:131`). An earlier draft had the element call `cx.current_paint_order()`, which

@@ -19,4 +19,5 @@ cost of re-litigating it is paid by whoever did not know it had been considered.
 | record | status | outcome |
 | --- | --- | --- |
 | [`0001-no-third-swap.md`](0001-no-third-swap.md) | decided | `FramePipeline` stays an open seam; no third swap, no new version slot |
+| [`0002-render-extension-device-model.md`](0002-render-extension-device-model.md) | decided | producer and consumer must be the same device: Path A and Path B are window-owner capabilities, Windows requires `WgpuRenderer`, and bridging a resource across devices is out of scope |
 | [`tracy-swap-scope.md`](tracy-swap-scope.md) | evidence for 0001 | what a telemetry swap would have been, and why it stops at the C++ dependency |

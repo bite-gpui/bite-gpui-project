@@ -78,6 +78,10 @@ Three consequences, each of which the drafts got wrong in the other direction:
    producer. That is a boundary, not an accident: it is what makes the Windows answer a
    configuration ("install `WgpuRenderer`") rather than a fork.
 
+The whole of it — the constraint, the Windows configuration, and why the OS-handle
+bridges are out of scope rather than pending — is
+[`../decisions/0002-render-extension-device-model.md`](../decisions/0002-render-extension-device-model.md).
+
 ## 3. The scene types
 
 ```rust

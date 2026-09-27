@@ -173,7 +173,8 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
   else's window cannot be a producer.
 - **Windows is Path A and Path B only under `gpui_wgpu::WgpuRenderer`.** The default
   `DirectXRenderer` is Direct3D 11 and the producer is Direct3D 12; there is no copy-free
-  bridge, and wgpu offers no shareable resource.
+  bridge, and wgpu offers no shareable resource. Decided in
+  [`../decisions/0002-render-extension-device-model.md`](../decisions/0002-render-extension-device-model.md).
 - **The factory is invoked once, before the first frame.** Recovery is therefore
   self-sufficient on the returned renderer, and post-construction queries belong on the
   renderer's trait rather than on the factory's input.
