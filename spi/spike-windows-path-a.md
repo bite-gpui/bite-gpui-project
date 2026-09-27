@@ -1,7 +1,8 @@
 # Spike: can a wgpu texture reach GPUI's renderer on Windows?
 
-- **Status:** spike, **unrun** — it needs a Windows host. This document is the plan,
-  the prior, and the decision it feeds.
+- **Status:** spike, **not yet run**. The question is answerable here only by
+  cross-compiling the probe and running it on Windows; see "Cross-compilation" below for
+  what that buys and what the disk on this host allows.
 - **Answers one question:** on Windows, can Path A work when the application renders
   with `wgpu` and the window is drawn by GPUI's default `DirectXRenderer`?
 - **Inherits:** corrections 1–20 and
@@ -59,6 +60,61 @@ rather than a fork.
 
 **Criterion:** a probe either produces a sampled, correct composite through the D3D11
 renderer (A), or it cannot, and a wgpu-rendered window does (B).
+
+## Cross-compilation: what it buys, and what it cannot
+
+Verified on this host: `rustup target add x86_64-pc-windows-msvc` succeeds (≈200 MB)
+and `cargo check --target x86_64-pc-windows-msvc` passes for a zero-dependency crate
+(0.2 s, 92 KB of artifacts). The toolchain path works from Linux.
+
+**What it buys** is the gate the tools repository asks for
+(`.tools/docs/journal/maintenance-report.md` §21): a compile check of the Windows
+crates from a Linux host, which is what catches "every Linux gate can be green while a
+platform backend does not compile". The same job covers `aarch64-apple-darwin` and
+`wasm32-unknown-unknown`, which the report also names.
+
+**What it cannot do** is answer the question. Cross-compiling produces a Windows
+binary; it does not run it. The probes need D3D11, D3D12 and WARP, none of which exist
+on Linux — and Wine's D3D is emulated (WineD3D/vkd3d) in a way that does not model
+shared-handle interop or WARP, so running the probe under Wine would answer a question
+about Wine.
+
+So the verification splits in two:
+
+- a cross-target `cargo check` job on `ubuntu-latest`, gating the Windows, Apple and
+  wasm crates;
+- the probe built for Windows and run **natively** on `windows-latest`, where WARP
+  supplies both a D3D11 and a D3D12 device on the same adapter — which is the
+  configuration probe 2 needs.
+
+The binding constraint on this host is **disk, not the toolchain**: 1.2 GB free. The
+`windows` crate alone, and `wgpu` for probe 1, exceed that for a fresh target tree, and
+`gpui_windows`'s tree needs several GB. Reclaimable without touching source:
+`.morphorm/target` (4.4 GB) and `.parley/target` (3.1 GB), both regenerable with
+`cargo clean`, and five unused rustup toolchains (≈1.5 GB each; the clone pins 1.95.0
+and the out-of-tree crates pin 1.98.1).
+
+### The two CI jobs
+
+```yaml
+cross-check:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - run: rustup target add x86_64-pc-windows-msvc aarch64-apple-darwin wasm32-unknown-unknown
+    - run: cargo check --target x86_64-pc-windows-msvc -p gpui_windows -p gpui_authoring
+    - run: cargo check --target aarch64-apple-darwin -p gpui_apple -p gpui_macos
+    - run: cargo check --target wasm32-unknown-unknown -p gpui_web
+
+path-a-probes:
+  runs-on: windows-latest
+  steps:
+    - uses: actions/checkout@v4
+    - run: cargo test --test path_a_probes
+```
+
+Probe 1 is the one that needs `wgpu`; probes 2 and 3 need only the `windows` crate. It
+is worth splitting them into two test binaries so the compile gate stays cheap.
 
 ## Probes, in order
 
