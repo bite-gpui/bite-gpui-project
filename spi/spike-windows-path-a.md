@@ -155,6 +155,30 @@ Three hazards to fold into whichever probe runs first:
   on what GPUI's sampler and shader do with it, and that has not been read. Settle it in
   probe 4 by sampling a known fixture, not by assumption.
 
+## Probe status
+
+- **Probe 2 — implemented; compiles for Windows; not yet run.** The probe lives at
+  `.uses/windows-path-a-probe` (scratch, outside version control) and is clean under
+  `cargo check --target x86_64-pc-windows-msvc`. Cross-compiling it validated four API
+  shapes this document depends on: `CreateCommittedResource` takes the resource as an
+  out-parameter (`*mut Option<T>`, not a return value); `CreateSharedHandle` is gated
+  on the `Win32_Security` feature and takes an `ID3D12DeviceChild`, not the resource;
+  `ID3D11Device1::OpenSharedResource1` takes the `HANDLE` by value; and
+  `CreateShaderResourceView` takes its view as the third, out-parameter argument. The
+  remaining answer is the runtime one, which needs `windows-latest`.
+- **Probe 3 — answered, by reading.** `hal::dx12::Texture`'s fields are private
+  (`wgpu-hal-29.0.4/src/dx12/mod.rs:979`) and the only accessor is `raw_resource()`, so
+  an application cannot construct the value `Device::create_texture_from_hal` requires.
+  The wrap is not app-reachable. Confirmed, not assumed.
+- **Probe 1 — expected to fail; surface confirmed.** `wgpu::hal::api::Dx12` exists
+  (`wgpu-hal-29.0.4/src/lib.rs:269`, alongside `Metal` at `:273`), and `as_hal` returns
+  `Option<impl Deref<Target = …>>` (`wgpu-29.0.4/src/api/texture_view.rs:73`). The run
+  adds the HRESULT from `CreateSharedHandle` on a wgpu-owned resource.
+
+Note what probe 2's success would and would not mean. It would show the *raw* D3D path
+works, which is exactly the producer that does not use wgpu. It would not make a
+wgpu-produced texture shareable, which probes 1 and 3 already close.
+
 ## Recommendation (pending probe 1, which is expected to hold)
 
 **Outcome B.** Path A and Path B on Windows are supported when the window is rendered by
