@@ -186,11 +186,16 @@ Two rules, and getting either wrong is a visible defect rather than a crash:
 `to_imported_handle` should validate both and fail early: the format is a property of the
 view, and the usage flags must include `TextureUsages::TEXTURE_BINDING`.
 
-**Not yet pinned on Windows.** GPUI's Windows render target is
-`DXGI_FORMAT_B8G8R8A8_UNORM` (`crates/gpui_windows/src/directx_renderer.rs:32`), not a
-`…_SRGB` format, so whether a foreign texture there should be `Bgra8UnormSrgb` or plain
-`Bgra8Unorm` depends on what GPUI's sampler and shader do with it — and that has not been
-read. Settle it by sampling a known fixture rather than by assumption.
+**Not a Windows special case, after all.** The surface format is the renderer's choice, and the
+wgpu renderer picks a non-sRGB one on every platform — `preferred_formats = [Bgra8Unorm,
+Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:359`) — so a Windows window running
+`WgpuRenderer` shows the same `*_UNORM` surface convention the rule above states, and
+`DirectXRenderer`'s `B8G8R8A8_UNORM` target
+(`crates/gpui_windows/src/directx_renderer.rs:32`) belongs to the renderer that supports
+neither path. The presentation probe measured the DX12 surface offering `Bgra8UnormSrgb` and
+`Bgra8Unorm` alike, so the choice is not one the platform makes
+([`../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md)).
+The fixture in [`verification.md`](verification.md) §1 is what verifies the rule itself.
 
 ## 5. Extracting the handle
 

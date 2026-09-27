@@ -340,10 +340,12 @@ in this budget: Path A adds a real arm to three renderers — wgpu's is empty to
 Neither is a patch to a `window.rs`, and keeping the two budgets separate is what the
 drafts' single "<150 LOC" claim obscured.
 
-One thing patch 07 needs that the factory does not cover, measured after this section was
-written: `gpui_wgpu`'s instance is `Backends::VULKAN | Backends::GL`
-(`crates/gpui_wgpu/src/wgpu_context.rs:292`), which finds no adapter on Windows, so
-installing `WgpuRenderer` there also means enabling `Backends::DX12` — see
+Two things patch 07 needs that the factory does not cover, both measured after this section
+was written. `gpui_wgpu`'s instance is `Backends::VULKAN | Backends::GL`
+(`crates/gpui_wgpu/src/wgpu_context.rs:292`), which finds no adapter on Windows, so installing
+`WgpuRenderer` there also means enabling `Backends::DX12`; and the DX12 surface offers only
+`Opaque` alpha, so a window it renders cannot be transparent the way the default renderer's
+can. Both are in
 [`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md).
 
 ## 7. Migration, in order

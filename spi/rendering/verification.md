@@ -87,8 +87,9 @@ all. A release receipt therefore says nothing about Direct3D.
 
 - **Real hardware.** The Windows probes run on WARP, which is why
   [`../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) records its
-  result as "mechanically
-  possible on one adapter" rather than "works".
+  result as "mechanically possible on one adapter" rather than "works", and why
+  [`../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md)
+  reports its adapter as `Microsoft Basic Render Driver` with `device_type = Cpu`.
 - **Adapter identity.** Sharing requires the same physical adapter, and the LUIDs of two
   independently created devices are not comparable from inside either one.
 - **The unsolved question.** Whether a wgpu texture can reach GPUI's Direct3D 11 renderer
