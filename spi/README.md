@@ -63,7 +63,15 @@ thermal pressure. A pipeline's answer is not the last word on a window's rate.
 | [`input-policy-seam.md`](input-policy-seam.md) | parked — specified but not proposed upstream; no third swap ships |
 | [`scene-renderer-seam.md`](scene-renderer-seam.md) | proposed — giving `SceneRenderer` a bootstrap so a renderer is installable through `Application`. Its factory design (§2–§5) is revised by the entry two rows below; its §3, the native hooks, still stands |
 | [`dual-path-render-extension.md`](dual-path-render-extension.md) | proposed — the zero-copy texture import and inline command injection RFC, transcribed as received. Its factory-free framing is superseded by the revision below |
-| [`dual-path-ioc-architecture.md`](dual-path-ioc-architecture.md) | proposed — the fork's revision of the render extension, merging the two above: the IoC factory, the type-erased target, and the primitive, with the corrections each needs at this ref. Its first finding is that Path A already half-exists as `PaintSurface` |
+| [`dual-path-ioc-architecture.md`](dual-path-ioc-architecture.md) | proposed — the fork's revision of the render extension, merging the two above: the IoC factory, the typed target, and the primitive, with the corrections each needs at this ref. Its first finding is that Path A already half-exists as `PaintSurface` |
 | [`dual-path-implementation-spec.md`](dual-path-implementation-spec.md) | proposed — the fine-grained companion to the row above: the initialisation sequence, the colour-space and pipeline-state-isolation invariants, the recovery protocol, and a verification matrix. It inherits that row's corrections rather than repeating them |
 | [`wgpu-target-adaptors.md`](wgpu-target-adaptors.md) | proposed — the renderer author's surface: what the target carries (typed handles, not `dyn Any`), the HAL texture extractor, and Path B's coordinate bridge. It finds that erasing the target cycles the dependency graph |
 | [`gpu-canvas-dx.md`](gpu-canvas-dx.md) | proposed — the authoring surface the five above exist to serve: a chainable `GpuCanvas` component, built on `div` and `canvas`, so an application renders a GPU viewport in a `div()` without implementing `Element` |
+
+## Spikes
+
+A question a document cannot settle, and the probe that settles it.
+
+| document | question |
+| --- | --- |
+| [`spike-windows-path-a.md`](spike-windows-path-a.md) | whether a texture rendered by `wgpu` can reach GPUI's Direct3D 11 Windows renderer, or whether Path A and Path B on Windows require installing `WgpuRenderer` |
