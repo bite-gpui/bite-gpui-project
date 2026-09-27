@@ -65,7 +65,7 @@ By concern, because one of the seams is a project rather than a trait.
 | [`rendering/`](rendering/README.md) | the render extension — the renderer seam and the two primitives — with [its own index](rendering/README.md) and chapter order |
 | [`authoring/`](authoring/gpu-canvas.md) | the authoring surface an application meets. `GpuCanvas` today; anything else that is a *surface* rather than an interface |
 | [`input/`](input/input-policy-seam.md) | the input-policy seam, parked |
-| [`rendering-project/`](rendering-project/README.md) | the flat view of the rendering work: symlinks to every document it needs, wherever it lives |
+| [`rendering-project/`](rendering-project/README.md) | all the rendering work at one path: grouped symlinks to every document it needs, wherever it lives |
 
 ## Seams
 

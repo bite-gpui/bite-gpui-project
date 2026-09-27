@@ -1,1 +1,0 @@
-../../decisions/0002-render-extension-device-model.md

@@ -1,1 +1,0 @@
-../rendering/inline-commands.md

@@ -1,1 +1,0 @@
-../authoring/gpu-canvas.md

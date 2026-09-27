@@ -1,1 +1,0 @@
-../../architecture/layer-stack.md
