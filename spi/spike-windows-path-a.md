@@ -1,8 +1,8 @@
 # Spike: can a wgpu texture reach GPUI's renderer on Windows?
 
-- **Status:** spike, **not yet run**. The question is answerable here only by
-  cross-compiling the probe and running it on Windows; see "Cross-compilation" below for
-  what that buys and what the disk on this host allows.
+- **Status:** spike. Probe 2 **ran green on `windows-latest`** — cross-API interop
+  works; probe 3 is answered by reading; probe 1's source answer stands. See
+  "Probe status".
 - **Answers one question:** on Windows, can Path A work when the application renders
   with `wgpu` and the window is drawn by GPUI's default `DirectXRenderer`?
 - **Inherits:** corrections 1–20 and
@@ -72,6 +72,11 @@ and `cargo check --target x86_64-pc-windows-msvc` passes for a zero-dependency c
 crates from a Linux host, which is what catches "every Linux gate can be green while a
 platform backend does not compile". The same job covers `aarch64-apple-darwin` and
 `wasm32-unknown-unknown`, which the report also names.
+
+It earned its keep on the first run. The Windows cross-check found
+`crates/gpui_windows/src/dialog.rs` importing `gpui::ForegroundExecutor` with no `gpui`
+dependency in that crate — a lib-source import the facade cannot satisfy, invisible to
+every Linux gate. The import is retargeted to `gpui_platform` in the same branch.
 
 **What it cannot do** is answer the question. Cross-compiling produces a Windows
 binary; it does not run it. The probes need D3D11, D3D12 and WARP, none of which exist
@@ -157,15 +162,15 @@ Three hazards to fold into whichever probe runs first:
 
 ## Probe status
 
-- **Probe 2 — implemented; compiles for Windows; not yet run.** The probe lives at
-  `.uses/windows-path-a-probe` (scratch, outside version control) and is clean under
-  `cargo check --target x86_64-pc-windows-msvc`. Cross-compiling it validated four API
-  shapes this document depends on: `CreateCommittedResource` takes the resource as an
-  out-parameter (`*mut Option<T>`, not a return value); `CreateSharedHandle` is gated
-  on the `Win32_Security` feature and takes an `ID3D12DeviceChild`, not the resource;
-  `ID3D11Device1::OpenSharedResource1` takes the `HANDLE` by value; and
-  `CreateShaderResourceView` takes its view as the third, out-parameter argument. The
-  remaining answer is the runtime one, which needs `windows-latest`.
+- **Probe 2 — `interop OK` on `windows-latest`.** The probe is on the branch
+  `bite_v1.22.0-pre-path-a-probe`, at `probes/windows-path-a` (PR #1), where a
+  `windows-latest` job runs it. It printed, in order: a D3D12 device; a shared-heap
+  texture; `CreateSharedHandle -> HANDLE(0x284)`; `OpenSharedResource1 -> texture`; an
+  SRV; `PROBE 2: interop OK`. So a D3D12 texture on `D3D12_HEAP_FLAG_SHARED` **can** be
+  opened on a D3D11 device and sampled. The run is on WARP — the hosted runner has no
+  GPU — so what is established is that interop is mechanically possible on one adapter,
+  which is also what D3D's documentation promises; hardware is expected to behave the
+  same but was not what was measured.
 - **Probe 3 — answered, by reading.** `hal::dx12::Texture`'s fields are private
   (`wgpu-hal-29.0.4/src/dx12/mod.rs:979`) and the only accessor is `raw_resource()`, so
   an application cannot construct the value `Device::create_texture_from_hal` requires.
@@ -175,11 +180,13 @@ Three hazards to fold into whichever probe runs first:
   `Option<impl Deref<Target = …>>` (`wgpu-29.0.4/src/api/texture_view.rs:73`). The run
   adds the HRESULT from `CreateSharedHandle` on a wgpu-owned resource.
 
-Note what probe 2's success would and would not mean. It would show the *raw* D3D path
-works, which is exactly the producer that does not use wgpu. It would not make a
-wgpu-produced texture shareable, which probes 1 and 3 already close.
+The success is narrower than it sounds. It shows the *raw* D3D path works — the producer
+that creates its own D3D12 texture. It does not make a wgpu-produced texture shareable:
+probe 1 (`HEAP_FLAG_NONE` at creation) and probe 3 (no app-reachable wrap) still close
+that direction. So Outcome A is reachable for an application that does not use wgpu's
+texture API on Windows, and Outcome B remains the recommendation for Path A as designed.
 
-## Recommendation (pending probe 1, which is expected to hold)
+## Recommendation (unchanged by probe 2's success)
 
 **Outcome B.** Path A and Path B on Windows are supported when the window is rendered by
 `gpui_wgpu::WgpuRenderer`; the default `DirectXRenderer` supports neither. The reasons:
