@@ -1,5 +1,5 @@
 - **Opened:** 2026-09-27
-- **Status:** open
+- **Status:** open — route 2 is wired and green; the entry point is on a distribution branch, not `main` yet
 - **Touches:** `bite-gpui/distribution` (the CI), `bite-gpui/bite-gpui` (PR #1), `.tools` (transplant and rebase only)
 
 # Running the CI on `bite-gpui/bite-gpui` pull requests
@@ -92,10 +92,53 @@ and only for the targets that run stages. Nothing runs on the fork's own pull re
    This is the only route with literally nothing in the fork, and it costs a GitHub App,
    a runner and a ruleset. Not worth it at this size.
 
-## What would close it
+## What route 2 measured
 
-Pick (1) or (2). (1) needs no change to `distribution` at all and can be done now; (2)
-keeps the driver to a six-line stub but needs a pull-request entry point added to
-`distribution` and the `./`-local-action question settled first. If the fork's gate is
-meant to be *the same* gate as `verify.yml`, prefer (2); if it is a narrower check —
-the cross-target check PR #1 added, say — (1) is honest and immediate.
+Route 2 is now wired. `bite-gpui/distribution` branch `pr-checks` carries a
+`workflow_call` entry point, `.github/workflows/pr-checks.yml`, and
+`bite-gpui/bite-gpui#1` carries the caller, `.github/workflows/distribution-checks.yml`.
+Running it answered the three questions the design left open:
+
+1. **A cross-repository call is allowed.** A public repository may call another public
+   repository's `workflow_call` workflow. No token, no secret, no app. This was the main
+   risk and it is cleared.
+2. **A checkout with no inputs gets the *caller's* repository.** Inside a called workflow
+   `github.repository` is the caller's, so the caller's tree lands at the workspace root
+   and the called repository's files are simply absent. A checkout of
+   `bite-gpui/distribution` at `path: .dist` is what makes the called repository's
+   scripts available here.
+3. **A `./`-relative `uses:` resolves against that caller checkout.** The first run's
+   `uses: ./.github/actions/build-env` failed with *"Can't find 'action.yml' … under
+   /home/runner/work/bite-gpui/bite-gpui/.github/actions/build-env"*. The
+   repository-local composite actions — `build-env`, `verify`, and the rest — are not
+   reachable from a called workflow as written.
+
+The first version of the entry point also failed its naming step for a second reason:
+`pipeline/naming.py --verify` walks the *whole* target table, so both lineages need a
+checkout, and the community-edition lineage fell back to its local path and exited on
+`bite_ce_main: no checkout at .tools/worktrees/wt-ce`. It now checks out the branch
+`targets.py --refs --select ce` names, exactly as `ci.yml` does. The check is green:
+`12 targets, 55 distinct (lineage, package) pairs, 55 published names, 0 failures`,
+reported to `bite-gpui/bite-gpui#1` as *Distribution checks / target table and naming
+rule*.
+
+What the entry point covers is the part of the pipeline that reads the tree rather than
+the release tag: the target table and the naming rule. Compilation stays the fork's own
+cross-target job (`cross-target-windows.yml`), which is also how the `gpui_windows`
+import defect was found.
+
+## What is left
+
+- **The ref.** The caller names `…/pr-checks.yml@pr-checks`, so the fork depends on a
+  branch of `distribution` that can be deleted. Merge the entry point to `main` and
+  switch the caller to `@main`.
+- **The gate.** A check that runs is a report, not a gate. A repository ruleset on
+  `bite-gpui/bite-gpui` — public, so available on Free — requiring *Distribution checks*
+  would make it one. Organization rulesets need Team or Enterprise and are out.
+- **Widening it.** `verify.yml`'s `preflight` and `code-checks` are not in the entry
+  point, for two separate reasons. `preflight` reads the stage report, which only
+  `stage.py` writes and a pull request cannot run. And the composite actions cannot be
+  called across the boundary (above). Whether a nested `./` reference *inside* a
+  composite action resolves against the action's own repository — which would let
+  `verify` be called fully qualified — is the next thing to measure if a wider gate is
+  wanted.
