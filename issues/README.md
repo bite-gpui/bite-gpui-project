@@ -28,3 +28,4 @@ questions get re-argued.
 | issue | status | subject |
 | --- | --- | --- |
 | [`0001-check-citations.md`](0001-check-citations.md) | closed | 73 citations carry a line number and nothing verified them; `script/check-citations` now resolves every one against `bite_v1.22.0-pre` |
+| [`0002-ci-for-fork-prs.md`](0002-ci-for-fork-prs.md) | open | the `.tools` verification never runs on `bite-gpui/bite-gpui` pull requests; the ruleset rule that was proposed to fix it does not exist, and the real options are a workflow in the fork or a thin caller into `.tools` |
