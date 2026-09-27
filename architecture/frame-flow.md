@@ -57,9 +57,8 @@ the presentation pacing, and it lives below the pipeline, not in it.
 
 The first four are held on `App` (`crates/gpui_authoring/src/app.rs:622`). The fifth is
 not on `App` at all — which is why `spi/README.md` lists it as the one seam with no
-facade hook, and why a renderer-level feature such as
-[`../spi/dual-path-render-extension.md`](../spi/dual-path-render-extension.md) is a
-change to the platform path rather than something an out-of-tree crate can install.
+facade hook, and why installing a renderer is a change to the platform path rather than
+something an out-of-tree crate can do ([`../spi/renderer-seam.md`](../spi/renderer-seam.md)).
 
 `with_renderer` is deliberately not the route to drawing: *"backends must not advance
 their frame loop here"*. It is for queries — the sprite atlas, a screen capture.

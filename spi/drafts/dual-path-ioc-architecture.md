@@ -77,7 +77,7 @@ Corrections 1–3 are the ones that change code.
    `DrawContext::wgpu_pass: &mut wgpu::RenderPass` would add `wgpu` to the engine,
    whose dependencies are `gpui_types` and small support crates only
    (`crates/gpui_engine/Cargo.toml`) and whose layer order
-   [`../architecture/layer-stack.md`](../architecture/layer-stack.md) draws. Two ways
+   [`../architecture/layer-stack.md`](../../architecture/layer-stack.md) draws. Two ways
    out, and `PaintSurface` is the precedent for the first:
    - **Mirror `PaintSurface`**: cfg-gated per-platform variants with a cfg-gated
      optional dependency, so Linux gets `wgpu` in the engine the way macOS gets
@@ -144,7 +144,7 @@ compose: **take this revision's §4 for the factory, the target and the trait; k
 seam document's §3 for the native hooks.** Widening this `PlatformRenderer` with
 macOS-only methods instead would break the layer-stack ruling against widening a
 shared trait for one platform
-([`../architecture/layer-stack.md`](../architecture/layer-stack.md)).
+([`../architecture/layer-stack.md`](../../architecture/layer-stack.md)).
 
 ## 1. Executive summary and tenets
 

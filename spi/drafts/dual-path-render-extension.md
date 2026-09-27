@@ -23,7 +23,7 @@ the tree. The RFC is a proposal in full. The only surfaces it names that are rea
 
 **The seam it needs has no bootstrap.** `SceneRenderer`
 (`crates/gpui_engine/src/renderer.rs:16`) is one of the five SPIs, and it is the one
-with no `Application::with_renderer` — see [`README.md`](README.md). Chapter 8's
+with no `Application::with_renderer` — see [`README.md`](../README.md). Chapter 8's
 "minimal core patches" are the reason: installing a custom renderer is not reachable
 through the facade today, so this SPI could not be *installed* even once implemented.
 That is the first thing to fix, and it is an upstream-facing change rather than an

@@ -133,5 +133,5 @@ special-case it.
 That test is what makes this document worth reading before adding anything: it is the
 criterion by which `FramePipeline` was left an open seam rather than shipped with a
 third swap ([`../decisions/0001-no-third-swap.md`](../decisions/0001-no-third-swap.md)),
-and the criterion the render-extension RFC has to clear
-([`../spi/dual-path-render-extension.md`](../spi/dual-path-render-extension.md)).
+and the criterion the render extension has to clear
+([`../spi/renderer-seam.md`](../spi/renderer-seam.md)).

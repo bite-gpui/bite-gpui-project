@@ -56,17 +56,145 @@ source throttles *before* a pipeline is consulted — an unfocused window to
 `WindowOptions::inactive_frame_interval` (30 fps by default), and either to 60 fps under
 thermal pressure. A pipeline's answer is not the last word on a window's rate.
 
-## Proposals
+## Seams
+
+One document per seam, plus the chapters of the one that has more than a trait.
 
 | document | status |
 | --- | --- |
 | [`input-policy-seam.md`](input-policy-seam.md) | parked — specified but not proposed upstream; no third swap ships |
-| [`scene-renderer-seam.md`](scene-renderer-seam.md) | proposed — giving `SceneRenderer` a bootstrap so a renderer is installable through `Application`. Its factory design (§2–§5) is revised by the entry two rows below; its §3, the native hooks, still stands |
-| [`dual-path-render-extension.md`](dual-path-render-extension.md) | proposed — the zero-copy texture import and inline command injection RFC, transcribed as received. Its factory-free framing is superseded by the revision below |
-| [`dual-path-ioc-architecture.md`](dual-path-ioc-architecture.md) | proposed — the fork's revision of the render extension, merging the two above: the IoC factory, the typed target, and the primitive, with the corrections each needs at this ref. Its first finding is that Path A already half-exists as `PaintSurface` |
-| [`dual-path-implementation-spec.md`](dual-path-implementation-spec.md) | proposed — the fine-grained companion to the row above: the initialisation sequence, the colour-space and pipeline-state-isolation invariants, the recovery protocol, and a verification matrix. It inherits that row's corrections rather than repeating them |
-| [`wgpu-target-adaptors.md`](wgpu-target-adaptors.md) | proposed — the renderer author's surface: what the target carries (typed handles, not `dyn Any`), the HAL texture extractor, and Path B's coordinate bridge. It finds that erasing the target cycles the dependency graph |
-| [`gpu-canvas-dx.md`](gpu-canvas-dx.md) | proposed — the authoring surface the five above exist to serve: a chainable `GpuCanvas` component, built on `div` and `canvas`, so an application renders a GPU viewport in a `div()` without implementing `Element` |
+| [`renderer-seam.md`](renderer-seam.md) | proposed — giving `SceneRenderer` a bootstrap, and the three contracts that follow: the widened trait, the typed target a renderer is built against, and the factory a window consults |
+
+## The render extension
+
+One feature, six chapters, because it is the only one that needs a primitive, a
+renderer contract and an authoring surface at once. Read them in order; each assumes the
+one before it.
+
+| chapter | subject |
+| --- | --- |
+| [`renderer-seam.md`](renderer-seam.md) | the seam: the widened `SceneRenderer`, `PlatformRenderer`, the typed target, the factory, recovery, and the upstream patch set |
+| [`foreign-texture.md`](foreign-texture.md) | Path A: importing a texture produced outside GPUI, the erasure, the colour-space invariant, and what each platform can actually do |
+| [`inline-commands.md`](inline-commands.md) | Path B: drawing into the window's own pass, the pipeline-state isolation matrix, and the coordinate bridge |
+| [`gpu-canvas.md`](gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
+| [`verification.md`](verification.md) | what a test can assert, and which platform each check needs |
+| [`spike-windows-path-a.md`](spike-windows-path-a.md) | the one question the documents above could not settle, and what the probe answered |
+
+## How this set was reconciled
+
+2026-09-27. Six drafts of the render extension arrived over two days, from two
+directions, and they overlapped: two of them specified a factory, three specified the
+same primitive, and four of them carried numbered corrections against each other. The
+chapters above are the merge. The drafts are kept in [`drafts/`](drafts/) as *evidence* —
+what was proposed, and what each got wrong — rather than as specification, the way
+`decisions/` keeps unnumbered evidence beside numbered records.
+
+| draft | became |
+| --- | --- |
+| [`drafts/dual-path-render-extension.md`](drafts/dual-path-render-extension.md) — the RFC, transcribed as received | the shape of `foreign-texture.md` and `inline-commands.md`; its Chapter 5 sketches are not portable here |
+| [`drafts/scene-renderer-seam.md`](drafts/scene-renderer-seam.md) | `renderer-seam.md` — its §1 (widen the trait), §3 (native hooks) and migration order are kept nearly whole; its process-wide factory (§2, §4, §5) is replaced |
+| [`drafts/dual-path-ioc-architecture.md`](drafts/dual-path-ioc-architecture.md) | `renderer-seam.md` for the factory, the target and the trait, `foreign-texture.md` for the primitive; its finding that `PaintSurface` already half-exists is the reason Path A is not a new primitive |
+| [`drafts/dual-path-implementation-spec.md`](drafts/dual-path-implementation-spec.md) | `renderer-seam.md` (recovery), `foreign-texture.md` (colour space), `inline-commands.md` (state isolation), `verification.md` |
+| [`drafts/wgpu-target-adaptors.md`](drafts/wgpu-target-adaptors.md) | `renderer-seam.md` (the typed target), `foreign-texture.md` (HAL extraction), `inline-commands.md` (the coordinate bridge) |
+| [`drafts/gpu-canvas-dx.md`](drafts/gpu-canvas-dx.md) | `gpu-canvas.md`, nearly whole |
+| cross-device texture sharing (never committed) | `foreign-texture.md` §"The device constraint"; its Tier 2 is rejected there |
+| [`spike-windows-path-a.md`](spike-windows-path-a.md) | kept as a spike |
+
+### Contradictions, and which way each was settled
+
+1. **Erased or typed `RendererTarget`?** **Typed.** The erased form
+   (`raw: &'a dyn Any`) makes any renderer that is not the backend's own downcast to
+   `LinuxRendererTarget`-style types, which requires depending on the backend crate —
+   and `gpui_linux` already depends on `gpui_wgpu`, so that is a cycle.
+   `gpui_platform` already depends on `raw-window-handle`, so naming the handles costs
+   nothing. One consequence is worth more than the argument: with the handles typed,
+   the *whole* per-platform downcast cascade in the adaptors draft — `surface_info`,
+   `window_handle`, `display_handle`, each with three arms and a downcast — collapses to
+   field reads, and `gpui_wgpu` stops needing to name a backend crate at all.
+2. **Is `PlatformRenderer` a trait or a type alias?** **A trait, with a cfg-selected
+   supertrait.** The seam draft wanted `type PlatformRenderer = dyn SceneRenderer` with
+   per-platform extension traits; the revision wanted `trait PlatformRenderer:
+   SceneRenderer`. Both are kept: the trait carries the lifecycle, and the native hooks
+   are extension traits that the trait requires on the platforms that have them.
+   Widening the shared trait with macOS-only methods instead would break the layer-stack
+   ruling against doing that.
+3. **`set_viewport_size` on `PlatformRenderer`?** **No — and the name is wrong.**
+   `SceneRenderer::set_viewport_size` is test-gated
+   (`crates/gpui_engine/src/renderer.rs:32`), has exactly one caller (the test window,
+   `crates/gpui_authoring/src/platform/test/window.rs:531`) and one override
+   (`crates/gpui_apple/src/metal_renderer.rs:1660`). The *production* resize path
+   already has a name: `WgpuRenderer::update_drawable_size`
+   (`crates/gpui_wgpu/src/wgpu_renderer.rs:1132`). So neither "lift the gate" nor "drop
+   it" was needed — the contract gets the production name, which is also what makes a
+   factory-installed renderer behave exactly as the backend's own.
+4. **Where does the factory live — `Application` or the window?** **The window.**
+   `WindowOptions`/`WindowParams`, mirrored by `TestPlatform`'s existing
+   `headless_renderer_factory`. A process-wide default and a per-window override can
+   coexist later; only the per-window field is specified.
+5. **`RendererFactory`: a bare `Rc<dyn Fn>` or a newtype?** **A trait plus a newtype.**
+   `WindowOptions` and `WindowParams` both derive `Debug`
+   (`crates/gpui_platform/src/window.rs:356`, `:429`), which a closure cannot satisfy and
+   a trait object cannot derive. The `FnRendererFactory` adapter keeps the closure
+   spelling for the common case.
+6. **The Windows arm of `ForeignTextureHandle`.** **Removed.** A wgpu texture cannot be
+   read by GPUI's Direct3D 11 renderer, and wgpu offers no shareable resource — see
+   `foreign-texture.md` and the spike. The payload is the wgpu `TextureView` on every
+   platform wgpu renders, and the raw Metal handle on macOS.
+7. **`SharedGraphicsContext`, from the uncommitted draft.** **Rejected.** It duplicates
+   `WgpuContext` field for field (`crates/gpui_wgpu/src/wgpu_context.rs:9`) and
+   `WgpuRenderer::new` takes the *existing* `GpuContext`, so a parallel type cannot be
+   injected. It also creates a device, which is the thing the draft's own §1 warns
+   against.
+8. **`gpui_animotion`.** **Not this tree's, and not named.** The `gpui_animotion` in
+   `.uses` is a third-party declarative *property-animation* engine; the RFC's video
+   exporter is a crate that does not exist here.
+9. **wgpu 29's builder API.** Corrected in the drafts: `Adapter::request_device` takes
+   one argument and returns a `Result`
+   (`wgpu-29.0.4/src/api/adapter.rs:58`), and `Instance::request_adapter` returns a
+   `Result`, not an `Option` (`wgpu-29.0.4/src/api/instance.rs:167`).
+10. **The drafts' authoring names.** `WindowContext` and `ViewContext` do not exist
+    here; `CornerRadii` is `Corners<Pixels>`; and painting is a `window.` capability, not
+    a `cx.` one. Corrected throughout.
+
+### Settled
+
+Each of these was decided on evidence and is not reopened by re-reading the drafts.
+
+- **Path A completes an existing primitive, it does not add one.** `PaintSurface`
+  (`crates/gpui_engine/src/scene.rs:749`) is already "content produced outside GPUI,
+  composited into the window", already a scene variant with its own batch, and already
+  drawn by two of three renderers. The wgpu arm is a no-op to write.
+- **The texture handle is erased; the target is not.** They are not the same kind of
+  value: a handle has one counterparty, the application and the renderer it chose, so a
+  `dyn Any` payload is a private agreement between them; the target is read by any
+  renderer the application installs.
+- **Path A is the window owner's capability.** Producer and consumer must be the same
+  device, which only the factory that built the renderer has. A widget inside someone
+  else's window cannot be a producer.
+- **Windows is Path A and Path B only under `gpui_wgpu::WgpuRenderer`.** The default
+  `DirectXRenderer` is Direct3D 11 and the producer is Direct3D 12; there is no copy-free
+  bridge, and wgpu offers no shareable resource.
+- **The factory is invoked once, before the first frame.** Recovery is therefore
+  self-sufficient on the returned renderer, and post-construction queries belong on the
+  renderer's trait rather than on the factory's input.
+- **The trait upcast is load-bearing.** `PlatformWindow::with_renderer` and `present`
+  hand out `&mut dyn SceneRenderer`
+  (`crates/gpui_platform/src/platform_window.rs:151`, `:157`), and the explicit
+  `as_scene_renderer` shims are gone, so reaching a `Box<dyn PlatformRenderer>` as a
+  `dyn SceneRenderer` is upcasting. Stable since 1.86; `rust-toolchain.toml` is 1.95.
+
+### Open
+
+- **The handle's erasure vs a cfg-gated `wgpu` in `gpui_engine`.** The recommendation is
+  erasure, following the target's own argument. `PaintSurface` is the precedent for the
+  other way — a cfg'd field with a cfg'd dependency, as macOS's `CVPixelBuffer` has.
+- **The native hooks' shape.** Should hold: the extension-trait form in
+  `renderer-seam.md`. What would reopen it is in that document.
+- **macOS layer ownership.** If a non-Metal renderer on macOS cannot be handed the
+  window's layer, `MacSceneRenderer` is the wrong shape and the layer has to become a
+  platform-side resource.
+- **Whether `WgpuRenderer` should become the default on macOS and Windows**, retiring
+  Metal and DirectX to optional. The seam makes the question askable; nothing decides it.
 
 ## Spikes
 

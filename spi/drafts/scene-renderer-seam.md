@@ -20,7 +20,7 @@ Four of the five seams are entered through a single `Application::with_*` call.
 concrete type and calls inherent methods on it, so there is no point at which an
 application — or a crate outside the tree — can say *which* renderer to use.
 
-[`../architecture/frame-flow.md`](../architecture/frame-flow.md) states the same from
+[`../architecture/frame-flow.md`](../../architecture/frame-flow.md) states the same from
 the frame side: `PlatformWindow::present` hands the renderer a closure and takes back
 *whether the frame was presented*; that is where the fifth seam is entered, and it is
 below the pipeline.
@@ -186,7 +186,7 @@ for extras, and because `Any` is `'static`, whatever it points at must be owned.
 
 The macOS layer methods and the Windows background-appearance method do not
 generalise, and the layer-stack ruling is explicit about this shape
-([`../architecture/layer-stack.md`](../architecture/layer-stack.md), "A leaky
+([`../architecture/layer-stack.md`](../../architecture/layer-stack.md), "A leaky
 abstraction gets an escape hatch, not a new method"). So they do not join
 `SceneRenderer`. Instead each platform names the trait its window holds:
 
