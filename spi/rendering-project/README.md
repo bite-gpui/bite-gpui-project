@@ -21,6 +21,7 @@ The subfolders mirror the sources — `rendering/`, `authoring/`, `decisions/`,
 | [`rendering/foreign-texture.md`](../rendering/foreign-texture.md) | Path A — importing a texture produced outside GPUI |
 | [`rendering/inline-commands.md`](../rendering/inline-commands.md) | Path B — drawing into the window's own pass |
 | [`rendering/verification.md`](../rendering/verification.md) | the matrix, and the platform each check needs |
+| [`rendering/spike-windows-presentation.md`](../rendering/spike-windows-presentation.md) | the open spike: whether `WgpuRenderer` can present on Windows |
 | [`authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface |
 | [`decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md) | decision 0002 — which devices a producer may use, and which it may not |
 | [`decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) | the measurement 0002 rests on |

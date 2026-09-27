@@ -38,6 +38,10 @@ decides which devices a producer may use, and
 measurement that decision rests on.
 [`rendering-project/`](../rendering-project/README.md) gathers symlinks to all of them.
 
+One spike is open: [`spike-windows-presentation.md`](spike-windows-presentation.md) —
+whether `WgpuRenderer` can present on Windows, which patch 07 needs and no measurement
+covers yet.
+
 ## How this set was reconciled
 
 2026-09-27. Six drafts of the render extension arrived over two days, from two directions,
@@ -164,3 +168,7 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
   platform-side resource.
 - **Whether `WgpuRenderer` should become the default on macOS and Windows**, retiring
   Metal and DirectX to optional. The seam makes the question askable; nothing decides it.
+- **Windows presentation for a non-D3D11 renderer.** 0002 item 2 makes Path A and Path B on
+  Windows depend on `WgpuRenderer`, which has never run there. Whether it can own the
+  window's presentation — and what the window must stop doing for it to — is
+  [`spike-windows-presentation.md`](spike-windows-presentation.md).

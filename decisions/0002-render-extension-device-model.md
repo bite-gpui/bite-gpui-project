@@ -119,6 +119,12 @@ like it might rescue Tier 2. It does not, because it requires the producer to cr
 own D3D12 texture — the direction probes 1 and 3 close for wgpu. The full record, and the
 one probe still pending, are in [`windows-path-a-probe.md`](windows-path-a-probe.md).
 
+Item 2 rests on one premise none of this measures: that `WgpuRenderer`, the mechanism it
+names for Windows, can present there at all. It has never run on Windows.
+[`../spi/rendering/spike-windows-presentation.md`](../spi/rendering/spike-windows-presentation.md)
+is the probe for it, and until it answers, item 2's Windows clause is design rather than
+evidence.
+
 ## What would reopen it
 
 - **wgpu gaining an external-memory or shareable-resource API.** Then Tier 2 becomes
