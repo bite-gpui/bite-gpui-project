@@ -2,8 +2,8 @@
 
 - **Evidence for** [decision 0002](0002-render-extension-device-model.md) — the measurement
   it rests on. Kept as evidence, not as a proposal: what the design does with the answer is
-  [`../spi/foreign-texture.md`](../spi/foreign-texture.md) §2, and what it did to CI is
-  [`../spi/verification.md`](../spi/verification.md) §3.
+  [`../spi/rendering/foreign-texture.md`](../spi/rendering/foreign-texture.md) §2, and what it did to CI is
+  [`../spi/rendering/verification.md`](../spi/rendering/verification.md) §3.
 - **The question:** on Windows, can Path A work when the application renders with `wgpu`
   and the window is drawn by GPUI's default `DirectXRenderer`? **Answered: no — Outcome B.**
   Path A and Path B on Windows require installing `gpui_wgpu::WgpuRenderer`.
@@ -87,7 +87,7 @@ renderer (A), or it cannot, and a wgpu-rendered window does (B).
    `gpui_wgpu::WgpuRenderer`, create a texture on the renderer's own device, push the
    primitive, and assert the composite contains it. **Status: not run.** It is the
    acceptance test for the Windows configuration rather than a question about it, so it is
-   [`../spi/verification.md`](../spi/verification.md) §1's row for whoever builds the seam.
+   [`../spi/rendering/verification.md`](../spi/rendering/verification.md) §1's row for whoever builds the seam.
 
 **The success is narrower than it sounds.** Probe 2 shows the *raw* D3D path works — for a
 producer that creates its own D3D12 texture. It does not make a wgpu-produced texture
@@ -99,7 +99,7 @@ is the decision for Path A as designed.
 
 - **Adapter identity.** GPUI's D3D11 device comes from DXGI adapter selection and wgpu's
   D3D12 device from its own. Sharing requires the same *physical* adapter, a LUID match —
-  and [`../spi/verification.md`](../spi/verification.md) §4 records why that cannot be
+  and [`../spi/rendering/verification.md`](../spi/rendering/verification.md) §4 records why that cannot be
   asserted from inside either device.
 - **Synchronisation.** Even where sharing works, D3D11 reading while D3D12 writes tears a
   frame unless there is a keyed mutex or a fence handshake. Nothing in the design carries
@@ -108,5 +108,5 @@ is the decision for Path A as designed.
 
 A third thing the probe turned up is not a hazard of the rejected path but an unsettled
 rule for the chosen one, and it lives with that rule:
-[`../spi/foreign-texture.md`](../spi/foreign-texture.md) §4, on whether GPUI's Windows
+[`../spi/rendering/foreign-texture.md`](../spi/rendering/foreign-texture.md) §4, on whether GPUI's Windows
 sampler wants an sRGB or a plain `UNORM` foreign texture.

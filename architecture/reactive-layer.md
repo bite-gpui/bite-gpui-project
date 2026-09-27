@@ -174,7 +174,7 @@ see and a replayed subtree is not a tree it can see.
   invalidations as a burst; by the time it is asked, the effect queue has run to
   quiescence and the window is simply dirty. This is why gating a "notify storm" at the
   pipeline seam was never going to work — see
-  [`../spi/input-policy-seam.md`](../spi/input-policy-seam.md).
+  [`../spi/input/input-policy-seam.md`](../spi/input/input-policy-seam.md).
 - **The window's rate is decided in three places, in this order.** This layer decides
   when a frame is *asked for* (step 8), the frame source decides whether to *serve* the
   ask (the thermal and inactive throttle), and only then does `FramePipeline` decide

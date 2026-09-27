@@ -105,7 +105,12 @@ def main() -> int:
     where = "the working tree" if ref is None else f"ref {ref}"
 
     docs = [Path(d) for d in args.documents] or sorted(
-        p for p in (root / ".meta").glob("**/*.md") if ".git" not in p.parts
+        p
+        for p in (root / ".meta").glob("**/*.md")
+        # A symlinked document is a view of one that is checked where it lives, so
+        # following it here would count its citations twice.
+        # `spi/rendering-project/` is nothing but symlinks.
+        if ".git" not in p.parts and not p.is_symlink()
     )
 
     checked = unresolved = missing = out_of_range = blanks = 0

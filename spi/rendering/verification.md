@@ -2,7 +2,7 @@
 
 - **Status:** proposed, as the test plan for
   [`renderer-seam.md`](renderer-seam.md), [`foreign-texture.md`](foreign-texture.md),
-  [`inline-commands.md`](inline-commands.md) and [`gpu-canvas.md`](gpu-canvas.md).
+  [`inline-commands.md`](inline-commands.md) and [`gpu-canvas.md`](../authoring/gpu-canvas.md).
 - **Why it is a chapter of its own:** most of this feature's failure modes are silent — a
   wrong scale factor, a missed gamma, a leaked pipeline, a device that is not the one the
   texture came from. None is a compile error, and three of the four platforms cannot be
@@ -86,7 +86,7 @@ all. A release receipt therefore says nothing about Direct3D.
 ## 4. What is not verifiable here, and what a probe is for
 
 - **Real hardware.** The Windows probes run on WARP, which is why
-  [`../decisions/windows-path-a-probe.md`](../decisions/windows-path-a-probe.md) records its
+  [`../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) records its
   result as "mechanically
   possible on one adapter" rather than "works".
 - **Adapter identity.** Sharing requires the same physical adapter, and the LUIDs of two

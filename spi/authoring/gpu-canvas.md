@@ -1,9 +1,9 @@
 # `GpuCanvas`: the authoring surface
 
 - **Status:** proposed. Nothing of it is implemented.
-- **Assumes:** [`foreign-texture.md`](foreign-texture.md) and
-  [`inline-commands.md`](inline-commands.md) — the primitive and the two `Window` hooks
-  it is pushed through — and, under them, [`renderer-seam.md`](renderer-seam.md).
+- **Assumes:** [`foreign-texture.md`](../rendering/foreign-texture.md) and
+  [`inline-commands.md`](../rendering/inline-commands.md) — the primitive and the two `Window` hooks
+  it is pushed through — and, under them, [`renderer-seam.md`](../rendering/renderer-seam.md).
 - **Target crates:** `gpui_authoring` (the element and its builder), re-exported by the
   `gpui` facade. It reads the scene primitive, so it also touches `gpui_engine`.
 - **What it is:** the end-user surface. The seam's primitive is a scene type; the person
@@ -134,7 +134,7 @@ no counterpart in this fork:
   `window.paint_with_callback`, beside them in the same phase. The drafts' separate
   `register_foreign_texture` step between them is gone — it existed to name the texture for
   a registry, and there is no registry
-  ([`foreign-texture.md`](foreign-texture.md) §3).
+  ([`foreign-texture.md`](../rendering/foreign-texture.md) §3).
 - **`Styled::style` returns `&mut StyleRefinement`**
   (`crates/gpui_authoring/src/styled.rs:26`), not `&mut Style`.
 - **The radii type is `Corners<Pixels>`** (`crates/gpui_types/src/geometry.rs:2235`,
@@ -146,7 +146,7 @@ no counterpart in this fork:
 by the `gpui` facade, so a consumer writes `use gpui::GpuCanvas`. It adds no seam and
 changes no existing trait: it is a component built from `div`, `canvas`'s pattern, and
 the two `Window` hooks the render extension adds. The renderer it draws through is the
-one [`renderer-seam.md`](renderer-seam.md) makes installable, and `GpuCanvas` neither
+one [`renderer-seam.md`](../rendering/renderer-seam.md) makes installable, and `GpuCanvas` neither
 chooses it nor knows its name — which is why a canvas cannot be used at all unless the
 window's renderer implements the path it asks for.
 

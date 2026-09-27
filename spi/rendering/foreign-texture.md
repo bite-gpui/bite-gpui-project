@@ -61,7 +61,7 @@ D3D12 resource is invisible to a D3D11 device unless it was created shareable �
 `D3D12_HEAP_FLAG_SHARED`, a *heap* flag set at creation. wgpu never sets it
 (wgpu-hal's DX12 backend passes `D3D12_HEAP_FLAG_NONE`), and wgpu 29 exposes no
 external-memory API on any backend, so there is no way to ask. The full probe record is
-[`../decisions/windows-path-a-probe.md`](../decisions/windows-path-a-probe.md).
+[`../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md).
 
 Three consequences, each of which the drafts got wrong in the other direction:
 
@@ -80,7 +80,7 @@ Three consequences, each of which the drafts got wrong in the other direction:
 
 The whole of it — the constraint, the Windows configuration, and why the OS-handle
 bridges are out of scope rather than pending — is
-[`../decisions/0002-render-extension-device-model.md`](../decisions/0002-render-extension-device-model.md).
+[`../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md).
 
 ## 3. The scene type, and the API the constraint implies
 
@@ -124,7 +124,7 @@ Three consequences, each a removal:
   the renderer's, which wgpu rejects when the bind group is created.
 
 The surface an application author meets does not change: `GpuCanvas` is the user API
-([`gpu-canvas.md`](gpu-canvas.md)) and the call above is internal to it. What changes is
+([`gpu-canvas.md`](../authoring/gpu-canvas.md)) and the call above is internal to it. What changes is
 what a third-party element or renderer author touches, and those names are worth fixing
 once, here:
 
@@ -155,7 +155,7 @@ only transports the token. That is the opposite of the *target* in
 [`renderer-seam.md`](renderer-seam.md) §5.3, which any renderer must read and which is
 therefore typed. Erasing the handle is also what keeps `wgpu` out of `gpui_engine`, whose
 dependencies are `gpui_types` and small support crates
-([`../architecture/layer-stack.md`](../architecture/layer-stack.md)); the alternative,
+([`../architecture/layer-stack.md`](../../architecture/layer-stack.md)); the alternative,
 mirroring `PaintSurface` with a cfg-gated `wgpu`, is recorded as the rejected option in
 [`README.md`](README.md).
 
@@ -230,7 +230,7 @@ texture; the renderer's frame is submitted after it; so the GPU executes them in
 order and the texture is complete by the time the composite samples it. No semaphore, no
 `MTLSharedEvent`, no keyed mutex — the synchronisation the cross-device drafts specified
 is the cost of a second device, and there is no second device
-([`../decisions/0002-render-extension-device-model.md`](../decisions/0002-render-extension-device-model.md)).
+([`../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)).
 
 What that asks of the application is a *when*, not a *what*: **the submission has to
 happen before the frame's.** The natural place is the paint callback, which runs while the

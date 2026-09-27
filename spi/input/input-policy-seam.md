@@ -291,7 +291,7 @@ Stated so a reviewer can shoot it down cheaply:
   notify burst coalesces to one dirty window, because the wake is edge-triggered on
   `dirty` and `dirty_views` is a set — though the observer effect is queued per notify
   call on the path where a window does display the entity, which
-  [`../architecture/reactive-layer.md`](../architecture/reactive-layer.md) describes in
+  [`../architecture/reactive-layer.md`](../../architecture/reactive-layer.md) describes in
   full. And pointer input already drives the VRR sustain above rather than being
   throttled.
 - **If a `Platform` decorator turns out cheap in practice**, the seam is unnecessary.

@@ -3,7 +3,7 @@
 - **Decided:** 2026-09-26
 - **Status:** decided
 - **Evidence:** [`tracy-swap-scope.md`](tracy-swap-scope.md),
-  [`../spi/input-policy-seam.md`](../spi/input-policy-seam.md)
+  [`../spi/input/input-policy-seam.md`](../spi/input/input-policy-seam.md)
 
 ## Decision
 
@@ -58,7 +58,7 @@ and text system. Gating input would mean wrapping `Platform` *and* `PlatformWind
 two of the largest traits in the layer. Worse, a filtering gate would blind
 `InputRateTracker`, which counts events that reached *dispatch* — so coalescing
 pointer input can suppress the VRR sustain the tracker exists to enable. Both are
-written up in `../spi/input-policy-seam.md`, which is parked rather than proposed.
+written up in `../spi/input/input-policy-seam.md`, which is parked rather than proposed.
 
 ### The remaining candidate failed on its dependency
 

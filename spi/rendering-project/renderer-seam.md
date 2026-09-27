@@ -1,0 +1,1 @@
+../rendering/renderer-seam.md

@@ -2,10 +2,10 @@
 
 - **Decided:** 2026-09-27
 - **Status:** decided
-- **Evidence:** [`../spi/foreign-texture.md`](../spi/foreign-texture.md) §2 and §5,
+- **Evidence:** [`../spi/rendering/foreign-texture.md`](../spi/rendering/foreign-texture.md) §2 and §5,
   [`windows-path-a-probe.md`](windows-path-a-probe.md),
-  [`../spi/renderer-seam.md`](../spi/renderer-seam.md) §5.5,
-  [`../spi/verification.md`](../spi/verification.md) §4
+  [`../spi/rendering/renderer-seam.md`](../spi/rendering/renderer-seam.md) §5.5,
+  [`../spi/rendering/verification.md`](../spi/rendering/verification.md) §4
 
 ## Decision
 
@@ -129,5 +129,5 @@ one probe still pending, are in [`windows-path-a-probe.md`](windows-path-a-probe
   renderer's device, and say so when it is not.
 - **A decision about Windows' default renderer.** If `DirectXRenderer` were reimplemented
   over wgpu — the same question as "should wgpu be the default?" —
-  [`../spi/renderer-seam.md`](../spi/renderer-seam.md) §10 leaves open, item 2 would
+  [`../spi/rendering/renderer-seam.md`](../spi/rendering/renderer-seam.md) §10 leaves open, item 2 would
   become "install nothing" rather than "install `WgpuRenderer`".
