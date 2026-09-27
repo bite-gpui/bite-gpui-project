@@ -1,94 +1,101 @@
 - **Opened:** 2026-09-27
 - **Status:** open
-- **Touches:** `.tools/`, `bite-gpui/bite-gpui` (PR #1), GitHub organization settings
+- **Touches:** `bite-gpui/distribution` (the CI), `bite-gpui/bite-gpui` (PR #1), `.tools` (transplant and rebase only)
 
-# Running the fork's verification on `bite-gpui/bite-gpui` pull requests
+# Running the CI on `bite-gpui/bite-gpui` pull requests
 
 ## The question
 
-The verification this project actually runs — the gates, replay, measurement and
-carve operations — is driven from `.tools`. `bite-gpui/bite-gpui` is a fork of Zed, and
-a pull request against it is not checked by any of that. Can the `.tools` configuration
-run against `bite-gpui/bite-gpui` pull requests *without putting workflow files in
-`bite-gpui/bite-gpui`*, by pointing at a workflow that lives elsewhere?
+The CI is not in the fork. Can it run against a pull request *to* the fork without
+putting workflow files in the fork, by pointing at a workflow that lives in the
+repository the CI is actually in?
 
-The proposal to investigate was: create an organization ruleset targeting the repo,
-select *Require status checks to pass*, then *Add check → Require a workflow to run*,
-pointing at `Repo-B/.github/workflows/ci.yml@main`, so that GitHub injects and runs the
-other repository's workflow on this repo's pull requests.
+The proposal to investigate was: create an organization ruleset targeting the
+repository, select *Require status checks to pass*, then *Add check → Require a workflow
+to run*, pointing at `Repo-B/.github/workflows/ci.yml@main`, so GitHub injects and runs
+the other repository's workflow on this repository's pull requests.
 
-## What the documentation shows
+## That mechanism does not exist
 
-**The rule does not exist.** GitHub's current list of ruleset rules
+GitHub's current list of ruleset rules
 (`docs.github.com/…/managing-rulesets/available-rules-for-rulesets`) has fifteen
 entries: restrict creations, updates and deletions; require linear history; require
 deployments; require signed commits; require a pull request; require status checks to
-pass; block force pushes; the scanning, quality and coverage rules; and the file-path,
--length, -extension and -size restrictions. There is no *Require workflows to run*, and
-nothing that runs a workflow. The nearest rule, *Require status checks to pass*, does
-the opposite: it requires a check that something **else** has already reported. It
-cannot start one.
+pass; block force pushes; the scanning, quality and coverage rules; and the
+file-path, -length, -extension and -size restrictions. There is no *Require workflows to
+run*, and nothing that runs a workflow. The nearest rule, *Require status checks to
+pass*, requires a check that something **else** has already reported — it cannot start
+one.
 
-**Organization rulesets are not available to this organization in any case.**
-`docs.github.com/…/creating-rulesets-for-repositories-in-your-organization` states the
-feature is "for customers on GitHub Team or GitHub Enterprise plans", and rulesets
-generally are available "in public repositories with GitHub Free … and in public and
-private repositories with GitHub Pro, Team, and Enterprise". `bite-gpui` holds eight
-public repositories and one private (the organization API reports
-`public_repos: 8, total_private_repos: 1`), so it is on Free. Repository-level rulesets
-work on the public repos, but a repository ruleset can only *require* checks, not run
-workflows from another repository.
+Organization rulesets are unavailable here in any case: the feature is "for customers on
+GitHub Team or GitHub Enterprise plans"
+(`docs.github.com/…/creating-rulesets-for-repositories-in-your-organization`), and the
+organization holds `public_repos: 8, total_private_repos: 1`.
 
-## What the tree actually looks like
+So the answer to the question as asked is no — there is no ruleset, no trigger and no
+reusable-workflow wiring that runs another repository's workflow with nothing at all in
+this one, short of an app reporting a status (§ *An app*, below).
 
-Two facts make the "no local workflow files" premise less useful than it sounds.
+## Where the CI actually is
 
-- **`bite-gpui/bite-gpui` is not free of workflow files.** Being a Zed fork, it carries
-  upstream's set — around fifty files under `.github/workflows/` on
-  `bite_v1.22.0-pre`, from `release.yml` to the community automation. They mostly
-  *skip* on these branches, which is exactly why the fork's verification never runs.
-  Adding one more workflow there is not invasive; it is one file among fifty.
-- **`bite-gpui/tools` has no workflows at all.** `GET /repos/bite-gpui/tools/contents/.github/workflows`
-  returns 404, and the local `.tools/.github` is empty. The tools repository is a
-  private repo of scripts (`gates/`, `replay/`, `measure/`, `carve/`, `packaging/`,
-  `targets/`, `docs/`), not of Actions workflows. So there is nothing in it for a caller
-  to call yet, whatever the calling mechanism.
+**`bite-gpui/distribution`**, and it is **public**. Four workflows:
 
-And one fact that settles the direction of the answer: **a workflow in
-`bite-gpui/bite-gpui` does run.** PR #1 added
-`.github/workflows/cross-target-windows.yml` to the branch and both of its jobs ran and
-passed. GitHub Actions is enabled for the repository (`actions/permissions` reports
-`enabled: true`, `allowed_actions: all`); what is missing is configuration, not
-capability.
+| file | triggers | what it does |
+| --- | --- | --- |
+| `ci.yml` | `pull_request`, `push: main`, dispatch | validates the target table and the naming rule, lints the CI wiring, plans a matrix, and stages one target per lineage |
+| `verify.yml` | dispatch, **`workflow_call`** | verifies one target's staged tree; the `verify` action is the one definition of what verifying a target means |
+| `release.yml` | dispatch | stages, packages and publishes a target, refusing to publish without a verification receipt |
+| `tag.yml` | dispatch | resolves a branch to its version, pushes the tag to the source repository, dispatches the release |
+
+`.tools` is the transplant and rebase tooling — `replay`, `carve`, `gates`, `measure`,
+`packaging` — with no workflows of its own, as corrected.
+
+## What that CI covers today, and what it does not
+
+It covers **changes to the distribution configuration**: a pull request *in
+`distribution`* stages and verifies targets to prove the table, the naming rule and the
+staging scripts still work against the source branches. It reads the source repository
+(`bite-gpui/bite-gpui`) as an *input*, resolved from the target table — it never reacts
+to a change there.
+
+So a change to the fork is verified only after the fact, by the next distribution run,
+and only for the targets that run stages. Nothing runs on the fork's own pull requests.
 
 ## What actually works
 
-1. **A workflow in `bite-gpui/bite-gpui`.** PR #1's approach. No cross-repository
-   access questions, no org settings; the cost is that the logic lives in the fork
-   rather than in `.tools`. Mitigation: the workflow can do nothing but checkout and
-   invoke `.tools`' scripts, so there is one place to maintain either way.
-2. **A reusable workflow, with a thin caller.** Put the gate in `.tools` as a workflow
-   with `on: workflow_call`, and add a six-line caller in
-   `bite-gpui/bite-gpui/.github/workflows/` whose only job is
-   `uses: bite-gpui/tools/.github/workflows/<verify>.yml@main`. This is the closest real
-   thing to the proposal: all the configuration stays in `.tools`, and what lives in the
-   fork is a stub that cannot drift.
-   The constraint to check first: `tools` is **private** while `bite-gpui` is public,
-   and a reusable workflow must be accessible to the caller. Same-organization access
-   normally covers it, but cross-repository reuse from a private repository is exactly
-   the case with an org-level control, so it should be verified from the fork with a
-   throwaway caller before being relied on. It also requires adding the workflow to
-   `.tools` first.
-3. **An app or external runner that reports a status.** A process outside GitHub Actions
-   runs the gates and posts a check with `statuses: write`; a repository ruleset then
-   requires that check. This is the only route that puts literally nothing in
-   `bite-gpui/bite-gpui`, and it costs a GitHub App (or a PAT in a secret), a runner,
-   and a ruleset on the repository. Not worth it at this size.
+1. **A workflow in `bite-gpui/bite-gpui`.** What PR #1 did, and it ran: both of its jobs
+   went green. The fork is a Zed fork and already carries around fifty workflow files
+   under `.github/workflows/` that skip on these branches, so one more is not invasive.
+   Since `distribution` is **public**, that workflow can check the latter out
+   (`repository: bite-gpui/distribution`, `path: .dist`) and run its `pipeline/` and
+   `checks/` scripts against the fork — the logic stays in `distribution`, and the fork
+   holds a thin driver. No token, no secrets, no ruleset.
+2. **A thin caller into `distribution`'s reusable workflow.** Closer to the proposal:
+   both repositories are public, so the private-access question that would otherwise
+   block it does not arise, and `verify.yml` already declares `workflow_call`. Two
+   things make it not fit as it stands, and they are the work items rather than
+   obstacles:
+   - **It is target-oriented.** Its input is a name from the target table, which
+     `pipeline/targets.py --env` resolves to a branch, repository and version. It
+     validates that table first, so an arbitrary pull-request ref — a branch no table
+     has heard of — cannot be verified through it. A pull-request entry point needs a
+     repo-and-ref input instead of a target name.
+   - **It uses a repository-local composite action.** Its first steps fetch
+     `./.github/actions/build-env`. Whether a `./` reference inside a workflow called
+     from another repository resolves against the called repository or the caller is
+     exactly the kind of detail that decides whether cross-repository reuse works at
+     all, and it should be confirmed with a throwaway caller before anything depends on
+     it.
+3. **An app, or an external runner, reporting a status.** A process outside GitHub
+   Actions runs the gates and posts a check with `statuses: write`; a repository ruleset
+   on `bite-gpui/bite-gpui` — public, so available on Free — then requires that check.
+   This is the only route with literally nothing in the fork, and it costs a GitHub App,
+   a runner and a ruleset. Not worth it at this size.
 
 ## What would close it
 
-Decide between (1) and (2). If (2), then: add the gate workflow to `.tools` with
-`workflow_call`, add the stub caller to `bite-gpui/bite-gpui`, and confirm the private
-cross-repository call is permitted before wiring the ruleset that makes it required.
-(1) needs no decision — it is what PR #1 already does, and the honest cost is a
-workflow file in the fork.
+Pick (1) or (2). (1) needs no change to `distribution` at all and can be done now; (2)
+keeps the driver to a six-line stub but needs a pull-request entry point added to
+`distribution` and the `./`-local-action question settled first. If the fork's gate is
+meant to be *the same* gate as `verify.yml`, prefer (2); if it is a narrower check —
+the cross-target check PR #1 added, say — (1) is honest and immediate.
