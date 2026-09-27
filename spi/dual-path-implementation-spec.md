@@ -1,208 +1,255 @@
 # The render extension, in detail — state machines, patches, verification
 
-- **Status:** proposed. The fine-grained companion to
-  [`dual-path-ioc-architecture.md`](dual-path-ioc-architecture.md), which holds the
-  architecture and the numbered corrections (1–10) that this document *assumes and does
-  not repeat*. [`gpu-canvas-dx.md`](gpu-canvas-dx.md) holds the authoring surface's
-  corrections. Where code below disagrees with either list, the list wins.
+- **Status:** proposed. **v2.0.0** of the implementation companion to
+  [`dual-path-ioc-architecture.md`](dual-path-ioc-architecture.md). It supersedes the
+  v1.0.0 draft recorded earlier in this file's history.
+- **Inherits:** the architecture document's corrections 1–10 and
+  [`gpu-canvas-dx.md`](gpu-canvas-dx.md)'s; they are not restated. Where code below
+  disagrees, those win.
 - **Target crates:** `gpui_engine`, `gpui_platform`, `gpui_authoring`, `gpui_linux`,
   `gpui_macos`, `gpui_windows`, `gpui_wgpu`.
 
-## 0. What this grain adds, and what it newly gets wrong
+## What v2.0.0 adopted, and what it still gets wrong
 
-The detailed draft restates the API-surface errors already catalogued —
-`WindowContext`, `CornerRadii`, `Style` for `StyleRefinement`, `cx.`-level painting,
-`TextureId`, the duplicated `set_viewport_size`, `as_scene_renderer`, `wgpu` inside
-`gpui_engine`, `gpui_animotion`, and a `bite_gpui` crate that is really the `gpui`
-facade. None of those are re-listed here.
+Adopted, and correctly so: the facade identity (no separate `bite-gpui` crate), the
+**double erasure boundary** (neither `gpui_engine` nor `gpui_platform` names `wgpu`, a
+window toolkit or Cocoa), the `renderer_factory` name mirroring
+`headless_renderer_factory`, dropping the `as_scene_renderer` shims, HAL code living in
+`gpui_wgpu`, `order` and `content_mask` on the primitive, recovery on all four
+platforms, and no longer naming `gpui_animotion`. Those are the right calls.
 
-What is genuinely new is worth keeping: the eager initialisation sequence (§1), the
-colour-space invariant (§2), the pipeline-state isolation matrix (§3), the recovery
-protocol (§4), and the verification matrix (§8). Four things it newly gets wrong are
-called out in place, and one — the erasure boundary — is a correction to *this*
-document's own premise rather than a detail.
+Still wrong, and each is a compile error or an unmade decision rather than a style
+point. Corrections 11–20, continuing the architecture document's numbering:
 
-## 1. Window initialisation, and why the factory cannot be earlier
+11. **The erased target cannot hold borrows.** `RendererTarget<'a> { raw: &'a dyn Any }`
+    requires the referent to be `'static`, because `Any: 'static`. The draft's
+    `LinuxRendererTarget<'a> { raw_window: &'a RawWindow, .. }` is therefore not
+    `'static` and cannot be coerced to `&dyn Any`. The target must **own** its handles.
+    That is easy and already required: `RawWindow` is `Copy` and `'static`
+    (`crates/gpui_linux/src/linux/wayland/window.rs:63`), and
+    `WgpuRenderer::new`'s bound is `W: … + Clone + 'static`
+    (`crates/gpui_wgpu/src/wgpu_renderer.rs:268`). Change every `&'a RawWindow` to
+    `RawWindow`.
+12. **`as_hal` has a different signature in wgpu 29.** It is
+    `unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::TextureView>>`
+    (`wgpu-29.0.4/src/api/texture_view.rs:73`) — one generic parameter, no closure,
+    `unsafe`, and it returns `Option`. The draft's
+    `as_hal::<api::Metal, _>(|hal_view| hal_view.expect(..).raw_handle())` is the
+    pre-29 closure form and will not compile. `wgpu::hal` itself is public and safe to
+    name (`pub extern crate wgpu_hal as hal`, `wgpu-29.0.4/src/lib.rs:104`).
+13. **There is no `hal::api::Dx11`.** wgpu-hal 29.0.4's backends are `dx12`, `gles`,
+    `metal` and `vulkan` (`wgpu-hal-29.0.4/src/lib.rs:252`) — there is no DX11 HAL. So
+    the Windows arm can only be `Dx12`, and that exposes the real problem below
+    (§6): **GPUI's Windows renderer is Direct3D 11**
+    (`crates/gpui_windows/src/directx_renderer.rs:2086`) while wgpu is Direct3D 12, so
+    the two are not interchangeable without shared-handle interop. Windows is the one
+    platform where Path A is not a HAL lookup.
+14. **`order` is the scene's to assign, so `current_paint_order()` is neither an API nor
+    needed.** `Scene::insert_primitive` computes the order itself
+    (`crates/gpui_engine/src/scene.rs:85`, `:95`) and overwrites each primitive's field
+    (`:102`–`:131`). The element supplies `bounds` and `content_mask` — the latter from
+    `window.content_mask()` (`crates/gpui_authoring/src/window.rs:4586`) — and the scene
+    orders it against its siblings. `cx.current_paint_order()` does not exist.
+15. **`register_foreign_texture` cannot return `AtlasTextureId`.** `AtlasTextureId`
+    (`crates/gpui_engine/src/atlas.rs:254`) indexes the atlas textures the renderer
+    *owns*; a foreign texture is not one of them. It needs its own id type, as the
+    architecture document's correction 4 says — v2.0.0 dropped that correction rather
+    than absorbing it.
+16. **The erasure loses the type on macOS and Windows.** `Arc::new(raw_ptr as usize)`
+    erases a pointer to a bare `usize`, which will collide with any other `usize`
+    payload and cannot be checked. A newtype per backend (`struct MetalTexture(usize)`)
+    costs nothing and keeps the downcast honest.
+17. **`PlatformRenderer` and `SceneRenderer` now both declare `set_viewport_size`.**
+    `SceneRenderer::set_viewport_size` already exists under
+    `#[cfg(any(test, feature = "test-support", feature = "bench-support"))]`
+    (`crates/gpui_engine/src/renderer.rs:32`); the new required method on the subtrait
+    collides with it in test builds. Correction 5 is still open: lift the gate and put
+    it on the real contract, or drop it from `PlatformRenderer`.
+18. **Patch 02 and patch 03 still contradict each other.** §0 says the field is on both
+    `WindowOptions` and `WindowParams`, but patch 02's diff adds it to `WindowParams`
+    only (`crates/gpui_platform/src/window.rs:438`) while patch 03 reads it off
+    `options`, the `WindowOptions` (`crates/gpui_authoring/src/window.rs:1756`).
+    `WindowOptions` is at `:357` in the same file and derives `Debug` at `:356`, so it
+    needs the field and the builder method. No patch defines
+    `WindowOptions::with_renderer_factory`.
+19. **Removing the upcast shims makes trait upcasting load-bearing.** With
+    `as_scene_renderer` gone, `PlatformWindow::with_renderer`/`present`
+    (`crates/gpui_platform/src/platform_window.rs:151`, `:157`), which take
+    `&mut dyn SceneRenderer`, only reach a `Box<dyn PlatformRenderer>` by upcasting.
+    That is stable (`rust-toolchain.toml` is 1.95) but should be stated, because it is
+    now the thing the whole seam depends on.
+20. **`GpuCanvas` still will not compile, and one change is a regression.** §7.
 
-The draft's ordering claim is correct and is the reason the factory lives where it
-does: **the native surface must exist before the factory runs.** A renderer binds to a
-`wl_surface`, an `HWND` or an `NSView`, so the sequence is strictly:
+## 1. Initialisation, and why the factory is once per window
+
+The ordering claim is right and is the reason the factory lives where it does: the
+native surface must exist before the factory runs, so it is invoked exactly once per
+window, after the window is allocated, and never again.
 
 ```
-WindowOptions.with_renderer_factory(..)      # per window, gpui_platform (correction 1)
-    → WindowHost::new                        # destructures options (crates/gpui_authoring/src/window.rs:1441)
-    → Platform::open_window(.., WindowParams) # crosses the trait boundary (crates/gpui_platform/src/platform.rs:95)
-        → allocate the native window          # wl_surface / HWND / NSWindow
-        → pack the backend target             # BackendRendererTarget
-        → RendererTarget::new(&backend)       # erase
-        → factory.create(target)? | default   # the decision
-    → Box<dyn PlatformRenderer> → stored in the window
+WindowOptions.renderer_factory            # gpui_platform (correction 1)
+  → WindowHost::new                        # destructures (crates/gpui_authoring/src/window.rs:1441)
+  → Platform::open_window(.., WindowParams) # (crates/gpui_platform/src/platform.rs:95)
+      → allocate the native window          # wl_surface / HWND / NSWindow
+      → pack the backend target once        # owned, correction 11
+      → RendererTarget::new(&backend)       # erase
+      → factory.create(target)? | default
+  → Box<dyn PlatformRenderer> in the window
 ```
 
-Two consequences the draft states and one it does not:
+Two consequences that follow from "once": recovery must be self-sufficient on the
+returned renderer (there is no second target resolution), and post-construction queries
+like `max_texture_size()` and `set_subpixel_layout(is_bgr)` — x11 at
+`crates/gpui_linux/src/linux/x11/window.rs:772` — belong on `PlatformRenderer`, not in
+the factory's input.
 
-- The factory is **invoked once per window, before the first frame**, and never again
-  — so `recover` (§4) must be self-sufficient, because there is no second chance to
-  re-resolve a target.
-- `max_texture_size()` and `set_subpixel_layout(is_bgr)` are queried *after*
-  construction (x11 at `crates/gpui_linux/src/linux/x11/window.rs:772`), which is why
-  they are on `PlatformRenderer` rather than constructor arguments.
-- **Newly wrong, and it is a naming gift:** the draft calls this field
-  `renderer_factory` as if new. The headless path already has exactly that field and
-  that name — `headless_renderer_factory`
-  (`crates/gpui_authoring/src/platform/test/platform.rs:54`, threaded from
-  `crates/gpui_authoring/src/app/headless_app_context.rs:68`). The window-level field
-  should mirror it rather than invent a parallel vocabulary, and the existing headless
-  factory is the working precedent for the whole design.
+## 2. Path A
 
-## 2. Path A: the colour-space invariant, and the erasure this document misses
+The colour-space invariant the draft adds is real and belongs here: the offscreen
+texture must be sampled as sRGB (`Rgba8UnormSrgb`/`Bgra8UnormSrgb`), or it composites
+with a ≈2.2 gamma error; and the sampler is linear with `ClampToEdge`, so a clip against
+rounded corners cannot bleed. This is the generalisation of `PaintSurface`
+(`crates/gpui_engine/src/scene.rs:749`), whose macOS payload is a `CVPixelBuffer`.
 
-The draft's §1.2 invariant is real and belongs in the spec, because getting it wrong is
-invisible until the composite:
+The erasure is right in principle and, as v2.0.0 states, legitimate because the
+registering application and the consuming renderer are counterparties — the engine only
+transports a token. Three fixes make it compile: the target owns its handles
+(correction 11), the handle payload is a typed newtype rather than `usize`
+(correction 16), and the id is not an `AtlasTextureId` (correction 15).
 
-- An offscreen texture handed over as Path A **must** be sampled as sRGB
-  (`Rgba8UnormSrgb` / `Bgra8UnormSrgb`). A linear texture composites with a ≈2.2 gamma
-  error and reads as washed out. The engine's own scene types are colour-managed the
-  same way.
-- The sampler is a linear, `ClampToEdge` sampler: the primitive is clipped against UI
-  rounded corners, and `ClampToEdge` is what stops the clip's edge from bleeding.
+## 3. Path B
 
-**The correction this document needs that the architecture document does not yet
-state.** The draft erases the *handle* only where it is convenient: §2 of the
-architecture document erases `RendererTarget`, but this spec leaves
-`CustomRenderPrimitive` naming concrete types — `ForeignTextureHandle::Wgpu(wgpu::TextureView)`
-and, in §3.3, `DrawContext::wgpu_pass: &mut wgpu::RenderPass<'static>`. Both put `wgpu`
-in `gpui_engine` (correction 3). The insight the draft is one step away from: **the
-erasure is legitimate precisely because the application also chose the renderer.** The
-app that registers a foreign texture and the renderer that consumes it are
-counterparties, so the concrete type agreement is *their* contract, not the engine's —
-and the engine only needs an opaque token plus a payload it never inspects. That is why
-`PaintSurface` gets away with a `CVPixelBuffer` (correction 3's cfg pattern) and why
-`DrawContext` must be erased the same way as the handle: the callback receives
-`&mut dyn Any`, and the renderer the app installed downcasts it.
+The state-isolation matrix is kept verbatim; it describes GPU state and is unaffected
+by the API corrections:
 
-## 3. Path B: the state-isolation matrix
-
-Keep this table — it is the most useful artifact in the draft, and it survives the API
-corrections unchanged, because it describes GPU state rather than Rust types:
-
-| subsystem | what an injected shader changes | what the renderer must restore |
+| subsystem | changed by an injected shader | restored by the renderer |
 | --- | --- | --- |
-| scissor | clamped to `primitive.bounds` | full target rect |
+| scissor | clamped to `primitive.bounds` | the full target rect |
 | viewport | possibly local bounds | `(0, 0, device_w, device_h)` |
-| pipeline | custom VS/FS bound | the quad/text pipeline |
+| pipeline | custom VS/FS | the quad and text pipelines |
 | depth/stencil | custom tests/masks | disabled |
 | blend | custom or additive | `SrcAlpha, OneMinusSrcAlpha` |
 | vertex buffers | slots `[0..N]` overwritten | the GPUI instance buffer at slot 0 |
 | samplers | sampler registers changed | the atlas sampler |
 
-Two corrections:
-
-- **The primitive carries `order` and `content_mask`**, like every other scene
-  primitive (`crates/gpui_engine/src/scene.rs:749`). Without them the injected command
-  cannot be placed correctly in the batch list, and the "snapshot/restore" story is
-  about the *wrong* boundary — the restore has to rewind to the batch cursor as well as
-  the pipeline state.
-- **"Flush the active batch" is renderer-specific and the draft's three sketches are
-  wrong in the same direction.** Metal and DirectX do carry a pause/restore shape, but
-  wgpu's batcher is not a command encoder a caller can pause mid-pass — the wgpu arm is
-  the one that has to be designed against `crates/gpui_wgpu/src/wgpu_renderer.rs`, not
-  sketched by analogy. That arm is also the only one that has to be written for Path A
-  (`PrimitiveBatch::Surfaces(_surfaces) => {}`,
-  `crates/gpui_wgpu/src/wgpu_renderer.rs:1546`).
+One simplification and one warning. The simplification: with correction 14 the element
+does not pass an order, so the "rewind the batch cursor" step is about `content_mask`
+and the scene's own ordering, not about an order the element computed. The warning:
+the draft's "Wgpu: conclude the active `PrimitiveBatch::Surfaces` or flush the quad
+draw call" is not a thing wgpu's batcher exposes; the wgpu arm is the one that has to be
+designed against `crates/gpui_wgpu/src/wgpu_renderer.rs`, not sketched by analogy from
+Metal and DirectX — and it is also the arm Path A still needs
+(`PrimitiveBatch::Surfaces(_surfaces) => {}`,
+`crates/gpui_wgpu/src/wgpu_renderer.rs:1546`).
 
 ## 4. Device loss and recovery
 
-The protocol is correct in outline and matches the tree. Verified against the ref:
-
-- Recovery is a method on the concrete renderer,
-  `WgpuRenderer::recover<W>(&mut self, window: &W) -> anyhow::Result<()>`
-  (`crates/gpui_wgpu/src/wgpu_renderer.rs:2131`), called from `present` on x11
-  (`crates/gpui_linux/src/linux/x11/window.rs:1765`) and wayland
-  (`crates/gpui_linux/src/linux/wayland/window.rs:1960`) guarded by `device_lost()`.
-  The draft's `RendererTarget`-taking `recover` is the erased form of the same call.
-- The draft's `new_rejecting_software` is real:
-  `crates/gpui_wgpu/src/wgpu_context.rs:76`, already used inside recovery
-  (`crates/gpui_wgpu/src/wgpu_renderer.rs:2163`).
-- The shared-context subtlety the draft names is the important one: the `GpuContext` is
-  process-wide (`Rc<RefCell<Option<WgpuContext>>>`, `crates/gpui_wgpu/src/wgpu_renderer.rs:168`),
-  so a recovering window must **adopt a context another window already rebuilt** rather
-  than construct a second device. The draft has this; it is the part most likely to be
-  got wrong in implementation.
-- One thing to add: recovery is not only Linux's. macOS and Windows resume from sleep
-  and lose devices too; the protocol should be stated once and implemented three times,
-  not described as a Wayland/X11 loop.
+Correct in outline and verified: `WgpuRenderer::recover<W>(&mut self, window: &W)`
+(`crates/gpui_wgpu/src/wgpu_renderer.rs:2131`), called from `present` guarded by
+`device_lost()` on x11 (`crates/gpui_linux/src/linux/x11/window.rs:1765`) and wayland
+(`crates/gpui_linux/src/linux/wayland/window.rs:1960`); `new_rejecting_software` exists
+(`crates/gpui_wgpu/src/wgpu_context.rs:76`). The shared-context adoption rule — the
+first recovering window rebuilds, the rest adopt (`Rc<RefCell<Option<WgpuContext>>>`,
+`crates/gpui_wgpu/src/wgpu_renderer.rs:168`) — is the subtle part and is right.
+v2.0.0 correctly drops the "Wayland/X11 only" framing; macOS and Windows lose devices
+too, so the protocol is stated once and implemented three times.
 
 ## 5. The patch set
 
-The corrected list, extending the architecture document's §8. Line-exact code is not
-worth reproducing here — the boundary is a moving target — but the *shape* is:
+Unchanged in shape from v1, with the corrections above applied:
 
-| patch | change | note |
-| --- | --- | --- |
-| 01 | new `gpui_platform/src/platform_renderer.rs`: `PlatformRenderer`, `RendererFactory`, `DynRendererFactory`, `RendererTarget` | as drafted |
-| 02 | `renderer_factory` on **both** `WindowParams` and `WindowOptions` | the draft adds it to `WindowParams` only, then patch 03 reads it off `WindowOptions` — the two patches contradict each other |
-| 03 | forward it through `WindowHost::new`'s destructure into `open_window` | as drafted |
-| 04–05 | wayland, x11: consult the factory, else the default | as drafted |
-| 06–07 | macOS (`crates/gpui_macos/src/window.rs:1100`), Windows (`crates/gpui_windows/src/window.rs:145`) | **absent from the draft**; without them the field is silently ignored on two backends |
+| patch | change |
+| --- | --- |
+| 01 | new `gpui_platform/src/platform_renderer.rs`: `PlatformRenderer`, `RendererFactory`, `DynRendererFactory`, `RendererTarget` |
+| 02 | `renderer_factory` on **both** `WindowOptions` (`crates/gpui_platform/src/window.rs:357`) and `WindowParams` (`:438`), plus the `with_renderer_factory` builder — correction 18 |
+| 03 | forward it through `WindowHost::new` into `open_window` |
+| 04–05 | wayland (`crates/gpui_linux/src/linux/wayland/window.rs:582`), x11 (`crates/gpui_linux/src/linux/x11/window.rs:769`) |
+| 06–07 | macOS (`crates/gpui_macos/src/window.rs:1100`), Windows (`crates/gpui_windows/src/window.rs:145`) |
 
-The draft's §2.5 shows a real smell the seam should fix rather than copy: the same
-surface-config and `RawWindow` construction appears twice, once for the factory arm and
-once for the default. Build the target once and pass it to whichever constructor wins,
-so the two arms cannot drift.
+v2.0.0 keeps the improvement worth keeping from the last round: the backend target is
+built **once** and handed to whichever arm wins, so the factory and default paths cannot
+drift. It never names patches 06–07, so on two of four backends the field would still be
+silently ignored.
 
-## 6. The downstream crate
+## 6. HAL extraction, and the Windows problem
 
-Three corrections, all from the two companion documents:
+The extraction belongs in `gpui_wgpu` — adopted. Correcting the mechanics:
 
-- **There is no `bite-gpui` crate to add.** The facade crate is `gpui` (package
-  `bite-gpui`), and its authoring surface is `gpui_authoring`. `GpuCanvas` belongs in
-  `gpui_authoring` beside `canvas`, re-exported as `gpui::GpuCanvas` — see
-  [`gpu-canvas-dx.md`](gpu-canvas-dx.md).
-- **The HAL helpers belong with a renderer crate, not the facade.** `ForeignTextureExt`
-  and the `as_hal` extraction are `wgpu`-specific and belong in `gpui_wgpu` (or a
-  sibling), where `wgpu` is already a dependency — not in the crate that defines
-  `GpuCanvas`.
-- **`GpuCanvas` must not implement `Element` from scratch.** The draft's §3.1 is the
-  same shape `gpu-canvas-dx.md` corrects: it would lose the hitbox that `Div`'s prepaint
-  registers, so drag and scroll would never fire. Compose a `div()` and delegate.
+- `as_hal` is `unsafe`, takes one generic parameter, and returns
+  `Option<impl Deref<Target = A::TextureView>>` (correction 12). Wrap it in the
+  `unsafe` block the draft omits and handle the `Option`.
+- **macOS** works: wgpu's Metal backend and GPUI's Metal renderer are the same API
+  (`wgpu-hal-29.0.4/src/lib.rs:258`).
+- **Linux** needs no extraction at all — wgpu *is* the renderer, so the app already
+  holds the `TextureView`.
+- **Windows does not work as drafted, and this is the design's hardest open piece.**
+  wgpu-hal has no DX11 backend (correction 13); GPUI's Windows renderer is D3D11. A
+  wgpu (D3D12) texture cannot be sampled by a D3D11 device without a shared handle
+  (`ID3D12Resource` → `ID3D11Texture2D` via `OpenSharedHandle`), which is a real piece
+  of interop to design and test, not a `raw_view()` call. Either Path A is
+  D3D12-renderer-only on Windows, or the producer must be a D3D11 device, or the
+  shared-handle bridge has to be built. Decide this before writing the patch.
 
-**`as_hal` is not anywhere in the tree.** `git grep as_hal` returns nothing, on any
-platform. The HAL extraction is therefore not "the existing mechanism, wrapped" — it is
-new code that has to be written and tested against `wgpu` 29 (`wgpu = "29.0.4"` at the
-workspace manifest) on each backend, with the features that expose `hal::api::Metal`
-and `hal::api::Dx11`. Treat it as the riskiest unbuilt piece in the design, and note
-that on Linux — where wgpu *is* the renderer — Path A needs no extraction at all, only
-the `TextureView` the app already owns.
+## 7. `GpuCanvas`, again
 
-## 7. Headless export
+v2.0.0 adopts "delegate to `div()`" as a tenet and then, in §3.1, does not do it. Four
+problems, the last a regression:
 
-The draft's §4 is a sound **design for a video exporter** and an unsound **description
-of `gpui_animotion`**: the crate in this tree is a declarative property-animation
-engine (correction 8, and the RFC preamble). The ring-buffer sizing, the "the virtual
-clock pauses instead of dropping frames" backpressure rule, and the reused pinned
-staging pool are all worth keeping as the design of whatever crate does the export —
-they are just not that crate's description.
+- **Still `WindowContext`.** Every callback and lifecycle method must be
+  `(…, window: &mut Window, cx: &mut App)`; `RenderOnce::render` is
+  `fn render(self, window: &mut Window, cx: &mut App)`
+  (`crates/gpui_authoring/src/element.rs:180`). `cx.request_layout`,
+  `cx.register_foreign_texture` and `cx.push_custom_primitive` are all `window.`-level.
+- **Still `CornerRadii`.** It is `Corners<Pixels>`
+  (`crates/gpui_types/src/geometry.rs:2235`).
+- **The private child element reintroduces the sizing and hitbox problems.** Its
+  `request_layout` uses `Style::default()`, so a child with no intrinsic size collapses;
+  and because `GpuCanvas` is a `RenderOnce` and not an `Element`, `.id()` yields
+  `Stateful<GpuCanvas>`, which is only an element when `GpuCanvas: Element`
+  (`crates/gpui_authoring/src/elements/div.rs:4078`) — so `on_click`/`on_hover` are
+  unavailable. [`gpu-canvas-dx.md`](gpu-canvas-dx.md) already resolves both: implement
+  `Element` on `GpuCanvas` by delegating to the inner `Div`, push the primitive after
+  `Div::paint`, and use no child.
+- **The texture callback lost its `bounds` argument** — `Fn(&mut WindowContext) ->
+  ForeignTextureHandle`. Path A renders *offscreen into a texture of the element's
+  size*, so the callback must receive `bounds`; v1.0.0 had it and v2.0.0 dropped it.
+  Restore `Fn(Bounds<Pixels>, &mut Window, &mut App) -> ForeignTextureHandle`.
 
-The parity claim that *does* belong to this design is the one the seam document makes:
-the primitives must render offscreen, because that is what lets CI read a frame back
-and assert on it.
+## 8. Headless export
 
-## 8. Verification matrix
+v2.0.0 stops naming `gpui_animotion` and frames the pipeline as "video recording and
+automated CI visual testing" — the correction, accepted. The bounded ring
+(`sync_channel(4)`), the "the virtual clock pauses, frames are never dropped"
+backpressure rule, and the reused pinned staging pool are a coherent design for a
+video exporter; they are just a design for a crate that does not exist yet.
 
-Keep it, as the test plan. Restated after the corrections, each row is an assertion a
-test can actually make:
+The parity claim that belongs to *this* design is narrower and testable, and it is the
+seam document's: the primitives render offscreen, so CI can read a frame back and
+assert on it.
 
-| scenario | the failing behaviour to prevent | the assertion |
+## 9. Verification matrix
+
+Kept, as the test plan. Each row is an assertion the headless harness can actually
+make:
+
+| scenario | to prevent | assertion |
 | --- | --- | --- |
 | resize / surface churn | stale swapchain geometry | after `set_viewport_size`, the next frame's scissor and viewport match the new size |
-| DPI change | half- or double-scale viewport | `bounds * scale_factor` rounds to the same integers the platform target reports |
-| premultiplied alpha | dark fringes at rounded corners | a known RGBA fixture composites to a known pixel (the offscreen readback the seam document enables) |
-| device loss | `SurfaceLost` panic | `device_lost()` then `recover()` then a frame draws, on the headless path |
-| thread affinity | `GpuContext` sent across threads | the factory is `!Send` by construction (`Rc`), so the type system, not a test, is the guard |
-| Path A colour space | washed-out composite | an sRGB fixture round-trips without a gamma shift |
+| DPI change | half/double-scale viewport | `bounds * scale_factor` rounds to the coordinates the platform target reports |
+| premultiplied alpha | fringes at rounded corners | a known RGBA fixture composites to a known pixel on readback |
+| device loss | `SurfaceLost` panic | `device_lost()` → `recover()` → a frame draws, headless |
+| thread affinity | `GpuContext` crossing threads | the factory is `!Send` by construction (`Rc`), so the type system is the guard |
+| Path A colour space | washed-out composite | an sRGB fixture round-trips without a ≈2.2 gamma shift |
+| foreign-texture id | an atlas id reused for a foreign texture | the registry rejects an id it did not hand out (correction 15) |
 
-The last column is the point: the seam document's whole argument is that this feature
-is CI-gated *because* the renderer is installable and the frames are readable
-in-process. A verification matrix whose rows cannot be asserted headlessly would
-contradict the reason the feature was ordered this way.
+## Open before implementing
+
+- **Correction 13 / §6** — the Windows cross-API question. This is the only item that
+  could invalidate a whole path on a platform, and it has no answer yet.
+- **Correction 17** — `set_viewport_size`'s test gate.
+- **Correction 11** — confirm every backend target is `'static` (owns its handles).
+- **The native hooks** — still owned by
+  [`scene-renderer-seam.md`](scene-renderer-seam.md) §3, and still needed: v2.0.0's
+  `PlatformRenderer` has no place for the macOS layer
+  (`crates/gpui_macos/src/window.rs:3087`) or the Windows appearance
+  (`crates/gpui_windows/src/window.rs:1039`).
