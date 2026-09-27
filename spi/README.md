@@ -67,13 +67,32 @@ One document per seam, plus the chapters of the one that has more than a trait.
 
 ## The render extension
 
-One feature, six chapters, because it is the only one that needs a primitive, a
-renderer contract and an authoring surface at once. Read them in order; each assumes the
-one before it.
+GPUI has no escape hatch for an external GPU context. A viewport that draws hundreds of
+thousands of vertices, a 3D view, a video decoder or a camera feed has three ways in
+today, and all three cost something: translate the geometry into GPUI's box and path
+primitives, blit an offscreen image through a CPU staging buffer — the shape `RenderImage`
+has — or fork the engine. The readback alone moves `W × H × 4 × fps × 2` bytes a second,
+≈1.0 GB/s at 1080p60 and ≈8.0 GB/s at 4K120, across the bus between GPU and CPU, which
+saturates the memory bus and costs one to two frames of latency.
+
+The extension answers with two mechanisms over one primitive: **Path A** imports a texture
+the application produced, and **Path B** draws the application's own commands into the
+window's pass. Where the four candidates land:
+
+| | primitive translation | offscreen blit | Path B inline | Path A texture |
+| --- | --- | --- | --- | --- |
+| GPU passes | 1 | 2 | **1** | 2 (zero-copy) |
+| CPU readback | none | full | **none** | **none** |
+| stacking with UI | native | limited | native | **native** |
+| scale ceiling | fails past ~500k vertices | high | **max** | high |
+| shader freedom | GPUI's SDFs only | full | **full** | full |
+
+Six chapters, because this is the only feature that needs a primitive, a renderer contract
+and an authoring surface at once. Read them in order; each assumes the one before it.
 
 | chapter | subject |
 | --- | --- |
-| [`renderer-seam.md`](renderer-seam.md) | the seam: the widened `SceneRenderer`, `PlatformRenderer`, the typed target, the factory, recovery, and the upstream patch set |
+| [`renderer-seam.md`](renderer-seam.md) | the seam: `PlatformRenderer`, the typed target, the factory, recovery, and the upstream patch set. `SceneRenderer` itself is unchanged |
 | [`foreign-texture.md`](foreign-texture.md) | Path A: importing a texture produced outside GPUI, the erasure, the colour-space invariant, and what each platform can actually do |
 | [`inline-commands.md`](inline-commands.md) | Path B: drawing into the window's own pass, the pipeline-state isolation matrix, and the coordinate bridge |
 | [`gpu-canvas.md`](gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
@@ -85,20 +104,26 @@ one before it.
 2026-09-27. Six drafts of the render extension arrived over two days, from two
 directions, and they overlapped: two of them specified a factory, three specified the
 same primitive, and four of them carried numbered corrections against each other. The
-chapters above are the merge. The drafts are kept in [`drafts/`](drafts/) as *evidence* —
-what was proposed, and what each got wrong — rather than as specification, the way
-`decisions/` keeps unnumbered evidence beside numbered records.
+chapters above are the merge. The drafts themselves have been **removed** — every part of
+them is either superseded by a chapter, recorded below as a correction, or was wrong
+enough not to keep, and a specification that no longer compiles is not evidence. The table
+is the provenance: what each proposed, and what became of it.
 
 | draft | became |
 | --- | --- |
-| [`drafts/dual-path-render-extension.md`](drafts/dual-path-render-extension.md) — the RFC, transcribed as received | the shape of `foreign-texture.md` and `inline-commands.md`; its Chapter 5 sketches are not portable here |
-| [`drafts/scene-renderer-seam.md`](drafts/scene-renderer-seam.md) | `renderer-seam.md` — its §1 (widen the trait), §3 (native hooks) and migration order are kept nearly whole; its process-wide factory (§2, §4, §5) is replaced |
-| [`drafts/dual-path-ioc-architecture.md`](drafts/dual-path-ioc-architecture.md) | `renderer-seam.md` for the factory, the target and the trait, `foreign-texture.md` for the primitive; its finding that `PaintSurface` already half-exists is the reason Path A is not a new primitive |
-| [`drafts/dual-path-implementation-spec.md`](drafts/dual-path-implementation-spec.md) | `renderer-seam.md` (recovery), `foreign-texture.md` (colour space), `inline-commands.md` (state isolation), `verification.md` |
-| [`drafts/wgpu-target-adaptors.md`](drafts/wgpu-target-adaptors.md) | `renderer-seam.md` (the typed target), `foreign-texture.md` (HAL extraction), `inline-commands.md` (the coordinate bridge) |
-| [`drafts/gpu-canvas-dx.md`](drafts/gpu-canvas-dx.md) | `gpu-canvas.md`, nearly whole |
-| cross-device texture sharing (never committed) | `foreign-texture.md` §"The device constraint"; its Tier 2 is rejected there |
+| `dual-path-render-extension.md` — the RFC, transcribed as received | the shape of `foreign-texture.md` and `inline-commands.md` |
+| `scene-renderer-seam.md` | `renderer-seam.md` — its §3 (native hooks) and its migration order are kept; its §1 (widen the trait) and its process-wide factory (§2, §4, §5) are not |
+| `dual-path-ioc-architecture.md` | `renderer-seam.md` for the factory, the target and the trait, `foreign-texture.md` for the primitive; its finding that `PaintSurface` already half-exists is why Path A is not a new primitive |
+| `dual-path-implementation-spec.md` | `renderer-seam.md` (recovery), `foreign-texture.md` (colour space), `inline-commands.md` (state isolation), `verification.md` |
+| `wgpu-target-adaptors.md` | `renderer-seam.md` (the typed target), `foreign-texture.md` (HAL extraction), `inline-commands.md` (the coordinate bridge) |
+| `gpu-canvas-dx.md` | `gpu-canvas.md`, nearly whole |
+| cross-device texture sharing (never committed) | `foreign-texture.md` §"The device constraint" and [decision 0002](../decisions/0002-render-extension-device-model.md); its Tier 2 is rejected there |
 | [`spike-windows-path-a.md`](spike-windows-path-a.md) | kept as a spike |
+
+Two claims in the drafts are worth naming, because they are the kind that get copied: the
+RFC's "≈16.0 GB/s at 4K120" is its own formula miscounted — `W × H × 4 × fps × 2` is ≈8.0
+— and its Chapter 7 names `gpui_animotion` as a video encoder, which is a different crate
+(item 8 below).
 
 ### Contradictions, and which way each was settled
 

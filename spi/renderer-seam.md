@@ -1,11 +1,11 @@
 # The renderer seam: giving the fifth SPI a bootstrap
 
 - **Status:** proposed. Nothing of it is implemented.
-- **Supersedes:** the factory and target designs in
-  [`drafts/scene-renderer-seam.md`](drafts/scene-renderer-seam.md) §2–§5 and
-  [`drafts/dual-path-ioc-architecture.md`](drafts/dual-path-ioc-architecture.md) §3–§4.
-  One of §1's rulings below also supersedes the first draft's §1, which is worth reading
-  because the reasoning is recorded there.
+- **Supersedes:** the drafts' factory and target designs — the seam draft's §2–§5 and the
+  IoC draft's §3–§4 — which were removed once this chapter carried them
+  ([`README.md`](README.md) has the reconciliation). One of §3's rulings also reverses the
+  seam draft's §1, which widened `SceneRenderer`; this does not, for the reason recorded
+  there.
 - **Prerequisite for:** [`foreign-texture.md`](foreign-texture.md) and
   [`inline-commands.md`](inline-commands.md). Those extend what a renderer can be handed;
   this makes the renderer itself installable. Neither replaces the other.
@@ -179,10 +179,9 @@ pub trait PlatformRenderer: SceneRenderer { /* … as 5.1 … */ }
 
 A `WgpuRenderer` on macOS would implement `MacSceneRenderer` by returning the
 `CAMetalLayer` it renders through, which is what a wgpu surface on macOS is. This is the
-part of
-[`drafts/scene-renderer-seam.md`](drafts/scene-renderer-seam.md) §3 that is still
-load-bearing; the draft put the alias `PlatformRenderer = dyn MacSceneRenderer` in place
-of the trait, which is the one change the supertrait makes.
+one part of the seam draft's §3 that is still load-bearing; it put the alias
+`PlatformRenderer = dyn MacSceneRenderer` in place of the trait, and the supertrait is the
+one change that makes it compose with the lifecycle.
 
 ### 5.3 The target: typed handles, one erased extra
 
