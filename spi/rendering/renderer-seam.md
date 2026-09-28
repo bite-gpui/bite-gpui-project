@@ -70,7 +70,7 @@ window wants from a renderer is a property any *onscreen* renderer has.
 | `set_subpixel_layout` | x11 `crates/gpui_linux/src/linux/x11/window.rs:794`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:671` |
 | `max_texture_size` | x11 `crates/gpui_linux/src/linux/x11/window.rs:798`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:614` |
 | `destroy` | x11 `crates/gpui_linux/src/linux/x11/window.rs:903`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:789`, macos `crates/gpui_macos/src/window.rs:1405` |
-| `device_lost` / `recover` / `needs_redraw` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1778`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:1967` |
+| `device_lost` / `recover` / `needs_redraw` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1778`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:1967`, windows `crates/gpui_windows/src/events.rs:1324` |
 | `gpu_specs` | x11 `crates/gpui_linux/src/linux/x11/window.rs:2002`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:2170`, web `crates/gpui_web/src/window.rs:1007`, windows `crates/gpui_windows/src/window.rs:1073` |
 | `layer`, `layer_ptr`, `set_presents_with_transaction` | macos `crates/gpui_macos/src/window.rs:3106` (defined `crates/gpui_apple/src/metal_renderer.rs:366`) |
 | `set_background_appearance` | windows `crates/gpui_windows/src/window.rs:1064` |
@@ -82,10 +82,13 @@ DirectComposition visual tree.
 
 **The Windows row is not the whole story.** The implementation also needs two operations the
 design's table did not list, both native to Direct3D and both on `WinSceneRenderer` (§5.2)
-rather than the shared lifecycle: a `resize` that returns a `Result`, because a swap chain that
-cannot be resized is a failure the window acts on by invalidating the devices, and
-`mark_drawable`, the state a Direct3D renderer keeps between a device loss and the forced render
-that follows it.
+rather than the shared lifecycle. `resize` returns a `Result`, because a swap chain that cannot
+be resized is a failure the window acts on by invalidating the devices
+(`crates/gpui_windows/src/events.rs:284`); `mark_drawable` is the state a Direct3D renderer
+keeps between a device loss and the forced render that follows it
+(`crates/gpui_windows/src/events.rs:1374`). Device loss is not one of them -- the platform
+replaces the devices behind the window and the renderer recovers through `RendererTarget`
+(`crates/gpui_windows/src/events.rs:1307`).
 
 **The ruling this implies.** The first draft read this table as "widen `SceneRenderer`
 with the generalising rows, defaulted". That is not needed, and it costs something: the
