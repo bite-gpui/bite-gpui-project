@@ -98,7 +98,7 @@ renderer (A), or it cannot, and a wgpu-rendered window does (B).
    `ID3D12Resource` (§1's third reading). Outcome A is therefore reachable — deferred by
    [0002](0002-render-extension-device-model.md) to a later milestone — so a wgpu producer
    that allocates a shareable resource can reach the default renderer. What proves it is a
-   native run of the whole loop — `probes/windows-shared-surface`.
+   native run of the whole loop, in [`shared-surface.md`](shared-surface.md).
 4. **Confirm Outcome B end to end.** On a Windows window, install a factory returning
    `gpui_wgpu::WgpuRenderer`, create a texture on the renderer's own device, push the
    primitive, and assert the composite contains it. **Status: not run.** It is the
@@ -111,7 +111,7 @@ texture. It does not make a texture wgpu *allocated* shareable: §1's first read
 closes that, because wgpu always creates with `D3D12_HEAP_FLAG_NONE`. But §1's third reading
 was wrong, so the producer need not avoid wgpu's texture API: it allocates the shareable
 resource itself, adopts it, and renders through wgpu. That reaches the default renderer too,
-which is what `probes/windows-shared-surface` measures.
+which is what [`shared-surface.md`](shared-surface.md) measures.
 
 ## 5. Two hazards, for whoever revisits Outcome A
 

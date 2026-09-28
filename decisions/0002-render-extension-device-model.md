@@ -132,8 +132,8 @@ Probe 2 on `windows-latest` established that the *raw* D3D path works: a D3D12 t
 a shared heap can be opened on a D3D11 device and sampled. With the revision below that is
 not a curiosity but the shape of a possible Tier 2 — a producer that allocates its own
 D3D12 texture and adopts it can drive the bridge. Whether it works end to end — allocate
-shareable, adopt, render through wgpu, read back through D3D11 — is what a second probe,
-`probes/windows-shared-surface` on PR #4, now measures. The first record is
+shareable, adopt, render through wgpu, read back through D3D11 — is what the second
+shared-surface probe measured. The first record is
 [`windows-path-a-probe.md`](windows-path-a-probe.md); the new one is
 [`shared-surface.md`](shared-surface.md).
 

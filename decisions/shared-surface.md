@@ -8,9 +8,10 @@
   writes into one and an encoder reads it.
 - **The question:** can a native renderer own a pool of OS-shared surfaces, and can `wgpu` sit
   on either side of one?
-- **The probes** are the crates at `probes/macos-shared-surface` and
-  `probes/windows-shared-surface`, on `bite_v1.22.0-pre-renderer-seam` (PR #4). Their jobs are
-  the record and come out once the printouts are, as with the other probes.
+- **The probes** ran as scratch commits on `bite_v1.22.0-pre-renderer-seam` (PR #4), with their
+  crates and CI jobs. They were experiments and were removed when the branch was cleaned for
+  review, so the printouts below are the durable record and there is no crate to reproduce them
+  from — unlike [`windows-path-a-probe.md`](windows-path-a-probe.md), whose crate stays.
 - **Status:** all three of the pool, the token and the fence are measured on both platforms, and
   Windows adoption works end to end. The one thing left unmeasured is macOS *adoption*.
 
@@ -127,7 +128,7 @@ alone opens the same storage — `io_surface::lookup(5)` reads the pixel and a f
 `MTLSharedEvent`. The first run is why the probe needed correcting: it created the buffer with a
 null attribute dictionary and the runner answered that no `IOSurface` stands behind it, so the
 probe stopped before probe 2. A `CVPixelBuffer` is IOSurface-backed only when the attributes
-ask for it, through `kCVPixelBufferIOSurfacePropertiesKey` (commit `c4a6dec52e`). What macOS
+ask for it, through `kCVPixelBufferIOSurfacePropertiesKey`. What macOS
 still does not measure is *adoption*: probe 6 reaches a wgpu texture's `MTLTexture` for
 reading, but nothing builds one over an `IOSurface` with `objc2-metal` and adopts it, so that
 half of §1's first reading rests on the source, not on a run.
