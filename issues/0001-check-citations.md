@@ -34,7 +34,7 @@ a line number there would be noise.
 ## What the checker has to handle
 
 1. **Two citation forms.** A repo-relative path
-   (`crates/gpui_authoring/src/window.rs:4242`) and a bare filename (`app.rs:654`) that
+   (`crates/gpui_authoring/src/window.rs:4244`) and a bare filename (`app.rs:654`) that
    relies on the reader's context. Bare names are ambiguous across crates: `window.rs`
    resolves to `gpui_authoring` or `gpui_platform`, and `lib.rs` and `frame.rs` appear in
    several crates. The checker resolves a bare name under `gpui_authoring/src`, and

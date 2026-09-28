@@ -21,9 +21,9 @@ GPU resources:
    built the window's renderer, so a widget inside someone else's window cannot be a
    producer. This is a boundary of the design, not an accident of it.
 2. **On Windows both paths require `gpui_wgpu::WgpuRenderer`**, installed through the
-   renderer factory. The default `DirectXRenderer` supports neither, and it must say so
-   rather than succeed silently — today it returns `Ok(())` without drawing
-   (`crates/gpui_windows/src/directx_renderer.rs:830`).
+   renderer factory. The default `DirectXRenderer` supports neither, and it says so rather
+   than succeeding silently: `draw_surfaces` returns an explicit unsupported error
+   (`crates/gpui_windows/src/directx_renderer.rs:833`).
 3. **Sharing a resource across devices is out of scope for this milestone.** No `IOSurface`
    variant, no DXGI shared-handle variant, no dma-buf; the erased texture payload keeps no
    Windows arm. It is deferred, not impossible — the revision below corrects the reason, and
@@ -140,10 +140,10 @@ shared-surface probe measured. The first record is
 Item 2's Windows clause — that `WgpuRenderer` can present there — was measured after it was
 written and holds, with two riders that
 [`windows-presentation-probe.md`](windows-presentation-probe.md) records. `WgpuRenderer` can
-present on a Windows window, but only on Direct3D 12, which `gpui_wgpu` does not enable today
-(`crates/gpui_wgpu/src/wgpu_context.rs:292`) — so installing it costs a backend change and not
-only plumbing. And the DX12 surface offers `Opaque` alpha alone, so a window it renders cannot
-be transparent the way the default renderer's can.
+present on a Windows window, but only on Direct3D 12, and reaching it was a backend change and
+not plumbing alone: the seam's Windows commit is what enables `Backends::DX12`
+(`crates/gpui_wgpu/src/wgpu_context.rs:311`). And the DX12 surface offers `Opaque` alpha alone,
+so a window it renders cannot be transparent the way the default renderer's can.
 
 ## Revision, 2026-09-28: adoption is app-reachable
 

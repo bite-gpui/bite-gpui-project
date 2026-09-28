@@ -63,7 +63,7 @@ Input enters at `PlatformWindow::on_input`, whose callback signature is
 straight through:
 
 ```rust
-// crates/gpui_authoring/src/window.rs:2164-2172
+// crates/gpui_authoring/src/window.rs:2166-2174
 platform_window.on_input({
     let mut cx = cx.to_async();
     Box::new(move |event| {
@@ -171,7 +171,7 @@ These need answers before this is implementable, and none is obvious.
    separate only if a reviewer wants `Discard` to be documented as non-recoverable.
 2. **What does a held event return to the platform?** `DispatchEventResult` is
    `{ propagate: bool, default_prevented: bool }`
-   (`crates/gpui_platform/src/window.rs:610-613`). Holding is not the same as
+   (`crates/gpui_platform/src/window.rs:633-636`). Holding is not the same as
    consuming, and claiming `propagate: false` for an event that was merely deferred
    may be observable to a backend. This is the least clear part of the proposal.
 3. **Not everything is coalescible.** `PlatformInput` has 15 variants
@@ -193,7 +193,7 @@ one-second "high rate" sustain when enough input has arrived recently, and the f
 source uses it to keep presenting:
 
 ```rust
-// crates/gpui_authoring/src/window.rs:2015-2017
+// crates/gpui_authoring/src/window.rs:2017-2019
 let needs_present = request_frame_options.require_presentation
     || needs_present.get()
     || input_rate_tracker.borrow_mut().is_high_rate();
@@ -218,7 +218,7 @@ and would have made the scheme look far more aggressive than it is.)
 **The trap.** The count is fed from dispatch, not arrival:
 
 ```rust
-// crates/gpui_authoring/src/window.rs:6111-6113
+// crates/gpui_authoring/src/window.rs:6113-6115
 let caused_invalidation = self.core.invalidator.update_count() > update_count_before;
 if caused_invalidation {
     self.core.input_rate_tracker.borrow_mut().record_input();

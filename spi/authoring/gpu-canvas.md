@@ -129,7 +129,7 @@ no counterpart in this fork:
   `(&mut self, window: &mut Window, cx: &mut Context<Self>)`
   (`crates/gpui_authoring/src/element.rs:164`, `:180`).
 - **Painting is a `Window` capability, not a `cx` one.** `paint_quad`
-  (`crates/gpui_authoring/src/window.rs:4972`) and `paint_image` (`:5365`) both insert
+  (`crates/gpui_authoring/src/window.rs:4974`) and `paint_image` (`:5365`) both insert
   into the frame's scene, so the hooks are `window.paint_imported_texture` and
   `window.paint_with_callback`, beside them in the same phase. The drafts' separate
   `register_foreign_texture` step between them is gone — it existed to name the texture for

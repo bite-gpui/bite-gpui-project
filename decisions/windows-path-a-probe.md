@@ -49,13 +49,14 @@ backend said otherwise:
 
 - GPUI's Windows renderer is **Direct3D 11** — `ID3D11Device`, `ID3D11DeviceContext`,
   `ID3D11Texture2D`, `ID3D11ShaderResourceView`
-  (`crates/gpui_windows/src/directx_renderer.rs:70`, `:71`, `:79`, `:80`) — over DXGI, with
+  (`crates/gpui_windows/src/directx_renderer.rs:73`, `:71`, `:79`, `:80`) — over DXGI, with
   `RENDER_TARGET_FORMAT = DXGI_FORMAT_B8G8R8A8_UNORM`
   (`crates/gpui_windows/src/directx_renderer.rs:32`).
-- Its `draw_surfaces` **is a no-op**: it returns `Ok(())` without drawing when the list is
-  non-empty (`crates/gpui_windows/src/directx_renderer.rs:830`), and `PaintSurface` carries
-  no Windows payload (`crates/gpui_engine/src/scene.rs:749`). Windows has no
-  foreign-surface path at all today.
+- Its `draw_surfaces` was **a no-op**: it returned `Ok(())` without drawing when the list was
+  non-empty, and the seam made it return an explicit unsupported error instead
+  (`crates/gpui_windows/src/directx_renderer.rs:833`). `PaintSurface` carries no Windows
+  payload (`crates/gpui_engine/src/scene.rs:749`), so Windows has no foreign-surface path at
+  all.
 
 So the prior was Outcome B — and it was not a setback, because the renderer factory is
 exactly the mechanism that makes it a supported configuration rather than a fork.

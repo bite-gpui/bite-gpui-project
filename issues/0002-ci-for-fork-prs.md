@@ -184,7 +184,7 @@ satisfied on any other platform: its build script's branch is gated on the host 
 
 An earlier version did all of this from one Linux runner. It worked for Windows, whose
 Rust includes the generated HLSL only in a release build, but not for Apple:
-`crates/gpui_apple/src/metal_renderer.rs:36` includes `OUT_DIR/shaders.metallib`
+`crates/gpui_apple/src/metal_renderer.rs:37` includes `OUT_DIR/shaders.metallib`
 unconditionally, and the lib is gated on the target while `build.rs` is compiled for the
 host, so nothing produced it. The build script keeps a stub for that case — it is what
 makes `cargo check --target aarch64-apple-darwin -p gpui_macos` work from a Linux

@@ -35,8 +35,8 @@ its own batch (`crates/gpui_engine/src/scene.rs:475`) and its own accumulation l
 Its only payload is a `CVPixelBuffer`, behind `#[cfg(target_os = "macos")]`
 (`crates/gpui_engine/src/scene.rs:749`); its only producer is
 `MacWindowExt::paint_surface` (`crates/gpui_authoring/src/window/mac.rs:21`); it is drawn by
-**one** renderer rather than two — DirectX's `draw_surfaces` returns `Ok(())` without
-drawing (`crates/gpui_windows/src/directx_renderer.rs:830`) and wgpu's arm is `{}` under the
+**one** renderer rather than two — DirectX's `draw_surfaces` returns an explicit unsupported
+error (`crates/gpui_windows/src/directx_renderer.rs:833`) and wgpu's arm is `{}` under the
 comment that surfaces "are macOS-only for video playback and are not implemented by the WGPU
 renderer" (`crates/gpui_wgpu/src/wgpu_renderer.rs:1544`) — and that one renders **YCbCr**,
 not RGBA: Metal's `surface_fragment` returns `ycbcrToRGBTransform * ycbcr`
@@ -67,7 +67,7 @@ Producer and consumer must be the **same device**, not merely the same API:
 The third row is the one that moved. It was *impossible*, on the reading that wgpu offers
 neither a shareable resource nor a way to adopt one; the second half was wrong, so the row is
 reachable rather than closed. GPUI's Windows renderer is Direct3D 11
-(`crates/gpui_windows/src/directx_renderer.rs:2086`) while wgpu is Direct3D 12, and a
+(`crates/gpui_windows/src/directx_renderer.rs:2092`) while wgpu is Direct3D 12, and a
 D3D12 resource is invisible to a D3D11 device unless it was created shareable —
 `D3D12_HEAP_FLAG_SHARED`, a *heap* flag set at creation, which wgpu never sets
 (`wgpu-hal-29.0.4/src/dx12/device.rs:104`). What wgpu *will* do is adopt a resource the
@@ -279,8 +279,8 @@ shares the encoder itself.
 | renderer | work |
 | --- | --- |
 | `WgpuRenderer` | **write the arm.** `PrimitiveBatch::Surfaces` is `{}` today (`crates/gpui_wgpu/src/wgpu_renderer.rs:1546`); it has to bind the imported view to a dedicated fragment sampler slot and draw the quad with the SDF clip, radii and opacity |
-| `MetalRenderer` | already draws `PaintSurface` (`crates/gpui_apple/src/metal_renderer.rs:1133`); downcast the payload to `MetalTexture` and bind it instead of the `CVPixelBuffer` path |
-| `DirectXRenderer` | **stop succeeding silently.** `draw_surfaces` returns `Ok(())` without drawing when the list is non-empty (`crates/gpui_windows/src/directx_renderer.rs:830`); with this design it must return an explicit unsupported error, so an application that registered a texture on the default Windows renderer learns why rather than seeing nothing |
+| `MetalRenderer` | already draws `PaintSurface` (`crates/gpui_apple/src/metal_renderer.rs:1137`); downcast the payload to `MetalTexture` and bind it instead of the `CVPixelBuffer` path |
+| `DirectXRenderer` | **nothing, under this design.** It already returns an explicit unsupported error rather than succeeding silently (`crates/gpui_windows/src/directx_renderer.rs:833`), and Windows runs Path A under `WgpuRenderer` (§2), so this renderer is not asked to sample an imported texture |
 
 The bind happens in the *same* pass that composites the quad batch — the generalisation
 of `draw_surfaces` — so there is no second pass and no intermediate target.

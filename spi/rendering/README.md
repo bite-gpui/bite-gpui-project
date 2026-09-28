@@ -140,7 +140,7 @@ RFC's "≈16.0 GB/s at 4K120" is its own formula miscounted — `W × H × 4 × 
    `SceneRenderer::set_viewport_size` is test-gated
    (`crates/gpui_engine/src/renderer.rs:32`), has exactly one caller (the test window,
    `crates/gpui_authoring/src/platform/test/window.rs:531`) and one override
-   (`crates/gpui_apple/src/metal_renderer.rs:1660`). The *production* resize path
+   (`crates/gpui_apple/src/metal_renderer.rs:1698`). The *production* resize path
    already has a name: `WgpuRenderer::update_drawable_size`
    (`crates/gpui_wgpu/src/wgpu_renderer.rs:1132`). So neither "lift the gate" nor "drop
    it" was needed — the contract gets the production name, which is also what makes a

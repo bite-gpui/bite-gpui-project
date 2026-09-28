@@ -55,7 +55,7 @@ orders by the command's position in the pass ([`foreign-texture.md`](foreign-tex
 (`crates/gpui_engine/src/scene.rs:85`, `:95`) and overwrites each primitive's field
 (`:102`–`:131`). An earlier draft had the element call `cx.current_paint_order()`, which
 does not exist and is not needed. The element supplies `bounds` and the `content_mask`
-from `window.content_mask()` (`crates/gpui_authoring/src/window.rs:4586`), and the scene
+from `window.content_mask()` (`crates/gpui_authoring/src/window.rs:4588`), and the scene
 orders it against its siblings.
 
 `content_mask` is not decoration: without it the injected commands draw outside the

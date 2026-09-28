@@ -28,13 +28,14 @@ device, which is stronger than the Windows probes' WARP:
 
 Two findings, and the second corrects this spike's own prior:
 
-- **`gpui_wgpu`'s backend set does not reach Metal, and on macOS it fails a step earlier than
-  on Windows.** `Backends::VULKAN | Backends::GL` (`crates/gpui_wgpu/src/wgpu_context.rs:292`)
-  cannot even create a surface here — *"Failed to create surface for any enabled backend"* —
-  where on Windows it created one and then found no adapter. Either way `WgpuRenderer::new`
-  fails before a frame, so the macOS commit needs `Backends::METAL` for the same reason the Windows one needs
-  `Backends::DX12`. `GL` does **not** answer on macOS, which the spike listed as the thing to
-  rule out.
+- **`gpui_wgpu`'s backend set did not reach Metal, and on macOS it failed a step earlier than
+  on Windows.** `Backends::VULKAN | Backends::GL`
+  (`crates/gpui_wgpu/src/wgpu_context.rs:309`) could not even create a surface here —
+  *"Failed to create surface for any enabled backend"* — where on Windows it created one and
+  then found no adapter. Either way `WgpuRenderer::new` failed before a frame, so the macOS
+  commit needed `Backends::METAL` for the same reason the Windows one needed `Backends::DX12`;
+  the seam enables both (`crates/gpui_wgpu/src/wgpu_context.rs:314`). `GL` did **not** answer
+  on macOS, which the spike listed as the thing to rule out.
 - **wgpu does not require the view to have a `CAMetalLayer`, and does not care about the
   order.** The spike read `raw-window-metal`'s `from_ns_view` as taking the view's layer, and
   `wgpu_hal::metal::Surface::from_layer`'s `isKindOfClass` assert as requiring one. That is not
@@ -85,8 +86,8 @@ METAL, after the layer arrived: PRESENT OK
 
 - **`MacSceneRenderer` keeps its shape.** The window can go on having
   `-[NSView makeBackingLayer]` return the renderer's layer
-  (`crates/gpui_macos/src/window.rs:3237`), because wgpu neither needs that layer to be a
-  `CAMetalLayer` nor minds when it arrives. Patch 06 is plumbing plus `Backends::METAL`, the
+  (`crates/gpui_macos/src/window.rs:3257`), because wgpu neither needs that layer to be a
+  `CAMetalLayer` nor minds when it arrives. The macOS commit is plumbing plus `Backends::METAL`, the
   same shape as the Windows commit.
 - **A wgpu renderer need not vend a layer at all**, subject to §4's one unmeasured corner.
 - **Transparency is available here, unlike Windows:** `alpha_modes = [Opaque, PostMultiplied]`
