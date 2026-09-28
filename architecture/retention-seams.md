@@ -1,7 +1,7 @@
 # Retention seams, and what blocks them
 
-- **Status: proposed.** Nothing here is implemented, and the resolutions in §5–§6 are designs, not
-  code. This is the *seam* companion to [`view-retention.md`](view-retention.md): that chapter is
+- **Status: proposed.** Nothing here is implemented, and the resolutions in §5–§8 are designs,
+  not code. This is the *seam* companion to [`view-retention.md`](view-retention.md): that chapter is
   what the two designs do; this one is how retention would attach to *this* stack, and what stops
   each attachment point.
 - **Sources.** The same two efforts, read at the same places: Zed `#63800` at
@@ -56,9 +56,9 @@ platform SPI into the engine or erases the engine/authoring distinction.
 
 ## 4. The traits a retention seam needs
 
-Five, of which **three are axes** a mode chooses and **two are capabilities** it uses. Full
-signatures, and the four-mode matrix they produce, are in the section of [`view-retention.md`](view-retention.md)
-§5 that this document grows out of; the axes are:
+Five, of which **three are axes** a mode chooses and **two are capabilities** it uses. The
+signatures are in §5 and §6, where [`view-retention.md`](view-retention.md) §5's combined design
+is turned into a seam on *this* stack; the axes are:
 
 | axis / capability | trait | layer | choices |
 | --- | --- | --- | --- |
@@ -68,15 +68,9 @@ signatures, and the four-mode matrix they produce, are in the section of [`view-
 | capability | `TextSystem` scopes | engine | shared |
 | capability | `Scene` replay + `ViewRecord` | engine + authoring | shared |
 
-| mode | `ViewRetention` | `Reactivity` | `RetainedLayout` |
-| --- | --- | --- | --- |
-| status quo | `Immediate` | – | – |
-| A — Zed view tree | `PersistentTree` | `StrictNotify` | `NodeOwned` |
-| B — gpui-fast | `SideTables` | `UpdateGenerations` | `KeyedPathHash` |
-| AB — combined | `PersistentTree` | `UpdateGenerations` | `NodeOwned` |
-
-The point of the factoring is the last row: **AB is A's spine with B's sensor**, so it is a
-recomposition rather than a third engine.
+The four modes are corners of that space; §8 is the matrix. The point of the factoring is its
+last row: **AB is A's spine with B's sensor**, so it is a recomposition rather than a third
+engine.
 
 ## 5. R0 — the recorder (resolved)
 
@@ -175,30 +169,163 @@ and its vocabulary in `gpui_authoring`, where `EntityId` and `Window` live. **No
 needed.** The price to state plainly: `request_layout_keyed` duplicates `request_layout`, because
 the compatible way to add a parameter is a new method.
 
-## 7. Blockers still open
+## 7. Blockers resolved (as designed)
 
-Each is real work, and each is already demonstrably needed by one of A or B.
+The open items divide into three classes: fatal semantic hazards, frame-isolation invariants, and
+the deployment trade-offs. Each resolution below is a design, not code — and where one is taken
+from A or B rather than invented, it says so. Most of them are A's own remaining work, listed in
+its plan, which is why they read as workable rather than hypothetical.
 
-| # | blocker | why it blocks |
-| --- | --- | --- |
-| R2 | **the ship decision** — `decisions/0001-no-third-swap.md`; the unchanged-upstream-surface aim; a `with_view_retention` bootstrap beside `crates/gpui_runtime/src/application.rs:92`/`:107` | decides *whether* any mode ships, and where |
-| R3 | **ambient inputs are not dependencies** — focus, window active, viewport size, mouse position, modality, hover. Today `ViewElementCacheKey` (`view.rs:302`) is bounds, content mask and text style only, and a focus/resize still forces `refresh()` | the largest source of full rebuilds; without it a "clean" view is stale |
-| R4 | **per-view element state and occurrence identity** — one `Frame` element-state map, keyed by `GlobalElementId`; repeated mounts of one entity collide | sibling mounts must keep separate state and subscriptions |
-| R5 | **frame-arena lifetimes and measure closures** — the per-draw arena means a measure closure may capture arena data and cannot outlive the frame | a record must not hold arena references |
-| R6 | **orphan layout roots** — `layout_as_root` inside a node (list items, editor blocks) is reached by nothing the node retains | leaks one Taffy tree per item per frame |
-| R7 | **dispatch identity and deferred context** — the dispatch tree's ids are per-frame and replay remaps them; a deferred draw (`window.rs:981`) records the element-id stack, text style, content mask, rem size and offset it was attached in | a replayed subtree must dispatch, and a deferred root must re-render in its captured context |
-| R8 | **text-cache ownership** — per-view carry wants the cache single-threaded and node-owned | carrying text per view is not a free addition to the current cache |
-| R9 | **input handler / IME on replay** — the platform's handle must resolve to the current frame's focused handler | replaying a view must move its handler correctly |
-| R10 | **atlas/tile lifetime** — a replayed sprite must not reference a released tile | Zed shipped two fixes for exactly this |
-| R11 | **the notify contract widens to all views** — retaining every view makes a missing `notify` a stale frame everywhere, not just in a `.cached()` view | correctness of the whole application; found with the oracle |
-| R12 | **inspector and accessibility full-refresh fallbacks** — `.cached()` disables itself while picking (`window.rs:7493`) | retention must either work under both or keep the fallback |
-| R13 | **the tax and memory** — ≈0.55 µs/dirty node + 0.06–0.11 µs/dirty element, paid on all-dirty frames too; ~2.5 KB per node | decides whether a mode is worth installing |
+```
+                          ┌── Class 1: semantic hazards (R11, R3, R5)
+                          │     invalidation correctness, across the application
+                          │
+   R2–R13 taxonomy ───────┼── Class 2: frame-isolation invariants (R4, R6, R7, R8, R9, R10)
+                          │     replay validity, across the Frame's own channels
+                          │
+                          └── Class 3: trade-offs and bootstrap (R2, R12, R13)
+                                the engine tax, the fallback boundaries, the per-window factory
+```
 
-## 8. Where this leaves the thread
+### Class 1: the semantic hazards
 
-The recorder (R0) and the published contracts (R1) are the two that looked fatal and are not: one
-resolves by publishing an opaque token instead of the frame slice, the other by adding capabilities
-additively. What remains is a queue of correctness work (R3–R12), none of which is expressible at an
-existing seam — which is why [`issues/0005-view-retention.md`](../issues/0005-view-retention.md)
-still reads as "adopt, defer, or reject", and why the fork-in-step remains the option that needs
-none of this.
+**R11 — the `notify` contract, and the one divergence to take.** In an immediate runtime a missing
+`cx.notify()` is masked: an unrelated sibling, a reflow or a parent refresh rebuilds the subtree
+anyway. Retain every view and the same omission leaves that subtree serving its last frame — a
+stale region, not a permanent freeze, since any full refresh clears it, but stale until then. A
+and B split here, and it is the one place they truly do. A makes it a decision: *"The engine does
+not compensate for missing notifications (no revision counters, no 'any `update` is a change'
+rule), because that rule cannot tell a read-only `update` from a mutation"* — missing
+notifications are bugs, found with the oracle. B takes the opposite reading: an
+`entity.update(..)` outside a draw counts as changed *even if nobody notified it*, because
+upstream would have re-rendered the reading view anyway. **AB takes B's sensor deliberately.**
+The cost is re-rendering on a read-only `update`; what it buys is bug-compatibility with view
+code written against upstream. It is a trade, not a free guarantee — B's rule still cannot see a
+mutation made through shared interior mutability, or through a channel that is neither `notify`
+nor an observed `update`, and B documents that residue: anything outside entities, globals and
+list or scroll state *"has to be notified of"*.
+
+**R3 — the ambient inputs.** Focus, window activation, viewport size, mouse position and hover are
+read imperatively while an element builds, so they are in no read set, and A measures the stopgap:
+*"A focus change, hover change or resize still calls `window.refresh()` today, so those frames
+rebuild everything; they cost what every frame cost before the engine."* It is the largest source
+of full rebuilds, and the coarse fix is wrong — one window-wide generation would make every focus
+or resize a full-window rebuild, a refresh wearing a generation. **Resolution (A's own sketch, and
+its list):** an `AmbientInput` read set per node — `Focus`, `WindowActive`, `ViewportSize`,
+`MousePosition`, `Hover(HitboxId)` — recorded through a `Cell`, since the readers take `&Window`,
+and expanded dirty-then-ancestors exactly as an entity read is. Hover needs two mechanisms
+because a mouse move is not the only way the set changes: a **mouse move** diffs the hovered
+hitbox set against the previous frame (hitbox ids are stable across a replayed frame) and dirties
+only the readers of hitboxes that entered or left it — which is what retires the `refresh()` in
+`div`'s hover listeners; a **relayout under a still mouse** moves what is under the cursor, so the
+post-prepaint hit test runs the same diff and schedules a frame. A modality flip dirties every
+hover reader. Without the second mechanism hover tears exactly where a clean parent shifts a child
+under a stationary pointer. A third bucket catches the rest — bounds, content mask, text style,
+rem size, scale, opacity, image cache — and is compared before reuse (A's `ViewNodeCacheKey`;
+this stack's is `ViewElementCacheKey`, `view.rs:302`).
+
+**R5 — frame-arena handles and carried measurement.** `BoxedMeasureFn` is `'static`
+(`crates/gpui_engine/src/layout.rs:45`), so a measure closure cannot hold a borrowed arena
+reference and a dangling pointer is not the hazard. The hazard runs the other way: the per-draw
+arena is cleared by flipping a validity flag, so a closure kept across a frame and reading
+arena-backed data sees invalidated memory, not freed memory. **Resolution — both halves, and they
+complement each other.** Carry the *result*, not the closure: B states the rule for a measured node
+— *"when last frame's text element at the same place measured the same text, runs and text style,
+the new element takes a copy of that measurement and the node is left clean"*, because a measured
+node *"given a new closure would be dirtied every frame, with every node above it"*. A adds the
+classification for a closure that cannot be detached: a **frame-bound** node (`frame_bound_nodes`)
+is excluded from `reuse_layout`, never carried past its frame, and rebuilt next frame — which is
+how A first handled deferred draws before it made them roots. A carried measurement is therefore
+always a value.
+
+### Class 2: the frame-isolation invariants
+
+Each is a channel of the frame, and each resolution is cited to the mode that has it.
+
+| # | invariant | failure mode | resolution (as designed) |
+| --- | --- | --- | --- |
+| **R4** | occurrence identity | two mounts of one `Entity<V>` take the same element path — `ViewElement::id()` is `self.entity_id.map(ElementId::View)` (`view.rs:313`) — so they share one `(GlobalElementId, TypeId)` entry in the `Frame`'s single element-state map (`window.rs:998`) and cannot keep separate state or subscriptions | split **mount identity** from **state identity**: `View::element_id()` says where a node mounts and `View::entity()` which entity backs it; the mount is found again by the occurrence `(element path, parent node, nth)`, identity within a node being `(node, Location::caller(), nth)` overridden by an explicit key. A repeated mount of one entity goes to the next occurrence, and element state is per node |
+| **R6** | orphan layout roots | a subtree laid out as its own root inside a node (`layout_as_root`, `element.rs:246` — list rows, editor blocks, the measured row of a `uniform_list`) hangs off no child list the node retains, so retiring the node's root never reaches it and it leaks one Taffy tree per item per frame | A found this by review and fixes it at layout time rather than by a list to retire: `Window::compute_layout` marks such orphan roots as **frame layout**, and `TaffyLayoutEngine::finish_frame` removes them as subtrees, stopping short of another node's retained root and never touching a tree a node painted with (`layout_trees_measured_inside_a_node_do_not_accumulate`) |
+| **R7** | dispatch identity and deferred context | the dispatch tree's ids are per-frame. Upstream remaps a replayed subtree by an offset delta, which A documents as insufficient once empty nodes are elided and a child owns a nested range. And a `DeferredDraw` (`window.rs:981`) can only render in the ambient context it was attached in | A records a node's pushes and pops as a contiguous range of the live `dispatch_tree.nodes`, snapshots the non-empty nodes after paint, and resolves each parent to a kept node of the scope (`DispatchParent::Recorded`) or the scope's attachment point (`DispatchParent::Attachment`); reuse pushes them back under the active node. A **node-owned dispatch tree with stable ids** removes the snapshot altogether and is A's own follow-up — cleaner, but *"not needed for correctness or the measured performance"*. The deferred root must *capture the ambient context it was attached in* — element-id stack, text-style stack, rem size, content mask, offset and dispatch parent — and re-render there |
+| **R8** | text-cache ownership | carrying text per view needs the cache to keep, per node, the `(key, layout)` pairs it looked up, not the whole-frame carry the trait's default shim gives (`crates/gpui_engine/src/text_system.rs:133`) | A makes the node the unit: each phase of a node holds its `TextUse` — including text shaped inside a Taffy measure closure, attributed to the node that requested the measured layout, since measuring runs outside the traversal — and a redraw seeds it back into the frame cache first; the cache stays one previous frame deep. The follow-up is to record the uses on the window's traversal stack as slices of one frame-level vector, so the `Arc` handles are moved rather than cloned and dropped per node |
+| **R9** | input handler / IME on replay | `Frame::input_handlers` (`window.rs:1006`) holds the platform's `PlatformInputHandler`s; a replayed view whose subtree owned the focused handler would leave the platform pointing into a frame that is gone | resolve **dynamically**: A has the recordings own their handlers, leased out of their slot for the length of a call, and `PlatformInputHandler` *"resolves the rendered frame's input handler through its context on every call"*, so a replayed view moves nothing — it changes which handler the context resolves to |
+| **R10** | atlas / tile lifetime | a replayed sprite can reference a tile the atlas released between frames — the crash behind Zed's atlas work | this one is **R1-shaped, not a pure invariant**: it needs an additive engine-SPI change, and there are two independent halves. Zed merged the renderer half — `#64623`, backends *skip a sprite whose texture was released instead of panicking* — while its `Window`-lifetime companion `#64619` was closed unmerged. A's branch does not ref-count tiles either: it forces a full refresh when an image is evicted, and lists *"audit for the same eviction pattern"* over GPUI's per-frame-use caches as remaining work. AB takes ref-marked tiles as a requirement on `PlatformAtlas` (`crates/gpui_engine/src/atlas.rs:56`) |
+
+### Class 3: the trade-offs and the bootstrap
+
+**R2 — the ship decision, and the shape of the hook.** This is the one still open, and it is the
+user's call. A retention mode is not a *swap* in the sense of
+[`decisions/0001-no-third-swap.md`](../decisions/0001-no-third-swap.md) — it is not a published
+implementation of a published trait — but it is exactly the change `layer-stack.md`'s test says a
+new use should not need, so adopting it *in* the stack re-opens 0001 while shipping it *out* of
+tree (a `bite-gp-retained` the stack does not name, with the stack carrying only the seam and
+`Immediate`) does not. Either way the hook follows the bootstrap seams already there:
+`with_layout_engine` (`crates/gpui_runtime/src/application.rs:92`) and `with_frame_pipeline`
+(`:107`) are factories, the first taking no window and the second a `WindowId`, and retention is
+stateful per window — so it is the second shape, one instance per `WindowId`:
+
+```rust
+impl Application {
+    pub fn with_view_retention(
+        self,
+        factory: impl Fn(WindowId) -> Box<dyn ViewRetention> + 'static,
+    ) -> Self;
+}
+```
+
+**R12 — the inspector and accessibility.** The interim is what the mechanisms already do: A's
+`.cached()` bypasses itself while the inspector is picking (`is_inspector_picking`,
+`window.rs:7493`), and B lists the same four things that are never drawn from the last frame — a
+refresh, a drag, the inspector picking, accessibility active. **Resolution:** keep the fallback as
+the interim — return `None` and rebuild in full while either is active — and take A's plan as the
+target, since A names deleting both: stable per-mount ids with partial accessibility
+`TreeUpdate`s, and inspector overrides modelled as reactive entities so an edit dirties exactly
+one node.
+
+**R13 — the tax, and where retention is allowed to sit.** A's cost model, measured on A's branch
+and not this stack's: an all-dirty frame pays roughly `0.55 µs × dirty nodes + 0.08 µs × dirty
+elements` — the per-node cost (occurrence lookup, cache key, three phases of begin/end, dependency
+recording, the dispatch snapshot, layout retention) flat in node size, and the per-element cost
+0.06–0.11 µs (a hitbox item, a primitive-kind byte, a text line's handle). It is paid on all-dirty
+frames too, which is why the tax is invisible where nodes are many and trivial (`Siblings/all
+dirty`) and only partly returned elsewhere. **Resolution — a boundary, not a universal:** pin
+retention to `Entity<V: Render>`, the view boundary, so the per-node tax is paid once per view and
+not per element, and the fine-grained leaves (`div`, text spans, `RenderOnce` closures) stay
+transient. Memory follows the boundary: a trivial leaf node weighs about 2.5 KB, ~680 B of it the
+`ViewNode` struct, and a 3-pane workspace holds about 20 nodes — tens of KB, not the megabytes a
+per-element store would cost.
+
+## 8. The resolution matrix
+
+The four modes are corners of the axis space in §4, with the two Class 2 channels on which they
+differ beyond the axes.
+
+| mode | `ViewRetention` | `Reactivity` | `RetainedLayout` | dispatch (R7) | atlas (R10) |
+| --- | --- | --- | --- | --- | --- |
+| status quo | `Immediate` | – | – | frame-global ids, offset-remapped | unchanged |
+| A — Zed view tree | `PersistentTree` | `StrictNotify` | `NodeOwned` | per-node ranges, snapshotted from the live tree | full refresh on eviction |
+| B — gpui-fast | `SideTables` | `UpdateGenerations` | `KeyedPathHash` | spliced stretches in the frame's buffer | not addressed |
+| AB — combined | `PersistentTree` | `UpdateGenerations` | `NodeOwned` | node-owned tree, stable ids | ref-marked tiles |
+
+Two things the matrix is careful about. **The dispatch column is where AB goes past its sources**:
+node-owned dispatch ids are A's own follow-up item, and A says they are *"not needed for
+correctness or the measured performance"*; AB takes them because stable identity is what the
+spine is for, not because either source needed them. **The atlas column is mostly negative**:
+neither A nor B ref-counts tiles today — the merged Zed fix is the renderer skipping a released
+texture, which hides the symptom rather than the lifetime — so AB is the first of the four to make
+the atlas obey retention.
+
+## 9. Where this leaves the thread
+
+The recorder (R0) and the published contracts (R1) were the two that looked fatal and are not: one
+resolves by publishing an opaque token instead of the frame slice, the other by adding
+capabilities additively. The items that remained (R2–R13) are now resolved *as designs* rather
+than listed as unknown, and the shape of the resolution is the point: every one is either a
+per-input dependency (Class 1), an invariant about replaying a channel of the frame (Class 2), or
+a deployment choice (Class 3). None is expressible at an existing seam, which is why they are
+work to implement rather than a trait to publish.
+
+What is *not* resolved is R2 — the ship decision, 0001's question aimed at a fourth candidate.
+Until it is taken, [`issues/0005-view-retention.md`](../issues/0005-view-retention.md) still reads
+as "adopt, defer, or reject", and the fork-in-step remains the option that needs none of this:
+A's resolutions are work A has begun, and B ships without any of them.
