@@ -163,7 +163,10 @@ replay; the trait owns only the store and the decision:
 pub struct ViewRecord(/* the private ranges + the closures/handlers moved out of the frame */);
 
 pub trait ViewRetention: 'static {
-    fn begin_frame(&mut self, window: &mut Window<'_>, cx: &mut App);
+    /// The entities that notified since the last frame. Authoring reads them off the window's
+    /// invalidator, which stays private — a store that owns the `consumers` expansion cannot reach
+    /// it, and reaching it is not the store's business.
+    fn begin_frame(&mut self, notified: &[EntityId], window: &mut Window<'_>, cx: &mut App);
     /// May this view be replayed? `reads` is what it read when last built; the impl owns the
     /// answer (a dirty set, a consumers map, generations…) and the record it kept, if any.
     fn reuse(&mut self, key: ViewKey, reads: &ReadSet,
@@ -183,6 +186,15 @@ This keeps the eleven channels private, makes the orchestrator *shape* selectabl
 map from `ViewKey` to `ViewRecord`, so status quo stores nothing, A a tree, B side tables, AB a
 tree), and keeps the dirty-child-in-a-clean-parent splice inside authoring, where B's `splice.rs`
 case becomes the `children` callback rather than a public buffer operation.
+
+**Two entry points the first draft of this trait was missing**, both found by the R2 probe
+([`../decisions/retention-seam-probe.md`](../decisions/retention-seam-probe.md) §3). The notified set
+is the first: every `Window` field is `pub(crate)`, so an implementation handed a `&mut Window` can
+read nothing from it, and `begin_frame` has to be *given* the set. The second is the **root list** —
+A's `ViewTree` owns `roots`/`next_roots` and swaps them in its own `finish_frame`, while the frame's
+roots are also the window's, since the frame's events dispatch against them (R7). The trait reconciles
+roots but defines no interface for them: either the store publishes its roots or `Window` gains root
+attachment, and §10's R2 was decided on the footing that it is additive either way.
 
 ## 6. R1 — the published contracts (resolved)
 
@@ -620,13 +632,16 @@ Each is a channel of the frame, and each resolution is cited to the mode that ha
 
 ### Class 3: the trade-offs and the bootstrap
 
-**R2 — the ship decision, and the shape of the hook.** This is the one still open, and it is the
-user's call. A retention mode is not a *swap* in the sense of
-[`decisions/0001-no-third-swap.md`](../decisions/0001-no-third-swap.md) — it is not a published
-implementation of a published trait — but it is exactly the change `layer-stack.md`'s test says a
-new use should not need, so adopting it *in* the stack re-opens 0001 while shipping it *out* of
-tree (a `bite-gp-retained` the stack does not name, with the stack carrying only the seam and
-`Immediate`) does not. Either way the hook follows the bootstrap seams already there:
+**R2 — the ship decision, and the shape of the hook.** **Decided:**
+[`decisions/0003-retention-ships-as-a-seam.md`](../decisions/0003-retention-ships-as-a-seam.md), on
+the evidence of [`decisions/retention-seam-probe.md`](../decisions/retention-seam-probe.md). The seam
+ships in this stack; the modes do not. `ViewRetention` with its `Immediate` default is a fourth *open
+boundary* beside the three the stack has, and
+[`decisions/0001-no-third-swap.md`](../decisions/0001-no-third-swap.md) is unamended, because a
+boundary whose default does nothing is what `FramePipeline` already is. A mode would be a *swap* — it
+replaces that default — and a swap is what 0001 bounds. The probe's deciding finding is that every
+`Window` field is `pub(crate)`, so the seam's published surface is the *whole* API a mode gets and the
+seam cannot itself be out of tree. The hook follows the bootstrap seams already there:
 `with_layout_engine` (`crates/gpui_runtime/src/application.rs:92`) and `with_frame_pipeline`
 (`:107`) are factories, the first taking no window and the second a `WindowId`, and retention is
 stateful per window — so it is the second shape, one instance per `WindowId`:
@@ -692,7 +707,10 @@ per-input dependency (Class 1), an invariant about replaying a channel of the fr
 a deployment choice (Class 3). None is expressible at an existing seam, which is why they are
 work to implement rather than a trait to publish.
 
-What is *not* resolved is R2 — the ship decision, 0001's question aimed at a fourth candidate.
-Until it is taken, [`issues/0005-view-retention.md`](../issues/0005-view-retention.md) still reads
-as "adopt, defer, or reject", and the fork-in-step remains the option that needs none of this:
-A's resolutions are work A has begun, and B ships without any of them.
+The ship decision (R2) is taken, and it split the thread in two:
+[`decisions/0003-retention-ships-as-a-seam.md`](../decisions/0003-retention-ships-as-a-seam.md) adopts
+the *seam* — a fourth open boundary with an `Immediate` default, so
+[`issues/0005-view-retention.md`](../issues/0005-view-retention.md) is no longer a choice between
+adopting, deferring and rejecting one thing — while the retaining *modes* ship out of tree. What stays
+open is the mode's own cost: R3–R13's work, of which A has begun most, and the two-column measurement
+the issue says has to be this project's own.

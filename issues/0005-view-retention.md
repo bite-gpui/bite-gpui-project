@@ -138,3 +138,11 @@ not quoted.
    prerequisites are already on `main` (see above).
 3. **Reject.** Record that per-view retention is deliberately not the stack's work, and
    why, so it is not re-argued.
+
+**2026-09-29 — the siting half is answered.**
+[`../decisions/0003-retention-ships-as-a-seam.md`](../decisions/0003-retention-ships-as-a-seam.md)
+decides that the *seam* ships in this stack and the retaining *modes* do not, on the evidence of
+[`../decisions/retention-seam-probe.md`](../decisions/retention-seam-probe.md). So this issue is no
+longer three ways to site one thing: the seam is adopted, and whether a mode is ever taken up is a
+consumer's question rather than the stack's. What stays open here is the mode's own cost — R3–R13's
+work, and the two-column benchmark §"The number not to carry" requires.
