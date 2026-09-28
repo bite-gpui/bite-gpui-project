@@ -1,7 +1,7 @@
 # Retention seams, and what blocks them
 
-- **Status: proposed.** Nothing here is implemented, and the resolutions in §5–§8 are designs,
-  not code. This is the *seam* companion to [`view-retention.md`](view-retention.md): that chapter is
+- **Status: proposed.** Nothing here is implemented, and everything from §5 on is a design, not
+  code. This is the *seam* companion to [`view-retention.md`](view-retention.md): that chapter is
   what the two designs do; this one is how retention would attach to *this* stack, and what stops
   each attachment point.
 - **Sources.** The same two efforts, read at the same places: Zed `#63800` at
@@ -57,8 +57,8 @@ platform SPI into the engine or erases the engine/authoring distinction.
 ## 4. The traits a retention seam needs
 
 Five, of which **three are axes** a mode chooses and **two are capabilities** it uses. The
-signatures are in §5 and §6, where [`view-retention.md`](view-retention.md) §5's combined design
-is turned into a seam on *this* stack; the axes are:
+signatures are in §5–§7, where [`view-retention.md`](view-retention.md) §5's combined design is
+turned into a seam on *this* stack; the axes are:
 
 | axis / capability | trait | layer | choices |
 | --- | --- | --- | --- |
@@ -68,9 +68,24 @@ is turned into a seam on *this* stack; the axes are:
 | capability | `TextSystem` scopes | engine | shared |
 | capability | `Scene` replay + `ViewRecord` | engine + authoring | shared |
 
-The four modes are corners of that space; §8 is the matrix. The point of the factoring is its
-last row: **AB is A's spine with B's sensor**, so it is a recomposition rather than a third
-engine.
+Two of the names the signatures trade in are the two the blockers in §8 resolve, so they are fixed
+once here and used throughout:
+
+- **`ViewKey`** — *which mount* of a view this is: the occurrence `(element path, parent node,
+  nth)` of R4. It is **not** an `EntityId`: one `Entity<V>` in two places is two keys, which is the
+  whole reason R4 exists.
+- **`ReadSet`** — everything a view's build depended on, in the three classes A insists are the
+  only three: the entities, globals and state versions it read; the ambient inputs it read (R3);
+  and the window values the cache key compares (bounds, content mask, text style, rem size, scale,
+  opacity), plus the change tokens a build captures so the sensor can ask whether any of it has
+  moved (§7). It is B's `RenderDependencies` under a neutral name, and it is what
+  `ViewRetention::reuse` is handed and what the store re-registers on a replay — the per-view form
+  of the window's `tracked_entities` in
+  [`reactive-layer.md`](reactive-layer.md) §"The other half: what is *not* rebuilt".
+
+The four modes are corners of that space; §9 is the matrix. The point of the factoring is its last
+row: **AB is A's spine with B's sensor**, so it is a recomposition rather than a third engine. §7
+shows the three axes being consulted, in order, in one frame.
 
 ## 5. R0 — the recorder (resolved)
 
@@ -132,13 +147,10 @@ no implementor changes:
 
 ```rust
 // gpui_engine
-pub struct LayoutKey(u64);                 // opaque; supplied by the walk
-
 pub trait RetainedLayout {                 // new; morphorm and parley never name it
-    fn request_layout_keyed(&mut self, key: LayoutKey, style: &EngineLayoutStyle,
-                            rem_size: Pixels, scale_factor: f32, children: &[LayoutId]) -> LayoutId;
     fn retain(&mut self, root: LayoutId);
     fn retire(&mut self, root: LayoutId);
+    /// Re-runs layout for an owned root — only when something under it changed.
     fn relayout(&mut self, root: LayoutId, available_space: Size<AvailableSpace>,
                 scale_factor: f32, ctx: &mut dyn MeasureContext);
     fn layout_unchanged(&self, root: LayoutId) -> bool;
@@ -160,16 +172,118 @@ fn end_text_use(&self) -> TextUse;                       // whole-frame carry by
 fn seed_text_use(&self, use_: &TextUse) { /* reuse_layouts(use_.index()) */ }
 ```
 
+**The key stays out of the shared trait.** A retained engine does not need one: the node owns the
+`LayoutId` that `request_layout` (`crates/gpui_engine/src/layout.rs:58`) already returned, so
+`retain`/`relayout`/`layout_unchanged` name a root the caller holds — which is exactly the
+"elimination of synthetic keys" the combined design takes from A. B needs one, because it has no
+node to hold the `LayoutId`: `fast/layout_key.rs` re-derives a `u64` from the element path for the
+engine to find its own node. That is B's shape, so it does not belong on a shared trait — B is a
+fork and changes its own copy of `LayoutEngine`, and a keyed shape shipped *here* would be an `*Ext`
+beside the trait, by the same ruling as `TextSystemEx`. **So A and AB add no method that mirrors
+`request_layout`** — only the lifecycle around the root it already returned.
+
 **What each crate does.** `bite-gp-morphorm` and `bite-gp-parley` compile unchanged and simply
 cannot *host* a retained mode; Taffy (`crates/gpui_engine_default/src/layout.rs:375`) implements
 `RetainedLayout`; authoring asks `layout_engine.retained()` once per frame and a retained mode with
 `None` **degrades** to "retain render/prepaint/paint, relayout every frame". Placement falls out —
-`LayoutKey`/`RetainedLayout`/`TextUse` in `gpui_engine`, which name no `EntityId`; `ViewRetention`
-and its vocabulary in `gpui_authoring`, where `EntityId` and `Window` live. **No vocabulary hoist is
-needed.** The price to state plainly: `request_layout_keyed` duplicates `request_layout`, because
-the compatible way to add a parameter is a new method.
+`RetainedLayout` and `TextUse` in `gpui_engine`, which name no `EntityId`; `ViewRetention` and its
+vocabulary in `gpui_authoring`, where `EntityId` and `Window` live. **No vocabulary hoist is
+needed.**
 
-## 7. Blockers resolved (as designed)
+## 7. The walk, and the three axes together
+
+A trait list is not an architecture until it is clear *where* each trait is consulted. Two of the
+three axes meet at a single point — the reuse decision at a view occurrence — and the two
+capabilities are reached only when that decision is a miss. The sensor is also written to from
+outside the frame, where the changes it watches for happen.
+
+```mermaid
+flowchart TD
+    ask["a frame is asked for"] --> notified["the window's notified entities"]
+    notified --> dirty["ViewRetention: expand through consumers"]
+    dirty --> occ["the walk reaches a view occurrence"]
+    occ --> key["its ViewKey: element path, parent, nth"]
+    key --> reuse{"ViewRetention::reuse(key, reads)"}
+    reuse -.-> sensor["Reactivity::updated_since(reads, token)"]
+    reuse -->|"hit"| replay["replay_view_record(record, children)"]
+    reuse -->|"miss"| build["capture_view_record: build, record ReadSet"]
+    build --> text["TextSystem: end_text_use per phase"]
+    text --> layout["LayoutEngine::retained: retain / relayout"]
+    layout --> store["ViewRetention::store(key, record)"]
+    replay --> store
+    store --> reconcile["ViewRetention::finish_frame: reconcile roots"]
+    reconcile --> sweep["LayoutEngine::finish_frame: retire, sweep frame layout"]
+    sweep --> aging["TextSystem::finish_frame: age the cache"]
+```
+
+Read top to bottom, four things fall out.
+
+1. **A view has two ways to be dirtied, and the sensor is the second.** A routes a `notify`
+   through the window's invalidator and the `consumers` map; that is the leftmost branch and it
+   is unchanged. B adds a way a `notify` cannot express: something the view read moved without
+   one. So `reuse` asks two questions — the store's "has a notify, or an ancestor that must
+   rebuild, reached this view", and the sensor's "has anything in this view's `ReadSet` moved
+   since it captured it". `Reactivity` is the second question only.
+2. **The store answers; the sensor only reports.** "May this be replayed" is decided in
+   `ViewRetention::reuse` and nowhere else, which is what lets the four modes differ in the store
+   while sharing the sensor, or the reverse. The sensor is written to from the update and notify
+   paths — outside the frame — and read once per occurrence, inside it.
+3. **A miss is the only path into layout and text.** `retain` / `layout_unchanged` / `relayout`
+   and the `TextSystem` scopes are reached on the build path, never on a replay — which is why an
+   engine whose `retained()` is `None` still retains render, prepaint and paint and merely
+   relayouts each frame (§6).
+4. **A dirty child inside a clean parent is the `children` callback.** `replay_view_record`
+   re-enters the walk through it, and that is where B's `fast/splice.rs` case lives — inside
+   authoring, where the frame's own channels stay private (§5). No public buffer operation, and no
+   second walking order to keep in step.
+
+**The three `finish_frame`s run in that order.** The store's reconciles the roots and *decides*
+what to retire; the layout engine's drops that and sweeps the frame-layout class R6 defines; the
+text system's ages the line-layout cache. Retiring before reconciling would drop a root a replay
+still re-attaches; aging the text cache before the sweep would drop a measurement the retirement
+is still reasoning about. A has the first two and not the third — its cache is one frame deep by
+construction — so the ordering is the combined design's own, and it is the kind of thing an
+implementation finds by asserting rather than by reading: the oracle compares the whole frame, not
+one phase of it.
+
+### `Reactivity`, the axis with no precedent
+
+A and B each implement this axis as *behaviour* rather than behind a trait: A deleted its entity
+revisions and its `dependency_revisions`, and B keeps a per-entity stamp (`fast/dependencies.rs`,
+its `EntityAccessLog::updated_at`). So the signature below is this document's proposal — a
+transcription of B's mechanism behind a trait, so that `StrictNotify` can be the same trait doing
+nothing.
+
+```rust
+// gpui_authoring
+pub trait Reactivity: 'static {
+    /// An `entity.update(..)` when no build is open. `StrictNotify` drops it — A's decision that
+    /// the rule "cannot tell a read-only `update` from a mutation". `UpdateGenerations` stamps
+    /// the entity, because a view may change a model it renders and notify only itself.
+    fn note_update(&mut self, entity: EntityId);
+    /// A `notify` that lands *while a build is open*. Stamped too: nothing else says whether it
+    /// changed what the model holds. One outside a build that follows an update was counted by
+    /// the update, and one alone changes nothing a view could have read.
+    fn note_notify(&mut self, entity: EntityId);
+    /// The freshness token a build captures, and the test against it later. Per read set, not per
+    /// frame — which is why `UpdateGenerations` keeps a per-entity stamp at all, and why A, having
+    /// deleted its revisions, has no equivalent.
+    fn stamp(&self) -> u64;
+    fn updated_since(&self, reads: &ReadSet, token: u64) -> bool;
+}
+```
+
+Three things about where that leaves the rest. **The token is per read set, not per frame**, and
+that is the part worth not simplifying away: "has anything I read moved since I was built" is a
+question only a token captured at build time can answer. **Ambient inputs and state versions are
+not here.** Focus, hover, viewport size and the `ListState`/`ScrollHandle` versions are the *store's*
+business, because each is a read a view records in its `ReadSet` and each expands
+dirty-then-ancestors through the machinery `consumers` already uses — a second index keyed by input
+rather than entity, not a third axis. **And `StrictNotify` is two empty bodies, a constant token and
+a `false`**, so the axis can cost nothing — which is what makes AB a recomposition of A's spine
+rather than a different engine.
+
+## 8. Blockers resolved (as designed)
 
 The open items divide into three classes: fatal semantic hazards, frame-isolation invariants, and
 the deployment trade-offs. Each resolution below is a design, not code — and where one is taken
@@ -198,7 +312,11 @@ not compensate for missing notifications (no revision counters, no 'any `update`
 rule), because that rule cannot tell a read-only `update` from a mutation"* — missing
 notifications are bugs, found with the oracle. B takes the opposite reading: an
 `entity.update(..)` outside a draw counts as changed *even if nobody notified it*, because
-upstream would have re-rendered the reading view anyway. **AB takes B's sensor deliberately.**
+upstream would have re-rendered the reading view anyway — and it has a second half that is easy to
+miss: a `notify` that lands *while a subtree is being built* counts as an update too, because a
+view mutating a model it read as it renders notifies only itself; a `notify` outside a build that
+follows an update was already counted by the update, and one alone *"changes nothing a view could
+have read"*. **AB takes B's sensor deliberately.**
 The cost is re-rendering on a read-only `update`; what it buys is bug-compatibility with view
 code written against upstream. It is a trade, not a free guarantee — B's rule still cannot see a
 mutation made through shared interior mutability, or through a channel that is neither `notify`
@@ -295,7 +413,7 @@ transient. Memory follows the boundary: a trivial leaf node weighs about 2.5 KB,
 `ViewNode` struct, and a 3-pane workspace holds about 20 nodes — tens of KB, not the megabytes a
 per-element store would cost.
 
-## 8. The resolution matrix
+## 9. The resolution matrix
 
 The four modes are corners of the axis space in §4, with the two Class 2 channels on which they
 differ beyond the axes.
@@ -315,7 +433,7 @@ neither A nor B ref-counts tiles today — the merged Zed fix is the renderer sk
 texture, which hides the symptom rather than the lifetime — so AB is the first of the four to make
 the atlas obey retention.
 
-## 9. Where this leaves the thread
+## 10. Where this leaves the thread
 
 The recorder (R0) and the published contracts (R1) were the two that looked fatal and are not: one
 resolves by publishing an opaque token instead of the frame slice, the other by adding

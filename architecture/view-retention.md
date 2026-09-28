@@ -556,6 +556,11 @@ not fork them" and the *unchanged public surface* aim already require.
 
 ## 7. Open questions the combined design has not settled
 
+Two of these have since got a seam-level sketch in [`retention-seams.md`](retention-seams.md) §8 —
+the ambient inputs (there, R3, from A's own plan) and the ambient context a replayed deferred root
+must re-capture (R7) — which moves them from "unsettled" to "designed, unimplemented". The rest
+are open.
+
 - **Ambient inputs** — focus, window-active, hover — as tracked dependencies instead of a
   refresh. Today (A's own note) a focus change costs a full-priced frame.
 - **Fine-grained caching through clean ancestors**, with deferred roots re-rendering in
