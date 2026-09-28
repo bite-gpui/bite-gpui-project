@@ -122,6 +122,51 @@ publishes the crate, because after it the crate no longer depends on the monorep
 layout. Anything of that shape is a commit, not a staging hack — staging should not be
 papering over structure that the source should carry.
 
+### The inspector token stays off the authoring surface — the one named exception
+
+`Element`'s `request_layout`, `prepaint` and `paint` take no `inspector_id`. Upstream
+threads `Option<&InspectorElementId>` through all three; the stack removes it, because
+the runtime already derived the token itself — from the element's source location and the
+id stack — so every implementor was only forwarding or ignoring it, and element authors
+were being handed an internal type to think about. `Drawable` now publishes the identity
+it computes on the `Window` for the duration of each lifecycle call and puts the previous
+one back, so nested elements attribute correctly.
+
+Taken in the `gpui_engine` boundary of the 111-commit patchset: `1b356da9ae` hid the
+token from the docs and kept the parameter ("churning every in-tree `Element`
+implementation to remove it would cost more than it is worth while the crate boundaries
+are still moving"), then `a4af8bcd47` removed it as the follow-up, accepting that "sixty-one
+implementations outside the runtime" lose a parameter per method (2026-09-14).
+
+**This is the one ruling that trades against the aim, and it is named as an exception
+because of it.** A public trait's method signature is part of the surface that anything
+implementing it must match, so an implementor written against upstream does not compile
+against the stack. Measured: 30 files take the parameter under `origin/main` and under
+every base from `v1.14.x` to `v1.22.0-pre`, and one in the fork — the publication helper,
+not an implementor. It is an exception, not a precedent: an *addition* to a trait gets an
+`*Ext` by the ruling above, and a *removal* from one is only justified where the
+parameter was never load-bearing.
+
+Two things would retire it. The parameter is ceremony at 61 call sites, so keeping the
+fork's shape is arguable on its own terms; and the precursor named a different end state —
+folding inspector identification into `GlobalElementId`, which the element already
+receives — which was never taken.
+
+Note which way this diverges. It is the **reference patchset diverging from upstream**;
+ce keeps upstream's shape and so diverges from the *reference* in the other direction. The
+other comparison is recorded in `.tools/docs/reference/divergence-ledger.md`, whose remit
+is ce against the reference rather than the reference against upstream.
+
+`api_surface.py` reports this slice clean and cannot report otherwise: it keys on `pub fn`
+and `pub struct|enum|trait`, so trait methods are outside its remit (the limitation
+recorded in `.tools/docs/reference/ce-rewrites.md`). A trait-method change is checked by
+the compiler — every implementor stops compiling, which is how this one surfaced — and by
+a diff of the trait declaration.
+
+The removal is proposed upstream as `gpui-drop-inspector-token` on `vanuan/zed`;
+[`../issues/0004-inspector-token-upstream.md`](../issues/0004-inspector-token-upstream.md)
+records the port and what would close it.
+
 ## The test the rulings exist to serve
 
 A new use — the scroll demo, the `gpui_parley` text system, an out-of-tree scene
