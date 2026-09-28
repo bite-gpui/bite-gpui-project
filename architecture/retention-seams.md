@@ -68,7 +68,7 @@ turned into a seam on *this* stack; the axes are:
 | capability | `TextSystem` scopes | engine | shared |
 | capability | `Scene` replay + `ViewRecord` | engine + authoring | shared |
 
-Two of the names the signatures trade in are the two the blockers in §8 resolve, so they are fixed
+Two of the names the signatures trade in are the two the blockers in §9 resolve, so they are fixed
 once here and used throughout:
 
 - **`ViewKey`** — *which mount* of a view this is: the occurrence `(element path, parent node,
@@ -83,7 +83,7 @@ once here and used throughout:
   of the window's `tracked_entities` in
   [`reactive-layer.md`](reactive-layer.md) §"The other half: what is *not* rebuilt".
 
-The four modes are corners of that space; §9 is the matrix. The point of the factoring is its last
+The four modes are corners of that space; §10 is the matrix. The point of the factoring is its last
 row: **AB is A's spine with B's sensor**, so it is a recomposition rather than a third engine. §7
 shows where each axis is consulted, in one frame.
 
@@ -290,7 +290,15 @@ rather than entity, not a third axis. **And `StrictNotify` is two empty bodies, 
 a `false`**, so the axis can cost nothing — which is what makes AB a recomposition of A's spine
 rather than a different engine.
 
-### A miss is not reconciled by diffing element trees
+## 8. Finer than the view: two ways, and why neither is the mechanism
+
+Both alternatives below come from the same instinct: retention's reuse unit is the **view** — and,
+inside it, the slot — and each wants a smaller one. The first reconciles *output* (compare the element
+tree with the last one and patch the difference). The second reconciles *input* (track dependencies
+per property rather than per view). The second is the better idea, and its problem is the more
+interesting one.
+
+### Diffing element trees is not the mechanism
 
 The next idea a reader reaches for is to give each view a `VNode` tree, keep the previous one, and on
 a miss diff old against new to emit minimal layout, text and primitive patches — virtual-DOM
@@ -334,7 +342,62 @@ general — B's test is a single `u64` compare only in the nothing-was-updated c
 set otherwise — and its `ReadSet` is `{entities, globals}`, a strict subset of §4's, which would
 reintroduce R3's untracked ambient inputs.
 
-## 8. Blockers resolved (as designed)
+### Tracking dependencies per property is the better idea
+
+The proposal: partition a view's reads into **structural** (read in a control-flow position — an
+`if`, a match arm, a list iteration) and **leaf** (read inside a styling, layout or text expression),
+track the leaf ones against their own patch targets, and on a change patch the slot in place instead
+of re-rendering the view. Its ordering claim is right, and worth stating on its own: **fine-grained
+reactivity does remove the need for diffing**, because if you know what changed you do not have to
+compare outputs to find out. Three things stop it being a mode of this design.
+
+1. **The partition cannot be computed from a read.** A read is `entity.read(cx)`; whether its value
+   lands in a control-flow position or in a `label`'s text is a property of *how the value is used*,
+   several expressions later. "Read in a control-flow position" is not something the engine can
+   observe — there is no `bind` or `Signal` in the stack to observe it with. There are three ways
+   out, and all three are already on this page: **annotate** it, which is a new authoring vocabulary
+   and one no existing `render` uses; **diff** the outputs to see what moved, which is the
+   alternative above; or **keep the view as the unit**. That is the whole objection.
+2. **It needs a third protocol on the seam, naming the internals R0 refused to publish.** Patching a
+   text slot, a Taffy style and a primitive's colour means naming a *patch target* — a slot id, a
+   `LayoutId`, a byte offset — which is the record's inside. It is *resolvable* the way R0 was, as an
+   opaque slot token plus a `Window` helper with capture and application left in authoring, but it is
+   a third protocol where the design has two, and it is the one that makes the store name frame
+   internals.
+3. **It is not a corner of the matrix.** Status quo, A, B and AB share one contract: an entity
+   notifies, the view re-renders, retention decides whether that was necessary. Fine-grained
+   reactivity changes *when `render()` runs* — once for the leaf half, per notify for the structural
+   half — so it is not a fifth row but a different table, and §4's axes describe how a *view* is
+   retained.
+
+Three specifics in that sketch are worth correcting rather than arguing about:
+
+- **A property patch does not retain sibling geometry.** Taffy's dirty marking recomputes from the
+  dirty node down, so any property that affects layout — `width`, `padding` — moves siblings and
+  possibly the parent. Only a *paint-only* change (colour, border radius, opacity, text colour) leaves
+  geometry alone, and that subset needs no layout at all. A already has the honest form of the
+  layout-affecting case: `changed_bounds`, and the plan item to record positions relative to the node
+  origin so a clean subtree that *moved* is translated on replay instead of rebuilt.
+- **Text is cached per line, not per run.** The carry is `layout_index` / `reuse_layouts` /
+  `truncate_layouts` over a `LineLayoutIndex` (`crates/gpui_engine/src/text_system.rs:133`), and a
+  redraw seeds `(Arc<CacheKey>, Arc<LineLayout>)` pairs one per line. A changed label reshapes the
+  *line* it is on and skips the lines whose key did not change — not "the shaped glyph run associated
+  with the slot".
+- **There are no stable byte offsets in the primitive stream.** The frame is the scene cache: a
+  replay copies each primitive out of the rendered frame at its recorded lane cursor and paints it
+  into the next. The bytes move every frame, and the record holds *kinds*, not primitives, so a colour
+  patch would have to be consulted at paint time.
+
+**What is worth keeping, and is not in the design.** A *value* slot is strictly easier than the
+subtree slot the stack already has. `slot`'s contract is that it must be given a definite size,
+because measuring would mean building it
+([`reactive-layer.md`](reactive-layer.md) §"The contract that comes with it"); a slot whose builder
+returns a `T` — a colour, a string — has no such problem, and re-running it costs one closure call
+rather than a subtree. That is the smallest useful piece of this direction, and it still needs the
+read re-parented from the view's `ReadSet` onto the slot, which is the authoring-model change in
+miniature.
+
+## 9. Blockers resolved (as designed)
 
 The open items divide into three classes: fatal semantic hazards, frame-isolation invariants, and
 the deployment trade-offs. Each resolution below is a design, not code — and where one is taken
@@ -464,7 +527,7 @@ transient. Memory follows the boundary: a trivial leaf node weighs about 2.5 KB,
 `ViewNode` struct, and a 3-pane workspace holds about 20 nodes — tens of KB, not the megabytes a
 per-element store would cost.
 
-## 9. The resolution matrix
+## 10. The resolution matrix
 
 The four modes are corners of the axis space in §4, with the two Class 2 channels on which they
 differ beyond the axes.
@@ -484,7 +547,7 @@ neither A nor B ref-counts tiles today — the merged Zed fix is the renderer sk
 texture, which hides the symptom rather than the lifetime — so AB is the first of the four to make
 the atlas obey retention.
 
-## 10. Where this leaves the thread
+## 11. Where this leaves the thread
 
 The recorder (R0) and the published contracts (R1) were the two that looked fatal and are not: one
 resolves by publishing an opaque token instead of the frame slice, the other by adding
