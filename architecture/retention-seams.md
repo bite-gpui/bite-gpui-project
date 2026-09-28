@@ -166,13 +166,16 @@ pub trait ViewRetention: 'static {
     /// The entities that notified since the last frame. Authoring reads them off the window's
     /// invalidator, which stays private — a store that owns the `consumers` expansion cannot reach
     /// it, and reaching it is not the store's business.
-    fn begin_frame(&mut self, notified: &[EntityId], window: &mut Window<'_>, cx: &mut App);
-    /// May this view be replayed? `reads` is what it read when last built; the impl owns the
-    /// answer (a dirty set, a consumers map, generations…) and the record it kept, if any.
-    fn reuse(&mut self, key: ViewKey, reads: &ReadSet,
-             window: &Window<'_>, cx: &App) -> Option<ViewRecord>;
-    fn store(&mut self, key: ViewKey, record: ViewRecord);
-    fn finish_frame(&mut self, window: &mut Window<'_>, cx: &mut App);
+    fn begin_frame(&mut self, notified: &[EntityId]);
+    /// May this view be replayed? The store already holds this view's `ReadSet` and the change
+    /// tokens its build captured (§4), so the sensor — which lives on the app while a store is one
+    /// per window — is supplied to the question rather than held by the store. The store decides.
+    fn reuse(&mut self, key: ViewKey, sensor: &mut dyn Reactivity) -> Option<ViewRecord>;
+    /// The reads go with the record: the store kept them to answer `reuse` next frame, and to keep
+    /// the `consumers` index a notify is expanded through.
+    fn store(&mut self, key: ViewKey, reads: ReadSet, record: ViewRecord);
+    /// The roots this frame attached, in drawing order. Anything else the store kept is unmounted.
+    fn finish_frame(&mut self, live_roots: &[ViewKey]);
 }
 
 impl Window<'_> {
@@ -193,8 +196,48 @@ is the first: every `Window` field is `pub(crate)`, so an implementation handed 
 read nothing from it, and `begin_frame` has to be *given* the set. The second is the **root list** —
 A's `ViewTree` owns `roots`/`next_roots` and swaps them in its own `finish_frame`, while the frame's
 roots are also the window's, since the frame's events dispatch against them (R7). The trait reconciles
-roots but defines no interface for them: either the store publishes its roots or `Window` gains root
-attachment, and §10's R2 was decided on the footing that it is additive either way.
+roots but defines no interface for them, and the answer settled on below is that the roots are the
+window's.
+
+### The trait, at its smallest
+
+Three constraints were put to this shape before it is worth freezing, and all three are answers about
+the *trait* rather than about a mode. They tighten it.
+
+**The status quo must not pay, so it is not an implementation.** An `Immediate` store behind a
+`Box<dyn ViewRetention>` would spend a dynamic call on every occurrence's `reuse` to be told "no".
+That call is small — two indirect calls per node against A's measured 0.55 µs per node is well under
+1% — but the guarantee is not small. With no store installed the walk has to *be the code it is
+today*, and the only way to own that is for the default to be `None` rather than an object. So
+`Immediate` is the *name* of the default, not a type: the matrix's status-quo row is "no store", the
+same shape as §6's `retained() -> Option<…>`. **Monomorphising `Window<R: ViewRetention>` is the one
+answer to reject outright**: `Window` is the pivot type every element and every method in the crate
+names, so a type parameter on it is the largest surface change available, against the aim the whole
+stack exists to keep.
+
+**The surface stays minimal, and the minimum forces two things the first draft had wrong.** Dropping
+`&mut Window` and `&mut App` from all four methods is the right call — it removes the `'frame`
+entanglement and takes away a store's ability to mutate window state — but with no context in the
+trait, two omissions surface:
+
+- **`store` has to be given the reads.** The store answers `reuse` from what it kept, and with no
+  `App` and no `Window` in the trait it is the only thing that *can* keep them: `consumers` is built
+  from them, and the next comparison is against them. The draft passed them to `reuse` alone, leaving
+  nothing holding them between frames.
+- **The sensor has to be handed to `reuse`, not held by the store.** `Reactivity`'s state is the
+  app's — B keeps its update generations in the `AppDependencies` on `App`, because an `update` is an
+  app-level event that knows no window — while a store is one per window. The two axes therefore have
+  different scopes, and the sensor is a parameter of the one question that needs it. B's own code
+  settles that question as a `bool` (`dependencies_changed(&self, dependencies) -> bool`, an `App`
+  method), which is the same thing said with less plumbing — for a caller that has the token, and only
+  the store does. What this leaves for the bootstrap: `with_view_retention` installs a store per
+  window, so the sensor needs a hook of its own, or the factory has to return both.
+
+**The roots are the window's, not the store's.** A's `ViewTree` owns `roots`/`next_roots`, but the
+frame's roots are the window's too — its events dispatch against them — so moving the root list to the
+window is both simpler and *less* state in the seam. The walk collects the roots it attached into a
+recycled buffer, the pattern `App::layout_id_buffer` already uses for layout ids, and `finish_frame`
+tells the store what survived. Nothing new is stored in `Frame` or in `Window`.
 
 ## 6. R1 — the published contracts (resolved)
 
@@ -265,16 +308,16 @@ flowchart TD
     notified --> dirty["ViewRetention: expand through the consumers map"]
     dirty --> occ["the walk reaches a view occurrence"]
     occ --> key["resolve its ViewKey: element path, parent, nth"]
-    key --> reuse{"ViewRetention::reuse(key, reads)"}
-    reuse -.->|"the sensor"| sensor["Reactivity::updated_since(reads, token)"]
+    key --> sensor["Reactivity::updated_since(reads, token)"]
+    sensor --> reuse{"ViewRetention::reuse(key, sensor)"}
     reuse -->|"hit"| replay["replay_view_record(record, children)"]
     reuse -->|"miss"| build["build the subtree, and record its ReadSet"]
     build --> text["TextSystem: a TextUse per phase"]
     build --> layout["LayoutEngine::retained: retain / layout_unchanged / relayout"]
-    text --> store["ViewRetention::store(key, record)"]
+    text --> store["ViewRetention::store(key, reads, record)"]
     layout --> store
     replay --> store
-    store --> reconcile["ViewRetention::finish_frame: reconcile the roots"]
+    store --> reconcile["ViewRetention::finish_frame(live_roots): retire what did not survive"]
     reconcile --> sweep["LayoutEngine::finish_frame: retire, sweep frame layout"]
     sweep --> aging["TextSystem::finish_frame: age the line-layout cache"]
 ```
@@ -284,9 +327,10 @@ Read top to bottom, four things fall out.
 1. **A view has two ways to be dirtied, and the sensor is the second.** A routes a `notify`
    through the window's invalidator and the `consumers` map; that is the leftmost branch and it
    is unchanged. B adds a way a `notify` cannot express: something the view read moved without
-   one. So `reuse` asks two questions — the store's "has a notify, or an ancestor that must
-   rebuild, reached this view", and the sensor's "has anything in this view's `ReadSet` moved
-   since it captured it". `Reactivity` is the second question only.
+   one. The sensor is supplied to the question rather than held by the store — its state is the app's
+   and a store is one per window — so `reuse` decides on `changed` plus the store's own dirty set:
+   "has a notify, or an ancestor that must rebuild, reached this view". `Reactivity` is the second
+   question only, and it stays out of the store's context.
 2. **The store answers; the sensor only reports.** "May this be replayed" is decided in
    `ViewRetention::reuse` and nowhere else, which is what lets the four modes differ in the store
    while sharing the sensor, or the reverse. The sensor is written to from the update and notify
@@ -638,8 +682,8 @@ the evidence of [`decisions/retention-seam-probe.md`](../decisions/retention-sea
 ships in this stack; the modes do not. `ViewRetention` with its `Immediate` default is a fourth *open
 boundary* beside the three the stack has, and
 [`decisions/0001-no-third-swap.md`](../decisions/0001-no-third-swap.md) is unamended, because a
-boundary whose default does nothing is what `FramePipeline` already is. A mode would be a *swap* — it
-replaces that default — and a swap is what 0001 bounds. The probe's deciding finding is that every
+boundary whose default does nothing is what `FramePipeline` already is. A mode would be a *swap* — a published
+implementation of a published trait — and a swap is what 0001 bounds. The probe's deciding finding is that every
 `Window` field is `pub(crate)`, so the seam's published surface is the *whole* API a mode gets and the
 seam cannot itself be out of tree. The hook follows the bootstrap seams already there:
 `with_layout_engine` (`crates/gpui_runtime/src/application.rs:92`) and `with_frame_pipeline`
@@ -689,13 +733,14 @@ differ beyond the axes.
 | B — gpui-fast | `SideTables` | `UpdateGenerations` | `KeyedPathHash` | spliced stretches in the frame's buffer | not addressed |
 | AB — combined | `PersistentTree` | `UpdateGenerations` | `NodeOwned` | node-owned tree, stable ids | ref-marked tiles |
 
-Two things the matrix is careful about. **The dispatch column is where AB goes past its sources**:
+Three things the matrix is careful about. **The dispatch column is where AB goes past its sources**:
 node-owned dispatch ids are A's own follow-up item, and A says they are *"not needed for
 correctness or the measured performance"*; AB takes them because stable identity is what the
 spine is for, not because either source needed them. **The atlas column is mostly negative**:
 neither A nor B ref-counts tiles today — the merged Zed fix is the renderer skipping a released
 texture, which hides the symptom rather than the lifetime — so AB is the first of the four to make
-the atlas obey retention.
+the atlas obey retention. **And the status-quo row's `Immediate` is the *absence* of a store, not an
+implementation of one** (§5), which is what makes the default path cost nothing.
 
 ## 12. Where this leaves the thread
 
