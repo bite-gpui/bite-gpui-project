@@ -12,11 +12,13 @@ that crosses each boundary.
 | [`reactive-layer.md`](reactive-layer.md) | how a state change becomes a frame: `notify`, the effect queue that runs observers, the invalidator that decides whether a window is dirty, and the entity-granular cache that decides which subtrees are not rebuilt at all |
 | [`extension-tiers.md`](extension-tiers.md) | the two ways a crate extends the engine — a *swap* replacing a seam's implementation, a *wrap* decorating the frame pipeline — and what each can do, cannot do, and commits to |
 | [`view-retention.md`](view-retention.md) | **proposed, unimplemented** — retained (incremental) view rendering: the two external efforts in detail, and a combined design |
+| [`retention-seams.md`](retention-seams.md) | **proposed, unimplemented** — how retention would attach to this stack: the seams that exist, the traits a seam would need, and the blockers (R0–R13), with the recorder and the published-trait contracts resolved |
 
-The first four describe the engine as it is. `view-retention.md` is the one exception: it
-is **proposed** and nothing in it is implemented here. It is kept beside the descriptive
-chapters because the thread is an engine-wide change the layer rulings have to decide, not
-a seam a crate can implement — see [`../issues/0005-view-retention.md`](../issues/0005-view-retention.md).
+The first four describe the engine as it is. `view-retention.md` and `retention-seams.md` are
+the exception: both are **proposed** and nothing in them is implemented here. They are kept
+beside the descriptive chapters because the thread is an engine-wide change the layer rulings
+have to decide, not a seam a crate can implement — see
+[`../issues/0005-view-retention.md`](../issues/0005-view-retention.md).
 
 ## Belongs here
 

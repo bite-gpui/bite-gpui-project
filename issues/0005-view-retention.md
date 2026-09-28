@@ -60,7 +60,8 @@ along with a combined design, in
 [`../architecture/view-retention.md`](../architecture/view-retention.md) — read from the
 branches' own docs (`crates/gpui/docs/view_tree.md` and `view_tree_render_path.md` at
 `refs/pull/63800/head`, tip `3d0b7f0a`, and gpui-fast's `docs/retained-mode.md`), not from
-their pull-request summaries.
+their pull-request summaries. The seams it would need, and the blockers to each, are in
+[`../architecture/retention-seams.md`](../architecture/retention-seams.md).
 
 | effort | where | shape | what it keeps |
 | --- | --- | --- | --- |
