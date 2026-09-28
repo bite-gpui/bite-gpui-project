@@ -42,6 +42,17 @@ is the measurement its Windows clause rests on, and
 what §6's patch 06 and §10 rest on.
 [`rendering-project/`](../rendering-project/README.md) gathers symlinks to all of them.
 
+## Status
+
+Specified, not implemented. None of the seam exists in the tree: there is no
+`crates/gpui_platform/src/platform_renderer.rs`, no `PlatformRenderer`, `RendererFactory`,
+`RendererTarget` or `ImportedTextureHandle`, no `renderer_factory` on `WindowParams` or
+`WindowOptions`, and no patch 04–07 in any backend's `window.rs` — that is the whole of §6
+of [`renderer-seam.md`](renderer-seam.md), unapplied. `SceneRenderer` is unchanged, as that
+chapter assumes: its only implementors are the four backends' renderers and the test and
+headless windows. Nothing here describes shipped behaviour, and the platform claims rest on
+the probes the chapters cite rather than on this branch.
+
 ## How this set was reconciled
 
 2026-09-27. Six drafts of the render extension arrived over two days, from two directions,
