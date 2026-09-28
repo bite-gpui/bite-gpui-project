@@ -93,5 +93,7 @@ all. A release receipt therefore says nothing about Direct3D.
 - **Adapter identity.** Sharing requires the same physical adapter, and the LUIDs of two
   independently created devices are not comparable from inside either one.
 - **The unsolved question.** Whether a wgpu texture can reach GPUI's Direct3D 11 renderer
-  is the one thing no document could settle; it needed a native run, and the answer is in
-  the spike.
+  needed a native run, and the reading has since moved: wgpu cannot *create* a shareable
+  texture, but it can *adopt* one the application allocated. The question is now whether that
+  adoption works end to end, which is
+  [`../decisions/shared-surface.md`](../../decisions/shared-surface.md).

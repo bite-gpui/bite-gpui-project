@@ -5,8 +5,15 @@
   [`../spi/rendering/foreign-texture.md`](../spi/rendering/foreign-texture.md) §2, and what it did to CI is
   [`../spi/rendering/verification.md`](../spi/rendering/verification.md) §3.
 - **The question:** on Windows, can Path A work when the application renders with `wgpu`
-  and the window is drawn by GPUI's default `DirectXRenderer`? **Answered: no — Outcome B.**
-  Path A and Path B on Windows require installing `gpui_wgpu::WgpuRenderer`.
+  and the window is drawn by GPUI's default `DirectXRenderer`? **Answered: no, for the route
+  the probe could reach — Outcome B.** Path A and Path B on Windows require installing
+  `gpui_wgpu::WgpuRenderer`.
+- **Revised 2026-09-28.** §1's third reading — that an application cannot wrap a native
+  shareable resource in wgpu — is wrong. A wgpu producer can allocate a shareable D3D12
+  resource itself and adopt it, which reaches the default renderer too, so the conclusion is
+  qualified rather than closed: the route exists, and [0002](0002-render-extension-device-model.md)
+  keeps the same-device route for this milestone and defers it. See
+  [`shared-surface.md`](shared-surface.md). The printout in §4 is unchanged.
 - **The other three platforms are out of scope** — macOS has Metal on both sides, Linux has
   wgpu on both.
 - **The probe** is the crate at `probes/windows-path-a`, on `bite_v1.22.0-pre` (landed with
@@ -25,13 +32,18 @@ backend said otherwise:
   Sharing must be set at creation, so no later `CreateSharedHandle` can work.
 - **wgpu-hal has no sharing API at all.** No `CreateSharedHandle`, no
   `OpenSharedResource`, no `HEAP_FLAG_SHARED` anywhere in `wgpu-hal-29.0.4/src/dx12/`, and
-  nothing in wgpu 29's own source either. The only thing an application can do with the
-  underlying resource is *read* it: `raw_resource() -> &ID3D12Resource`
-  (`wgpu-hal-29.0.4/src/dx12/mod.rs:990`) — an unshared resource.
-- **The reverse direction exists but is not app-reachable.** `create_texture_from_hal`
-  would let an application wrap a raw, shareable D3D12 texture in wgpu, except that it
-  takes a `hal::dx12::Texture` whose fields are private
-  (`wgpu-hal-29.0.4/src/dx12/mod.rs:979`). A wgpu-internal escape hatch, not a public one.
+  nothing in wgpu 29's own source either. An application can *read* the underlying resource
+  through `raw_resource() -> &ID3D12Resource` (`wgpu-hal-29.0.4/src/dx12/mod.rs:990`), and
+  through the raw device it can allocate and adopt (the third reading), but wgpu itself
+  neither shares nor imports.
+- **The reverse direction exists, and is app-reachable.** `texture_from_raw` builds a `hal`
+  texture from a raw `ID3D12Resource` the caller allocated, and `create_texture_from_hal`
+  wraps it (`wgpu-hal-29.0.4/src/dx12/device.rs:448`,
+  `wgpu-29.0.4/src/api/device.rs:325`) — both public, with public parameter types. An
+  application never constructs a `hal::dx12::Texture`; it passes the resource it made. This
+  is the reading this document originally got wrong; the correction is
+  [`shared-surface.md`](shared-surface.md) and the revision in
+  [0002](0002-render-extension-device-model.md).
 
 ## 2. The receiving end, in this tree
 
@@ -56,7 +68,8 @@ exactly the mechanism that makes it a supported configuration rather than a fork
 - **Outcome B — no interop.** Path A on Windows is supported only when the window is
   rendered by `gpui_wgpu::WgpuRenderer` (installed through the factory), where producer and
   consumer share one device and the payload is simply the `TextureView` — the arm Linux
-  already uses.
+  already uses. (Revised 2026-09-28: this is the route the probe reached, not the only one;
+  Outcome A is reachable through adoption — §1's third reading.)
 
 **Criterion:** a probe either produces a sampled, correct composite through the D3D11
 renderer (A), or it cannot, and a wgpu-rendered window does (B).
@@ -79,21 +92,26 @@ renderer (A), or it cannot, and a wgpu-rendered window does (B).
    hosted runner has no GPU — so what is established is that interop is mechanically
    possible on one adapter, which is also what D3D's documentation promises; hardware is
    expected to behave the same but was not what was measured.
-3. **Check the app-facing wrap.** Whether an application can construct a
-   `hal::dx12::Texture` (or otherwise reach `create_texture_from_hal`) without forking
-   wgpu. **Status: no, by reading** — §1. If it were unexpectedly yes, Outcome A would
-   widen.
+3. **Check the app-facing wrap.** Whether an application can reach `create_texture_from_hal`
+   without forking wgpu. **Status: yes, by reading — corrected 2026-09-28.** It does not
+   construct a `hal::dx12::Texture`; it calls `texture_from_raw` with its own
+   `ID3D12Resource` (§1's third reading). Outcome A is therefore reachable — deferred by
+   [0002](0002-render-extension-device-model.md) to a later milestone — so a wgpu producer
+   that allocates a shareable resource can reach the default renderer. What proves it is a
+   native run of the whole loop — `probes/windows-shared-surface`.
 4. **Confirm Outcome B end to end.** On a Windows window, install a factory returning
    `gpui_wgpu::WgpuRenderer`, create a texture on the renderer's own device, push the
    primitive, and assert the composite contains it. **Status: not run.** It is the
    acceptance test for the Windows configuration rather than a question about it, so it is
    [`../spi/rendering/verification.md`](../spi/rendering/verification.md) §1's row for whoever builds the seam.
 
-**The success is narrower than it sounds.** Probe 2 shows the *raw* D3D path works — for a
-producer that creates its own D3D12 texture. It does not make a wgpu-produced texture
-shareable: §1's first and third readings still close that direction. So Outcome A is
-reachable for an application that does not use wgpu's texture API on Windows, and Outcome B
-is the decision for Path A as designed.
+**The success is narrower than it sounds — but not as narrow as this document first read
+it.** Probe 2 shows the *raw* D3D path works, for a producer that creates its own D3D12
+texture. It does not make a texture wgpu *allocated* shareable: §1's first reading still
+closes that, because wgpu always creates with `D3D12_HEAP_FLAG_NONE`. But §1's third reading
+was wrong, so the producer need not avoid wgpu's texture API: it allocates the shareable
+resource itself, adopts it, and renders through wgpu. That reaches the default renderer too,
+which is what `probes/windows-shared-surface` measures.
 
 ## 5. Two hazards, for whoever revisits Outcome A
 

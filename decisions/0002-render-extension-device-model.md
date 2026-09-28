@@ -1,9 +1,13 @@
 # 0002 — The render extension's device model
 
 - **Decided:** 2026-09-27
-- **Status:** decided
+- **Revised:** 2026-09-28 — the claim that a wgpu producer cannot wrap a native shareable
+  resource was wrong. See "Revision" below.
+- **Status:** decided — the same-device model holds; the shared-handle route is future work,
+  corrected and recorded in the revision below
 - **Evidence:** [`../spi/rendering/foreign-texture.md`](../spi/rendering/foreign-texture.md) §2 and §5,
   [`windows-path-a-probe.md`](windows-path-a-probe.md),
+  [`shared-surface.md`](shared-surface.md),
   [`../spi/rendering/renderer-seam.md`](../spi/rendering/renderer-seam.md) §5.5,
   [`../spi/rendering/verification.md`](../spi/rendering/verification.md) §4
 
@@ -20,9 +24,10 @@ GPU resources:
    renderer factory. The default `DirectXRenderer` supports neither, and it must say so
    rather than succeed silently — today it returns `Ok(())` without drawing
    (`crates/gpui_windows/src/directx_renderer.rs:830`).
-3. **Sharing a resource across devices is out of scope, not pending.** No `IOSurface`
-   variant, no DXGI shared-handle variant, no dma-buf. The erased texture payload keeps
-   no Windows arm.
+3. **Sharing a resource across devices is out of scope for this milestone.** No `IOSurface`
+   variant, no DXGI shared-handle variant, no dma-buf; the erased texture payload keeps no
+   Windows arm. It is deferred, not impossible — the revision below corrects the reason, and
+   [`shared-surface.md`](shared-surface.md) measures the bridge a later milestone could take.
 4. **The device is reached through the factory**, which already carries it:
    `GpuContext = Rc<RefCell<Option<WgpuContext>>>`
    (`crates/gpui_wgpu/src/wgpu_renderer.rs:168`) with
@@ -79,28 +84,28 @@ rejected" is about.
 
 A cross-device draft proposed a tiered model — share the device (Tier 1), bridge with OS
 handles (Tier 2), fail loudly (Tier 3). Tiers 1 and 3 are this decision; **Tier 2 is
-rejected**, and the reasons are worth keeping because they are what would otherwise be
-re-litigated.
+deferred**, not rejected as impossible — the revision below corrects that reading, and
+[`shared-surface.md`](shared-surface.md) measures it working. The reasons it is not taken now
+are worth keeping, because they are what taking it later would have to pay.
 
-Tier 2's primitives, per platform, and why each is unavailable:
+Tier 2's primitives, per platform, and what wgpu cannot do for each:
 
-| platform | the bridge would be | why it does not work here |
+| platform | the bridge would be | what wgpu cannot do for it |
 | --- | --- | --- |
-| macOS | an `IOSurface`-backed `MTLTexture`, handed over as a raw handle, with an `MTLSharedEvent` for ordering | the backing has to be chosen at creation, and `wgpu::TextureDescriptor` has no field for it; wgpu 29 exposes no external-memory API on any backend |
-| Windows | a DXGI shared NT handle (`D3D12_HEAP_FLAG_SHARED` on the producer, `D3D11_RESOURCE_MISC_SHARED_NTHANDLE` on a D3D11 one, `OpenSharedResource1` on the consumer) | same wall: sharing is a creation-time property, and wgpu-hal's DX12 backend always passes `D3D12_HEAP_FLAG_NONE` |
-| Linux | a dma-buf export | same wall, and unnecessary: on Linux both sides are wgpu, so Tier 1 applies |
+| macOS | an `IOSurface`-backed `MTLTexture`, handed over as a raw handle, with an `MTLSharedEvent` for ordering | wgpu-hal's Metal backend names no `IOSurface` anywhere, so the application has to build the `MTLTexture` itself with `objc2-metal`; and wgpu's Metal backend speaks `objc2-metal`, not the `metal` crate `gpui_apple` uses |
+| Windows | a DXGI shared NT handle (`D3D12_HEAP_FLAG_SHARED` on the producer, `D3D11_RESOURCE_MISC_SHARED_NTHANDLE` on a D3D11 one, `OpenSharedResource1` on the consumer) | wgpu always *creates* with `D3D12_HEAP_FLAG_NONE`, so a texture wgpu allocated cannot be shared; the application has to allocate the shareable resource itself |
+| Linux | a dma-buf export | nothing — it is unnecessary: on Linux both sides are wgpu, so Tier 1 applies |
 
-The wrap direction is closed too, which is what makes this a wall rather than an
-inconvenience: an application cannot hand its own shareable native texture to wgpu,
-because `create_texture_from_hal` takes a `hal::*::Texture` whose fields are private
-(`wgpu-hal-29.0.4/src/dx12/mod.rs:979`). So Tier 2 only ever works for a producer that
-owns the native API **and is not wgpu** — which is not what this feature is for.
+Only the *creation* half of the wall holds: wgpu makes nothing it creates shareable. The
+**wrap direction is open** — an application can adopt a shareable resource it allocated —
+which the revision below corrects and the shared-surface probe measures.
 
 **None of that makes the bridges exotic.** Every compositor consumes its clients' buffers
 through exactly these mechanisms — a dma-buf on Wayland, a DXGI surface for DWM, a
 `CAMetalDrawable`'s storage for Core Animation — which is how a window reaches the screen at
-all. What is rejected is the *counterparty*, not the mechanism: the producer at this seam's
-other end is a texture wgpu made, and wgpu offers no way to make one shareable. And it is the
+all. What is deferred is the *counterparty*, not the mechanism: wgpu offers no way to make a
+texture it created shareable, so the bridge has to be driven by the application rather than
+through wgpu's texture API. And it is the
 **device**, not the process, that forces a bridge — two devices in one process need one as much
 as two processes do, and sharing inside one device needs none at all, only two views of the
 same resource. That is why tier 3's condition is "a device it does not control" and "a separate
@@ -117,29 +122,69 @@ Three costs that Tier 2 would have added, each absent from the chosen design:
   match between two devices that were created independently and do not guarantee one.
   `verification.md` §4 records why that is also why it cannot be asserted from inside
   either device.
-- **The payoff is zero.** Path A exists to remove a CPU copy. Tier 2 removes the copy and
-  adds a per-platform bridge, a synchronisation protocol and a same-adapter constraint —
-  and still cannot be driven by a wgpu producer.
+- **The payoff does not cover the cost.** Path A exists to remove a CPU copy. Tier 2 removes
+  the copy and adds a per-platform bridge, a synchronisation protocol and a same-adapter
+  constraint — three new obligations for one saved copy.
 
 ## What was tried, and how the answer was arrived at
 
 Probe 2 on `windows-latest` established that the *raw* D3D path works: a D3D12 texture on
-a shared heap can be opened on a D3D11 device and sampled. That is the part that looked
-like it might rescue Tier 2. It does not, because it requires the producer to create its
-own D3D12 texture — the direction probes 1 and 3 close for wgpu. The full record, and the
-one probe still pending, are in [`windows-path-a-probe.md`](windows-path-a-probe.md).
+a shared heap can be opened on a D3D11 device and sampled. With the revision below that is
+not a curiosity but the shape of a possible Tier 2 — a producer that allocates its own
+D3D12 texture and adopts it can drive the bridge. Whether it works end to end — allocate
+shareable, adopt, render through wgpu, read back through D3D11 — is what a second probe,
+`probes/windows-shared-surface` on PR #4, now measures. The first record is
+[`windows-path-a-probe.md`](windows-path-a-probe.md); the new one is
+[`shared-surface.md`](shared-surface.md).
 
-Item 2's Windows clause was measured after it was written and holds, with two riders that
+Item 2's Windows clause — that `WgpuRenderer` can present there — was measured after it was
+written and holds, with two riders that
 [`windows-presentation-probe.md`](windows-presentation-probe.md) records. `WgpuRenderer` can
 present on a Windows window, but only on Direct3D 12, which `gpui_wgpu` does not enable today
-(`crates/gpui_wgpu/src/wgpu_context.rs:292`) — so item 2 costs a backend change and not only
-plumbing. And the DX12 surface offers `Opaque` alpha alone, so a window it renders cannot be
-transparent the way the default renderer's can.
+(`crates/gpui_wgpu/src/wgpu_context.rs:292`) — so installing it costs a backend change and not
+only plumbing. And the DX12 surface offers `Opaque` alpha alone, so a window it renders cannot
+be transparent the way the default renderer's can.
+
+## Revision, 2026-09-28: adoption is app-reachable
+
+The paragraph that called the wall symmetric — "an application cannot hand its own shareable
+native texture to wgpu" — is wrong, and it came from a bad grep: `texture_from_raw` does not
+match a search for `fn from_raw`. In `wgpu-hal` 29.0.4 every desktop backend exposes
+
+```rust
+pub unsafe fn texture_from_raw(resource: <native handle>, …) -> Texture
+```
+
+(`wgpu-hal-29.0.4/src/dx12/device.rs:448`, `wgpu-hal-29.0.4/src/metal/device.rs:358`,
+`wgpu-hal-29.0.4/src/vulkan/device.rs:406`, `wgpu-hal-29.0.4/src/gles/device.rs:127`), taking
+the raw resource by value with public parameter types; `create_texture_from_hal` then wraps it
+(`wgpu-29.0.4/src/api/device.rs:325`), and both `wgpu::hal` and `hal::api::*` are public
+(`wgpu-29.0.4/src/lib.rs:104`, `wgpu-hal-29.0.4/src/lib.rs:267`). An application never
+constructs a `hal::dx12::Texture` — it passes an `ID3D12Resource` it allocated.
+
+So the two halves of the wall are not the same:
+
+- **Creation is still closed.** wgpu cannot make a shareable texture. Its DX12 backend passes
+  `D3D12_HEAP_FLAG_NONE` or `…_CREATE_NOT_ZEROED` on everything it creates
+  (`wgpu-hal-29.0.4/src/dx12/device.rs:104`, `wgpu-hal-29.0.4/src/dx12/suballocation.rs:440`),
+  and its Metal backend has no `IOSurface` entry point. This stands.
+- **Adoption is open.** A producer can allocate the shareable resource itself — the raw D3D12
+  device is reachable through `as_hal::<Dx12>().raw_device()` — adopt it with
+  `texture_from_raw`, render into it with wgpu, and hand the OS handle to a native consumer.
+
+What this makes *possible* is a later milestone: Path A on Windows need not install
+`WgpuRenderer` if the producer allocates a shareable D3D12 resource and the two sides
+synchronise. The costs listed above do not go away — synchronisation, and a same-adapter
+requirement whose LUIDs cannot be compared from inside either device — so the decision keeps
+the same-device model for this milestone and records the bridge as future work.
+[`shared-surface.md`](shared-surface.md) measures that it works.
 
 ## What would reopen it
 
-- **wgpu gaining an external-memory or shareable-resource API.** Then Tier 2 becomes
-  reachable for a wgpu producer and this decision's item 3 is the thing to revisit.
+- **Taking the deferred bridge.** Tier 2 is reachable today (the revision above) and measured
+  ([`shared-surface.md`](shared-surface.md)); a milestone that needs a foreign-device or
+  another-process producer is what would take it, and a *creation*-time shareable API from
+  wgpu would make it cheap.
 - **A consumer that must run in another process or on a second device** — a hardware
   video decoder, an engine that already owns a device. The bridge then belongs to that
   consumer, and the seam's obligation stays what it is: accept a texture only from the

@@ -62,35 +62,45 @@ Producer and consumer must be the **same device**, not merely the same API:
 | --- | --- | --- |
 | wgpu → `WgpuRenderer` (Linux, and Windows with it installed) | `wgpu::TextureView` | the same `wgpu::Device`; wgpu validates and rejects a mismatch |
 | wgpu (Metal backend) → GPUI's Metal renderer (macOS) | the raw `id<MTLTexture>` | the same GPU; a raw driver handle bypasses wgpu's bookkeeping |
-| wgpu (D3D12) → GPUI's `DirectXRenderer` (D3D11, Windows default) | *none* | **impossible** |
+| wgpu (D3D12) → GPUI's `DirectXRenderer` (D3D11, Windows default) | *none, this milestone* | **out of scope** — a shared handle would bridge it as future work, so the milestone installs `WgpuRenderer` instead |
 
-The third row is why **Path A and Path B on Windows require installing
-`gpui_wgpu::WgpuRenderer`** through the factory: GPUI's Windows renderer is Direct3D 11
+The third row is the one that moved. It was *impossible*, on the reading that wgpu offers
+neither a shareable resource nor a way to adopt one; the second half was wrong, so the row is
+reachable rather than closed. GPUI's Windows renderer is Direct3D 11
 (`crates/gpui_windows/src/directx_renderer.rs:2086`) while wgpu is Direct3D 12, and a
 D3D12 resource is invisible to a D3D11 device unless it was created shareable —
-`D3D12_HEAP_FLAG_SHARED`, a *heap* flag set at creation. wgpu never sets it
-(wgpu-hal's DX12 backend passes `D3D12_HEAP_FLAG_NONE`), and wgpu 29 exposes no
-external-memory API on any backend, so there is no way to ask. The full probe record is
-[`../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md).
+`D3D12_HEAP_FLAG_SHARED`, a *heap* flag set at creation, which wgpu never sets
+(`wgpu-hal-29.0.4/src/dx12/device.rs:104`). What wgpu *will* do is adopt a resource the
+application allocated: `texture_from_raw` and `create_texture_from_hal` are public on every
+desktop backend (`wgpu-hal-29.0.4/src/dx12/device.rs:448`,
+`wgpu-29.0.4/src/api/device.rs:325`), and the whole loop is measured to work
+([`../decisions/shared-surface.md`](../../decisions/shared-surface.md)). What it costs is the
+bridge's synchronisation and a same-adapter requirement, so it is **future work this milestone
+unblocks** rather than part of this milestone: the same-device rows are what land.
 
 Three consequences, each of which the drafts got wrong in the other direction:
 
 1. **The Windows arm of `ImportedTextureHandle` is removed.** Its
-   `DirectX(*const c_void)` variant rested on the premise that a wgpu producer can feed
-   GPUI's D3D11 renderer. It cannot.
-2. **The `PaintSurface` macOS field is the precedent, not the model.** A shareable
-   resource — an `IOSurface`-backed `MTLTexture`, a DXGI shared NT handle, a dma-buf —
-   must be chosen *at creation*, and wgpu offers no descriptor for any of them. A
-   "Tier 2" OS-handle bridge only ever works for a producer that owns the native API and
-   is not wgpu, which is not what this path is for. It is out of scope, not pending.
+   `DirectX(*const c_void)` variant rested on a wgpu producer feeding GPUI's D3D11 renderer
+   from its own device, which the device rule forbids. The same-device route needs no arm —
+   Windows matches Linux, with the `TextureView`. The shared-handle arm the future bridge would
+   want is recorded in
+   [`../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)
+   and measured in [`../decisions/shared-surface.md`](../../decisions/shared-surface.md).
+2. **The `PaintSurface` macOS field is the precedent, not the model.** A shareable resource —
+   an `IOSurface`-backed `MTLTexture`, a DXGI shared NT handle, a dma-buf — must be chosen *at
+   creation*, and wgpu offers no descriptor for any of them, so the application must allocate
+   and adopt it: on Windows `texture_from_raw` over a shareable `ID3D12Resource`, and on macOS
+   a `MTLTexture` built with `objc2-metal`, because wgpu-hal names no `IOSurface`. That is the
+   future bridge's shape, not this path's.
 3. **Path A is the window owner's capability.** The device belongs to whoever called
    `with_renderer_factory`, so a widget inside someone else's window cannot be a
    producer. That is a boundary, not an accident: it is what makes the Windows answer a
    configuration ("install `WgpuRenderer`") rather than a fork.
 
-The whole of it — the constraint, the Windows configuration, and why the OS-handle
-bridges are out of scope rather than pending — is
-[`../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md).
+The whole of it — the constraint, the Windows configuration, and the future bridge — is
+[`../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md),
+with the measurement in [`../decisions/shared-surface.md`](../../decisions/shared-surface.md).
 
 ## 3. The scene type, and the API the constraint implies
 
@@ -202,7 +212,7 @@ Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:359`) — so a Windows wind
 `WgpuRenderer` shows the same `*_UNORM` surface convention the rule above states, and
 `DirectXRenderer`'s `B8G8R8A8_UNORM` target
 (`crates/gpui_windows/src/directx_renderer.rs:32`) belongs to the renderer that supports
-neither path. The presentation probe measured the DX12 surface offering `Bgra8UnormSrgb` and
+neither path today. The presentation probe measured the DX12 surface offering `Bgra8UnormSrgb` and
 `Bgra8Unorm` alike, so the choice is not one the platform makes
 ([`../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md)).
 The fixture in [`verification.md`](verification.md) §1 is what verifies the rule itself — and
@@ -248,6 +258,9 @@ order and the texture is complete by the time the composite samples it. No semap
 `MTLSharedEvent`, no keyed mutex — the synchronisation the cross-device drafts specified
 is the cost of a second device, and there is no second device
 ([`../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)).
+The cross-device case that 0002 defers as future work would need exactly that handshake, and
+the shared-handle arm in §2 is where it would be carried; what it costs is measured in
+[`../decisions/shared-surface.md`](../../decisions/shared-surface.md).
 
 What that asks of the application is a *when*, not a *what*: **the submission has to
 happen before the frame's.** The natural place is the paint callback, which runs while the

@@ -31,13 +31,15 @@ its own folder, because it is a surface an application meets rather than part of
 | [`verification.md`](verification.md) | what a test can assert, and which platform each check needs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 
-Three documents outside this folder are part of the work rather than of the design:
+Four documents outside this folder are part of the work rather than of the design:
 [`../../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)
 decides which devices a producer may use,
 [`../../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) is the
 measurement that decision rests on,
 [`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md)
-is the measurement its Windows clause rests on, and
+is the measurement its Windows clause rests on,
+[`../../decisions/shared-surface.md`](../../decisions/shared-surface.md) is the shared-buffer
+measurement that reopens it, and
 [`../../decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md) is
 what §6's patch 06 and §10 rest on.
 [`rendering-project/`](../rendering-project/README.md) gathers symlinks to all of them.
@@ -115,12 +117,14 @@ RFC's "≈16.0 GB/s at 4K120" is its own formula miscounted — `W × H × 4 × 
    (`crates/gpui_platform/src/window.rs:356`, `:429`), which a closure cannot satisfy and
    a trait object cannot derive. The `FnRendererFactory` adapter keeps the closure
    spelling for the common case.
-6. **The Windows arm of `ImportedTextureHandle`.** **Removed.** A wgpu texture cannot be
-   read by GPUI's Direct3D 11 renderer, and wgpu offers no shareable resource — see
-   [`foreign-texture.md`](foreign-texture.md) and
-   [`../../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md).
-   The payload is the wgpu `TextureView` on every platform wgpu renders, and the raw Metal
-   handle on macOS.
+6. **The Windows arm of `ImportedTextureHandle`.** **A shared handle, not a raw device
+   pointer.** A wgpu texture cannot be read by GPUI's Direct3D 11 renderer as a resource on
+   its own device, and wgpu cannot create a shareable one — but it can adopt one the
+   application allocated, so a DXGI shared NT handle reaches D3D11 where a raw pointer cannot.
+   See [`foreign-texture.md`](foreign-texture.md) §2,
+   [`../../decisions/shared-surface.md`](../../decisions/shared-surface.md), and 0002's
+   revision. The same-device payload stays the wgpu `TextureView` on every platform wgpu
+   renders, and the raw Metal handle on macOS.
 7. **`SharedGraphicsContext`, from the uncommitted draft.** **Rejected.** It duplicates
    `WgpuContext` field for field (`crates/gpui_wgpu/src/wgpu_context.rs:9`) and
    `WgpuRenderer::new` takes the *existing* `GpuContext`, so a parallel type cannot be
@@ -153,13 +157,13 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
   value: a handle has one counterparty, the application and the renderer it chose, so a
   `dyn Any` payload is a private agreement between them; the target is read by any
   renderer the application installs.
-- **Path A is the window owner's capability.** Producer and consumer must be the same
-  device, which only the factory that built the renderer has. A widget inside someone
-  else's window cannot be a producer.
-- **Windows is Path A and Path B only under `gpui_wgpu::WgpuRenderer`.** The default
-  `DirectXRenderer` is Direct3D 11 and the producer is Direct3D 12; there is no copy-free
-  bridge, and wgpu offers no shareable resource. Decided in
-  [`../../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md).
+- **Path A is the window owner's capability.** The device is the one the factory that built
+  the renderer chose, so a widget inside someone else's window cannot be a producer; a
+  producer on another device reaches it only through the shared-handle bridge (see Open).
+- **Windows takes the same-device route.** Path A and Path B on Windows run under
+  `gpui_wgpu::WgpuRenderer`, as on Linux, and the payload is the `wgpu::TextureView`; the
+  default `DirectXRenderer` supports neither. The shared-handle bridge that would reach it from
+  a foreign device is measured and deferred, not part of this milestone.
 - **The factory is invoked once, before the first frame.** Recovery is therefore
   self-sufficient on the returned renderer, and post-construction queries belong on the
   renderer's trait rather than on the factory's input.
@@ -179,6 +183,11 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
 - **Whether `WgpuRenderer` should become the default on macOS and Windows**, retiring
   Metal and DirectX to optional. The seam makes the question askable and nothing decides it —
   though both halves are now measured rather than unknown, below.
+- **The shared-handle bridge, deferred.** A wgpu producer on a foreign device would reach
+  GPUI's renderer through a DXGI shared handle it allocates and wgpu adopts; measured to work
+  ([`../../decisions/shared-surface.md`](../../decisions/shared-surface.md)), costing a fence
+  and a same-adapter guarantee the same-device route does not need. Future work this milestone
+  unblocks.
 - **Windows presentation for a non-D3D11 renderer.** Measured: `WgpuRenderer` can present
   on a Windows window, on Direct3D 12 — which `gpui_wgpu` does not enable today, so patch 07
   is a backend change as well as plumbing — and the DX12 surface offers only `Opaque` alpha,
@@ -193,6 +202,8 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
 - **Egress, if it is wanted.** Every chapter here is about a producer reaching *into* GPUI. The
   other direction — handing GPUI's own output to a foreign consumer — is unspecified, and the
   device rule already fixes its shape: on our device it is two views of one resource and needs
-  no handle at all, on another device it is the bridge 0002 rejects, and otherwise it is a
-  readback. What is *not* missing is the OS compositor: it is already a consumer of our surface
-  through exactly those bridges, which is how a window reaches the screen.
+  no handle at all, on another device it is the bridge 0002 now leaves open, and otherwise it is
+  a readback. Video out is this direction, and
+  [`../../decisions/shared-surface.md`](../../decisions/shared-surface.md) is its first
+  measurement; what is *not* missing is the OS compositor, which is already a consumer of our
+  surface through exactly those bridges, and is how a window reaches the screen.

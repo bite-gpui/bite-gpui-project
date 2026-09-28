@@ -23,7 +23,8 @@ The subfolders mirror the sources — `rendering/`, `authoring/`, `decisions/`,
 | [`rendering/verification.md`](../rendering/verification.md) | the matrix, and the platform each check needs |
 | [`authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface |
 | [`decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md) | decision 0002 — which devices a producer may use, and which it may not |
-| [`decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) | the measurement 0002 rests on |
+| [`decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) | the first measurement 0002 rests on |
+| [`decisions/shared-surface.md`](../../decisions/shared-surface.md) | the shared-buffer probe that reopens 0002 — Windows adoption and the macOS pool, token and fence measured; macOS adoption open |
 | [`decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md) | the measurement 0002's Windows clause rests on |
 | [`decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md) | the measurement patch 06 and renderer-seam §10 rest on |
 | [`architecture/frame-flow.md`](../../architecture/frame-flow.md) | where the seam is entered in a frame |
