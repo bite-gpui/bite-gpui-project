@@ -85,7 +85,7 @@ once here and used throughout:
 
 The four modes are corners of that space; §9 is the matrix. The point of the factoring is its last
 row: **AB is A's spine with B's sensor**, so it is a recomposition rather than a third engine. §7
-shows the three axes being consulted, in order, in one frame.
+shows where each axis is consulted, in one frame.
 
 ## 5. R0 — the recorder (resolved)
 
@@ -200,20 +200,21 @@ outside the frame, where the changes it watches for happen.
 ```mermaid
 flowchart TD
     ask["a frame is asked for"] --> notified["the window's notified entities"]
-    notified --> dirty["ViewRetention: expand through consumers"]
+    notified --> dirty["ViewRetention: expand through the consumers map"]
     dirty --> occ["the walk reaches a view occurrence"]
-    occ --> key["its ViewKey: element path, parent, nth"]
+    occ --> key["resolve its ViewKey: element path, parent, nth"]
     key --> reuse{"ViewRetention::reuse(key, reads)"}
-    reuse -.-> sensor["Reactivity::updated_since(reads, token)"]
+    reuse -.->|"the sensor"| sensor["Reactivity::updated_since(reads, token)"]
     reuse -->|"hit"| replay["replay_view_record(record, children)"]
-    reuse -->|"miss"| build["capture_view_record: build, record ReadSet"]
-    build --> text["TextSystem: end_text_use per phase"]
-    text --> layout["LayoutEngine::retained: retain / relayout"]
-    layout --> store["ViewRetention::store(key, record)"]
+    reuse -->|"miss"| build["build the subtree, and record its ReadSet"]
+    build --> text["TextSystem: a TextUse per phase"]
+    build --> layout["LayoutEngine::retained: retain / layout_unchanged / relayout"]
+    text --> store["ViewRetention::store(key, record)"]
+    layout --> store
     replay --> store
-    store --> reconcile["ViewRetention::finish_frame: reconcile roots"]
+    store --> reconcile["ViewRetention::finish_frame: reconcile the roots"]
     reconcile --> sweep["LayoutEngine::finish_frame: retire, sweep frame layout"]
-    sweep --> aging["TextSystem::finish_frame: age the cache"]
+    sweep --> aging["TextSystem::finish_frame: age the line-layout cache"]
 ```
 
 Read top to bottom, four things fall out.
@@ -231,11 +232,17 @@ Read top to bottom, four things fall out.
 3. **A miss is the only path into layout and text.** `retain` / `layout_unchanged` / `relayout`
    and the `TextSystem` scopes are reached on the build path, never on a replay — which is why an
    engine whose `retained()` is `None` still retains render, prepaint and paint and merely
-   relayouts each frame (§6).
+   relayouts each frame (§6). The two are **not sequential**, and the diagram draws them as
+   siblings for that reason: they interleave *per element phase*. Layout retention closes the
+   layout phase (A's `store_layout` / `retire_layout`), each of the three phases brackets its own
+   `TextUse`, and the measure closures *inside* the layout phase shape text attributed to the node
+   that requested the layout. Any linear ordering of the two is a fiction.
 4. **A dirty child inside a clean parent is the `children` callback.** `replay_view_record`
    re-enters the walk through it, and that is where B's `fast/splice.rs` case lives — inside
    authoring, where the frame's own channels stay private (§5). No public buffer operation, and no
-   second walking order to keep in step.
+   second walking order to keep in step. The frame is *replayed*, not spliced: with a node's own
+   identity and stable cursors there is no flat buffer to cut a hole in (`view-retention.md` §5.4),
+   which is the one place this document's vocabulary has to be kept apart from B's.
 
 **The three `finish_frame`s run in that order.** The store's reconciles the roots and *decides*
 what to retire; the layout engine's drops that and sweeps the frame-layout class R6 defines; the
