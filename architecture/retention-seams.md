@@ -68,7 +68,7 @@ turned into a seam on *this* stack; the axes are:
 | capability | `TextSystem` scopes | engine | shared |
 | capability | `Scene` replay + `ViewRecord` | engine + authoring | shared |
 
-Two of the names the signatures trade in are the two the blockers in §9 resolve, so they are fixed
+Two of the names the signatures trade in are the two the blockers in §10 resolve, so they are fixed
 once here and used throughout:
 
 - **`ViewKey`** — *which mount* of a view this is: the occurrence `(element path, parent node,
@@ -83,7 +83,7 @@ once here and used throughout:
   of the window's `tracked_entities` in
   [`reactive-layer.md`](reactive-layer.md) §"The other half: what is *not* rebuilt".
 
-The four modes are corners of that space; §10 is the matrix. The point of the factoring is its last
+The four modes are corners of that space; §11 is the matrix. The point of the factoring is its last
 row: **AB is A's spine with B's sensor**, so it is a recomposition rather than a third engine. §7
 shows where each axis is consulted, in one frame.
 
@@ -135,7 +135,7 @@ points into its children's ranges, so a replayed parent would replay a child's s
 plan has the item that removes this — *"Fine-grained caching: a dirty descendant rebuilds through
 clean ancestors"* — and its two missing pieces are R7's captured ambient context at each child
 reference, and layout-change reporting from Taffy. So the slot work is the identity half and that item
-is the payoff half; a leaf change stays expensive until both are done.
+is the payoff half; a leaf change stays expensive until both are done. §9 sequences the second half.
 
 ## 5. R0 — the recorder (resolved)
 
@@ -461,7 +461,7 @@ the record's partition was written either by the author — an annotation no exi
 by comparing the previous output with the new one, which is Tier 2's own work. So the chain cannot
 choose Tier 1 over Tier 2 at runtime; that choice was made in the authoring API, which is the second
 objection above. And Tier 2 is not viable at all, so a chain whose middle rung is missing is better
-read as what §10 already records: **AB, with status quo as the fallback**, and R13's boundary deciding
+read as what §11 already records: **AB, with status quo as the fallback**, and R13's boundary deciding
 where the top stops.
 
 Four specifics should not come back with it:
@@ -481,7 +481,58 @@ Four specifics should not come back with it:
   other direction: the method §6 removed, because the node owns the `LayoutId` that `request_layout`
   returned and there is no key to pass.
 
-## 9. Blockers resolved (as designed)
+## 9. The payoff half: a dirty child under a clean parent
+
+§4's slot work gives a change a *boundary*; it does not yet make the change cheap, because a dirty
+node rebuilds its ancestors — a parent's output points into its children's ranges, so a replayed
+parent would replay a child's stale prepaint. Removing that is A's own plan item, *"Fine-grained
+caching: a dirty descendant rebuilds through clean ancestors"*, and A orders it explicitly: *"After
+ownership, identity, and offsets."* Ownership has landed — A's plan marks "Nodes are the frame" done —
+while identity is half landed: mount identity is separated from state identity, but element identity
+is still the carried `GlobalElementId`. The rest is four steps, each the next one's precondition.
+
+**1. Identity, narrowed to the node.** An element's identity becomes `(node, Location::caller(),
+nth)`, and the `GlobalElementId` path is computed on demand rather than carried. This is not only a
+cost item: it is what makes step 3's captured context *small* — a local suffix instead of a cloned
+path — and what keeps element state attached to the same element when its ancestors do not rebuild.
+
+**2. Positions recorded relative to the node origin.** Everything a node records that has a position —
+scene primitives, hitboxes, input-handler bounds, tooltip and cursor requests — is recorded with an
+offset and translated on replay, so `layout_unchanged` can compare the root's size and ignore its
+`location`. Without this a node that *moved* still has to be rebuilt, and ancestor elision buys nothing
+on a reflow — the case that matters most.
+
+**3. The ambient context at each child reference.** `OutputItem::Child(node, phase)` gains the
+environment the child was entered in: the element-id stack (local suffix), the text-style stack, the
+content mask, the rem size, the element offset, the dispatch parent and the image cache. It is written
+when the child is entered and restored when a replay reaches a dirty child, so that child's
+`prepaint`/`paint` can run **under a replayed parent**. The precedent is already in the design: this is
+exactly what A requires of a *deferred root* under fine-grained caching, and A names it as the item's
+precondition. The difference is scope — every child reference rather than one deferred root — which is
+why it is a step of its own.
+
+**4. Layout-change reporting from the layout engine.** Once a child re-renders in place under a
+replayed parent, the relayout can have moved its siblings and resized the parent, and every scope that
+moved has to be scheduled. A's instrument today is the ancestor walk, kept deliberately *"until change
+reporting exists"*, and it is what makes the design *correct but slow* in the meantime. The reporting
+belongs to the layout engine rather than to Taffy, so it is an additive capability beside
+`RetainedLayout` — optional-with-fallback, the same shape as `retained()`: an engine that reports the
+layout nodes a relayout moved, and an engine that cannot, for which the parent walk stays. For Taffy
+the ask is upstream rather than a fork, which is A's own note: *"try upstream before forking"*.
+
+**What "done" is.** Not compile-and-run: the oracle, over A's own list — *"flex reflow, unchanged
+outer bounds with inner changes, parent movement, clipping, and mount/unmount"* — each a case where a
+replayed parent and a rebuilt child must agree with a full refresh. The parent walk stays in place
+throughout, so each step is an optimisation measurable against the step before it, not a rewrite that
+has to be right at once.
+
+**And it may not pay.** A's own caveat is the one to carry into any measurement: *"rebuilding a tiny
+node alone can cost more than its parent's rebuild saved"*. The fixture that shaped the item is
+`Workbench/update/row`, and the number that would justify it is one this project's own bench prints,
+two-column, per the measurement policy in [`../../.uses/README.md`](../../.uses/README.md) — not a figure
+from A's branch.
+
+## 10. Blockers resolved (as designed)
 
 The open items divide into three classes: fatal semantic hazards, frame-isolation invariants, and
 the deployment trade-offs. Each resolution below is a design, not code — and where one is taken
@@ -611,7 +662,7 @@ transient. Memory follows the boundary: a trivial leaf node weighs about 2.5 KB,
 `ViewNode` struct, and a 3-pane workspace holds about 20 nodes — tens of KB, not the megabytes a
 per-element store would cost.
 
-## 10. The resolution matrix
+## 11. The resolution matrix
 
 The four modes are corners of the axis space in §4, with the two Class 2 channels on which they
 differ beyond the axes.
@@ -631,7 +682,7 @@ neither A nor B ref-counts tiles today — the merged Zed fix is the renderer sk
 texture, which hides the symptom rather than the lifetime — so AB is the first of the four to make
 the atlas obey retention.
 
-## 11. Where this leaves the thread
+## 12. Where this leaves the thread
 
 The recorder (R0) and the published contracts (R1) were the two that looked fatal and are not: one
 resolves by publishing an opaque token instead of the frame slice, the other by adding
