@@ -1,7 +1,7 @@
 # Retention seams, and what blocks them
 
-- **Status: proposed.** Nothing here is implemented, and everything from §5 on is a design, not
-  code. This is the *seam* companion to [`view-retention.md`](view-retention.md): that chapter is
+- **Status: proposed.** Nothing here is implemented, and everything from §5 on is a design rather
+  than code — except §10's R2, which is decided. This is the *seam* companion to [`view-retention.md`](view-retention.md): that chapter is
   what the two designs do; this one is how retention would attach to *this* stack, and what stops
   each attachment point.
 - **Sources.** The same two efforts, read at the same places: Zed `#63800` at
@@ -62,7 +62,7 @@ turned into a seam on *this* stack; the axes are:
 
 | axis / capability | trait | layer | choices |
 | --- | --- | --- | --- |
-| axis | `ViewRetention` | authoring | `Immediate` · `PersistentTree` (A) · `SideTables` (B) |
+| axis | `ViewRetention` | authoring | `Immediate` (no store) · `PersistentTree` (A) · `SideTables` (B) |
 | axis | `Reactivity` | authoring | `StrictNotify` (A) · `UpdateGenerations` (B) |
 | axis | `RetainedLayout` | engine | `–` · `NodeOwned` (A) · `KeyedPathHash` (B) |
 | capability | `TextSystem` scopes | engine | shared |
@@ -78,9 +78,9 @@ once here and used throughout:
   only three: the entities, globals and state versions it read; the ambient inputs it read (R3);
   and the window values the cache key compares (bounds, content mask, text style, rem size, scale,
   opacity), plus the change tokens a build captures so the sensor can ask whether any of it has
-  moved (§7). It is B's `RenderDependencies` under a neutral name, and it is what
-  `ViewRetention::reuse` is handed and what the store re-registers on a replay — the per-view form
-  of the window's `tracked_entities` in
+  moved (§7). It is B's `RenderDependencies` under a neutral name, what the store keeps per key and
+  compares at `reuse`, and what it re-registers on a replay — the per-view form of the window's
+  `tracked_entities` in
   [`reactive-layer.md`](reactive-layer.md) §"The other half: what is *not* rebuilt".
 
 The four modes are corners of that space; §11 is the matrix. The point of the factoring is its last
@@ -139,8 +139,8 @@ is the payoff half; a leaf change stays expensive until both are done. §9 seque
 
 ## 5. R0 — the recorder (resolved)
 
-**The blocker.** An out-of-tree `ViewRetention` needs to record and replay a view's slice of the
-frame. That slice is not a handle; it is a protocol across eleven channels in
+**The blocker.** A retention mode's store — the part of the thread that lives outside this stack
+(§10's R2) — needs to record and replay a view's slice of the frame. That slice is not a handle; it is a protocol across eleven channels in
 `crates/gpui_authoring/src/window.rs:995` (`Frame`): hitboxes, tooltips (`:976`), deferred draws
 (`:981`, holding a frame-arena `AnyElement`), the dispatch tree, accessed element states, mouse
 listeners (type-erased closures), input handlers (the platform SPI), cursor styles, tab stops and
@@ -190,14 +190,11 @@ map from `ViewKey` to `ViewRecord`, so status quo stores nothing, A a tree, B si
 tree), and keeps the dirty-child-in-a-clean-parent splice inside authoring, where B's `splice.rs`
 case becomes the `children` callback rather than a public buffer operation.
 
-**Two entry points the first draft of this trait was missing**, both found by the R2 probe
-([`../decisions/retention-seam-probe.md`](../decisions/retention-seam-probe.md) §3). The notified set
-is the first: every `Window` field is `pub(crate)`, so an implementation handed a `&mut Window` can
-read nothing from it, and `begin_frame` has to be *given* the set. The second is the **root list** —
-A's `ViewTree` owns `roots`/`next_roots` and swaps them in its own `finish_frame`, while the frame's
-roots are also the window's, since the frame's events dispatch against them (R7). The trait reconciles
-roots but defines no interface for them, and the answer settled on below is that the roots are the
-window's.
+**One entry point the first draft of this trait was missing**, found by the R2 probe
+([`../decisions/retention-seam-probe.md`](../decisions/retention-seam-probe.md) §3): the notified set.
+Every `Window` field is `pub(crate)`, so an implementation handed a `&mut Window` can read nothing
+from it, and `begin_frame` has to be *given* the set. The probe's other gap — the root list — is
+settled below as the window's.
 
 ### The trait, at its smallest
 
@@ -293,7 +290,9 @@ cannot *host* a retained mode; Taffy (`crates/gpui_engine_default/src/layout.rs:
 `None` **degrades** to "retain render/prepaint/paint, relayout every frame". Placement falls out —
 `RetainedLayout` and `TextUse` in `gpui_engine`, which name no `EntityId`; `ViewRetention` and its
 vocabulary in `gpui_authoring`, where `EntityId` and `Window` live. **No vocabulary hoist is
-needed.**
+needed.** §9's fourth step adds one further capability to this same seam — reporting the layout nodes
+a relayout moved — and it is additive in the same way: an engine that reports them, and an engine that
+does not, for which the parent walk stays.
 
 ## 7. The walk, and the three axes together
 
@@ -305,20 +304,21 @@ outside the frame, where the changes it watches for happen.
 ```mermaid
 flowchart TD
     ask["a frame is asked for"] --> notified["the window's notified entities"]
-    notified --> dirty["ViewRetention: expand through the consumers map"]
+    notified --> begin["ViewRetention::begin_frame(notified)"]
+    begin --> dirty["expand through the consumers map"]
     dirty --> occ["the walk reaches a view occurrence"]
     occ --> key["resolve its ViewKey: element path, parent, nth"]
     key --> sensor["Reactivity::updated_since(reads, token)"]
     sensor --> reuse{"ViewRetention::reuse(key, sensor)"}
     reuse -->|"hit"| replay["replay_view_record(record, children)"]
-    reuse -->|"miss"| build["build the subtree, and record its ReadSet"]
+    reuse -->|"miss"| build["capture_view_record: build the subtree, record its ReadSet"]
     build --> text["TextSystem: a TextUse per phase"]
     build --> layout["LayoutEngine::retained: retain / layout_unchanged / relayout"]
     text --> store["ViewRetention::store(key, reads, record)"]
     layout --> store
     replay --> store
-    store --> reconcile["ViewRetention::finish_frame(live_roots): retire what did not survive"]
-    reconcile --> sweep["LayoutEngine::finish_frame: retire, sweep frame layout"]
+    store --> finish["ViewRetention::finish_frame(live_roots): retire what did not survive"]
+    finish --> sweep["LayoutEngine::finish_frame: retire, sweep frame layout"]
     sweep --> aging["TextSystem::finish_frame: age the line-layout cache"]
 ```
 
@@ -327,8 +327,8 @@ Read top to bottom, four things fall out.
 1. **A view has two ways to be dirtied, and the sensor is the second.** A routes a `notify`
    through the window's invalidator and the `consumers` map; that is the leftmost branch and it
    is unchanged. B adds a way a `notify` cannot express: something the view read moved without
-   one. The sensor is supplied to the question rather than held by the store — its state is the app's
-   and a store is one per window — so `reuse` decides on `changed` plus the store's own dirty set:
+   one. The sensor is handed to the question rather than held by the store — its state is the app's
+   and a store is one per window — so `reuse` decides on that answer plus the store's own dirty set:
    "has a notify, or an ancestor that must rebuild, reached this view". `Reactivity` is the second
    question only, and it stays out of the store's context.
 2. **The store answers; the sensor only reports.** "May this be replayed" is decided in
@@ -350,8 +350,9 @@ Read top to bottom, four things fall out.
    identity and stable cursors there is no flat buffer to cut a hole in (`view-retention.md` §5.4),
    which is the one place this document's vocabulary has to be kept apart from B's.
 
-**The three `finish_frame`s run in that order.** The store's reconciles the roots and *decides*
-what to retire; the layout engine's drops that and sweeps the frame-layout class R6 defines; the
+**The three `finish_frame`s run in that order.** The store's is handed the roots the frame attached
+and *decides* what to retire; the layout engine's drops that and sweeps the frame-layout class R6
+defines; the
 text system's ages the line-layout cache. Retiring before reconciling would drop a root a replay
 still re-attaches; aging the text cache before the sweep would drop a measurement the retirement
 is still reasoning about. A has the first two and not the third — its cache is one frame deep by
@@ -402,7 +403,8 @@ Both alternatives below come from the same instinct: retention's reuse unit is t
 inside it, the slot — and each wants a smaller one. The first reconciles *output* (compare the element
 tree with the last one and patch the difference). The second reconciles *input* (track dependencies
 per property rather than per view). The second is the better idea, and its problem is the more
-interesting one.
+interesting one. A third subsection asks whether the two can be *ordered* — the combined design as the
+cheap tier and each alternative as a fallback — and answers that they cannot.
 
 ### Diffing element trees is not the mechanism
 
@@ -509,7 +511,7 @@ Read as "where can the work be cut — nothing, a property, a structure, or ever
 are a real description, and two things in the sketch are worth keeping as framing rather than as
 mechanism. **Every tier produces the same shape of output**: whatever built the primitives, they are
 written contiguously at the frame's cursors, which is the discipline that retires buffer splicing. And
-**the post-walk lifecycle is shared** — §7's reconcile → sweep → age. So the continuum's two ends are
+**the post-walk lifecycle is shared** — §7's retire → sweep → age. So the continuum's two ends are
 the two things this document already has: AB at the top, status quo at the bottom.
 
 What it cannot do is *order the middle*. "If only leaf signals changed" is a test on the record, and
@@ -591,8 +593,8 @@ from A's branch.
 ## 10. Blockers resolved (as designed)
 
 The open items divide into three classes: fatal semantic hazards, frame-isolation invariants, and
-the deployment trade-offs. Each resolution below is a design, not code — and where one is taken
-from A or B rather than invented, it says so. Most of them are A's own remaining work, listed in
+the deployment trade-offs. Each is a design rather than code — bar R2, which is decided — and where
+one is taken from A or B rather than invented, it says so. Most of them are A's own remaining work, listed in
 its plan, which is why they read as workable rather than hypothetical.
 
 ```
@@ -679,11 +681,11 @@ Each is a channel of the frame, and each resolution is cited to the mode that ha
 **R2 — the ship decision, and the shape of the hook.** **Decided:**
 [`decisions/0003-retention-ships-as-a-seam.md`](../decisions/0003-retention-ships-as-a-seam.md), on
 the evidence of [`decisions/retention-seam-probe.md`](../decisions/retention-seam-probe.md). The seam
-ships in this stack; the modes do not. `ViewRetention` with its `Immediate` default is a fourth *open
-boundary* beside the three the stack has, and
+ships in this stack; the modes do not. `ViewRetention`, with no store installed by default, is a fourth
+*open boundary* beside the three the stack has, and
 [`decisions/0001-no-third-swap.md`](../decisions/0001-no-third-swap.md) is unamended, because a
-boundary whose default does nothing is what `FramePipeline` already is. A mode would be a *swap* — a published
-implementation of a published trait — and a swap is what 0001 bounds. The probe's deciding finding is that every
+an open boundary with no shipped swap is what `FramePipeline` already is. A mode would be a *swap* — a
+published implementation of a published trait — and a swap is what 0001 bounds. The probe's deciding finding is that every
 `Window` field is `pub(crate)`, so the seam's published surface is the *whole* API a mode gets and the
 seam cannot itself be out of tree. The hook follows the bootstrap seams already there:
 `with_layout_engine` (`crates/gpui_runtime/src/application.rs:92`) and `with_frame_pipeline`
@@ -754,7 +756,7 @@ work to implement rather than a trait to publish.
 
 The ship decision (R2) is taken, and it split the thread in two:
 [`decisions/0003-retention-ships-as-a-seam.md`](../decisions/0003-retention-ships-as-a-seam.md) adopts
-the *seam* — a fourth open boundary with an `Immediate` default, so
+the *seam* — a fourth open boundary with no store installed by default, so
 [`issues/0005-view-retention.md`](../issues/0005-view-retention.md) is no longer a choice between
 adopting, deferring and rejecting one thing — while the retaining *modes* ship out of tree. What stays
 open is the mode's own cost: R3–R13's work, of which A has begun most, and the two-column measurement

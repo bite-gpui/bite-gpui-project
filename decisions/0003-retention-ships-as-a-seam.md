@@ -11,13 +11,13 @@
 
 **The retention seam ships in this stack. The retaining modes do not.**
 
-A `ViewRetention` seam — the three axes, the two capabilities, the opaque `ViewRecord`, and an
-`Immediate` default that reuses nothing — is a fourth *open boundary* beside `LayoutEngine`,
-`TextSystem` and `FramePipeline`, bootstrapped by `Application::with_view_retention`.
+A `ViewRetention` seam — the three axes, the two capabilities, the opaque `ViewRecord`, and no store
+installed by default — is a fourth *open boundary* beside `LayoutEngine`, `TextSystem` and
+`FramePipeline`, bootstrapped by `Application::with_view_retention`.
 `PersistentTree`, `SideTables` and the AB recomposition ship out of tree, in a repository of their own.
 
-**`0001` is unamended.** It declines a third swap and a new version slot, and this adds neither: a
-boundary whose default does nothing is what `FramePipeline` already is.
+**`0001` is unamended.** It declines a third swap and a new version slot, and this adds neither: an
+open boundary with no shipped swap is what `FramePipeline` already is.
 
 ## Why
 
@@ -52,7 +52,6 @@ either way.
 - **An out-of-tree mode unable to keep up with the seam** — the same tail risk 0001 already records for
   `bite-gp-pass`: a boundary that moves under a consumer. If it bites, the answer is to stabilise the
   seam, not to adopt the mode.
-- **Evidence that `Immediate` is not a sufficient default** — that the stack cannot ship the seam alone
-  without also changing behaviour for consumers who never opt in. §6's degradation path says it can:
-  an engine whose `retained()` is `None`, and a store that always answers `None`, leave the
-  immediate-mode frame exactly as it is.
+- **Evidence that shipping the seam with no store is not neutral** — that a consumer who never opts in
+  sees a behaviour change. §6's degradation path says they cannot: an engine whose `retained()` is
+  `None`, and a window with no store installed, leave the immediate-mode frame exactly as it is.

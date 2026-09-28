@@ -41,9 +41,10 @@ Both from this probe, both additive, both seam-side:
   reads `take_views()` and passes it, so `begin_frame` takes `notified: &[EntityId]`. One argument, and
   the invalidator stays private.
 - **The root list.** A's `ViewTree` owns `roots`/`next_roots` and swaps them in `finish_frame`;
-  the frame's roots are also the window's, since events dispatch against them (R7). §5 reconciles roots
-  in `finish_frame` but defines no interface for them. **Fix:** either the store publishes its roots or
-  `Window` gains root attachment — additive either way, but §5 owes an answer.
+  the frame's roots are also the window's, since events dispatch against them (R7). §5's `finish_frame`
+  reconciles roots but defines no interface for them. **Fix:** §5 settles it as the window's — the walk
+  collects the roots it attached and hands `finish_frame` that list — which is less state in the seam
+  rather than more.
 
 Neither changes `Frame` and neither widens an existing trait, so both ship with the seam in either
 option.
@@ -63,7 +64,7 @@ as unnameable outside the crate.
 
 | what the seam adds | where | kind |
 | --- | --- | --- |
-| `ViewRetention`, `ViewKey`, `ReadSet`, `ViewRecord`, `Immediate` | `gpui_authoring` | new |
+| `ViewRetention`, `ViewKey`, `ReadSet`, `ViewRecord` | `gpui_authoring` | new |
 | `Window::capture_view_record` / `replay_view_record` | `gpui_authoring` | new methods |
 | the notified-set and root-list entry points | `gpui_authoring` | new methods (§3) |
 | factory field, `set_view_retention_factory` | `App` | new |
@@ -71,11 +72,11 @@ as unnameable outside the crate.
 | `RetainedLayout`, `LayoutEngine::retained()` | `gpui_engine` | new, defaulted |
 | text-use scopes on `TextSystem` | `gpui_engine` | new, defaulted |
 
-Additive throughout: no existing trait widened, `Frame` untouched, and an implementation that does
-nothing is the default. A seam with a no-op default and no shipped implementation is exactly what
-`FramePipeline` already is, and 0001 declines a third *swap*, not a fourth *open boundary*. A mode, by
-contrast, is a published implementation of a published trait — a swap by 0001's own definition, and
-therefore a version slot, which is the thing 0001 declined.
+Additive throughout: no existing trait widened, `Frame` untouched, and the default is no store at all
+rather than an implementation that does nothing. A seam with no shipped swap is what `FramePipeline`
+already is, and 0001 declines a third *swap*, not a fourth *open boundary*. A mode, by contrast, is a
+published implementation of a published trait — a swap by 0001's own definition, and therefore a
+version slot, which is the thing 0001 declined.
 
 **What would falsify that:** a mode needing something the seam cannot express without widening an
 existing trait or changing `Frame`. This probe found the two likely candidates and both resolved
