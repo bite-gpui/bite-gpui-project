@@ -17,7 +17,7 @@ The subfolders mirror the sources — `rendering/`, `authoring/`, `decisions/`,
 | here | is |
 | --- | --- |
 | [`rendering/README.md`](../rendering/README.md) | the chapter order, the trade-off, and the reconciliation |
-| [`rendering/renderer-seam.md`](../rendering/renderer-seam.md) | the seam: `PlatformRenderer`, the typed target, the factory, recovery, and the patch set |
+| [`rendering/renderer-seam.md`](../rendering/renderer-seam.md) | the seam: `PlatformRenderer`, the typed target, the factory, recovery, and the implementation order |
 | [`rendering/foreign-texture.md`](../rendering/foreign-texture.md) | Path A — importing a texture produced outside GPUI |
 | [`rendering/inline-commands.md`](../rendering/inline-commands.md) | Path B — drawing into the window's own pass |
 | [`rendering/verification.md`](../rendering/verification.md) | the matrix, and the platform each check needs |
@@ -26,7 +26,7 @@ The subfolders mirror the sources — `rendering/`, `authoring/`, `decisions/`,
 | [`decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) | the first measurement 0002 rests on |
 | [`decisions/shared-surface.md`](../../decisions/shared-surface.md) | the shared-buffer probe that reopens 0002 — Windows adoption and the macOS pool, token and fence measured; macOS adoption open |
 | [`decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md) | the measurement 0002's Windows clause rests on |
-| [`decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md) | the measurement patch 06 and renderer-seam §10 rest on |
+| [`decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md) | the measurement §6's macOS commit and §10 rest on |
 | [`architecture/frame-flow.md`](../../architecture/frame-flow.md) | where the seam is entered in a frame |
 | [`architecture/layer-stack.md`](../../architecture/layer-stack.md) | the ruling the extension has to clear |
 

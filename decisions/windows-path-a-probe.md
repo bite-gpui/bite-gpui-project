@@ -103,7 +103,7 @@ renderer (A), or it cannot, and a wgpu-rendered window does (B).
    `gpui_wgpu::WgpuRenderer`, create a texture on the renderer's own device, push the
    primitive, and assert the composite contains it. **Status: not run.** It is the
    acceptance test for the Windows configuration rather than a question about it, so it is
-   [`../spi/rendering/verification.md`](../spi/rendering/verification.md) §1's row for whoever builds the seam.
+   [`../spi/rendering/verification.md`](../spi/rendering/verification.md) §1's row for whoever builds Path A.
 
 **The success is narrower than it sounds — but not as narrow as this document first read
 it.** Probe 2 shows the *raw* D3D path works, for a producer that creates its own D3D12

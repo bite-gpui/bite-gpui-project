@@ -307,8 +307,9 @@ and throw it away).
 
 `WindowOptions` is destructured **exhaustively** at this site
 (`crates/gpui_authoring/src/window.rs:1726`), so a field added to it stops the build until the
-line forwarding it is written: patch 02 does not compile without patch 03. That is better than
-a test — the compiler is the check — and it is why the two land as one commit.
+line forwarding it is written: the options field does not compile without its forwarding
+line. That is better than a test — the compiler is the check — and it is why the two land as
+one commit.
 
 ### 5.6 Invoked once, so recovery must be self-sufficient
 
@@ -345,54 +346,50 @@ call, with the same resize, transparency and device-loss behaviour. Concretely: 
 difference is that the result is held as `Box<dyn PlatformRenderer>` instead of the
 concrete type.
 
-## 6. The upstream patch set
+## 6. The implementation
 
-The factory seam only. Every line is additive.
+Five commits, in merge order. Each reads on its own, and the order is the one the dependencies
+allow: the platform commits need the contracts and the factory first, and the macOS and Windows
+commits need the instance backends, so the shared pieces land before the platforms that extend
+them.
 
-| patch | file | change | size |
+| # | change | files | size |
 | --- | --- | --- | --- |
-| 01 | `crates/gpui_platform/src/platform_renderer.rs` | `PlatformRenderer`, the cfg-selected native traits, `RendererFactory`, `DynRendererFactory`, `FnRendererFactory`, `RendererTarget` | new file, ~90 LOC |
-| 02 | `crates/gpui_platform/src/window.rs` | `renderer_factory` on `WindowParams` and on `WindowOptions`, plus the builder (both `Debug`, hence the newtype) | ~6 LOC |
-| 03 | `crates/gpui_authoring/src/window.rs` | forward the field through `WindowHost::new` into the `open_window` call | ~6 LOC |
-| 04 | `crates/gpui_linux/src/linux/wayland/window.rs` | consult the factory, else `WgpuRenderer::new` | ~18 LOC |
-| 05 | `crates/gpui_linux/src/linux/x11/window.rs` | as 04 | ~18 LOC |
-| 06 | `crates/gpui_macos/src/window.rs` | as 04, else `renderer::new_renderer` (`:1100`) | ~20 LOC |
-| 07 | `crates/gpui_windows/src/window.rs` | as 04, else `DirectXRenderer::new` (`:145`) | ~20 LOC |
+| 1 | the contracts and the factory | `crates/gpui_platform/src/platform_renderer.rs` (new), `crates/gpui_platform/src/window.rs`, `crates/gpui_authoring/src/window.rs` | +187/−2 |
+| 2 | Linux | `crates/gpui_linux/src/linux/wayland/window.rs`, `crates/gpui_linux/src/linux/x11/window.rs`, and the wgpu renderer's own `PlatformRenderer` impl in `crates/gpui_wgpu` | +193/−23 |
+| 3 | Windows | `crates/gpui_windows/src/{window,events,directx_renderer}.rs`, `WinSceneRenderer`'s Windows-only methods, and `Backends::DX12` | +158/−38 |
+| 4 | macOS | `crates/gpui_macos/src/{window,platform}.rs`, `crates/gpui_apple/src/metal_renderer.rs`, and `Backends::METAL` | +93/−31 |
+| 5 | the test | `crates/gpui_authoring/src/platform/test/platform.rs`, `crates/gpui_authoring/src/app/test_context.rs` | +162/−3 |
 
-**Factory footprint: ~180 LOC across four backends.** The dual-path primitives are *not*
-in this budget: Path A adds a fragment path and a pipeline to two renderers — wgpu's batch arm
-is empty today (`crates/gpui_wgpu/src/wgpu_renderer.rs:1546`) and the only surface fragment
-that samples a non-atlas texture is a YCbCr one
+**Why these group this way.** The module, the two window-option fields and the forwarding line
+are one commit because they are not compiler-separable (§5.5). The wgpu renderer's
+implementation lands with Linux, because Linux is its first consumer; Windows then extends it
+with the hooks only Windows asks for. The instance's DX12 and METAL arms are split so each
+platform commit carries its own, rather than one commit enabling both for the other's benefit.
+
+**Factory footprint: ~180 LOC across four backends, plus the wgpu implementation.** The
+dual-path primitives are *not* in this budget: Path A adds a fragment path and a pipeline to
+two renderers — wgpu's batch arm is empty today (`crates/gpui_wgpu/src/wgpu_renderer.rs:1546`)
+and the only surface fragment that samples a non-atlas texture is a YCbCr one
 (`crates/gpui_wgpu/src/shaders.wgsl:1350`) — and Path B adds pause/restore to each. Neither is
-a patch to a `window.rs`, and keeping the two budgets separate is what the drafts' single
+a change to a `window.rs`, and keeping the two budgets separate is what the drafts' single
 "<150 LOC" claim obscured.
 
-Two things patch 07 needs that the factory does not cover, both measured after this section
-was written. `gpui_wgpu`'s instance is `Backends::VULKAN | Backends::GL`
+Two things the Windows commit needs that the factory does not cover, both measured after this
+section was written. `gpui_wgpu`'s instance is `Backends::VULKAN | Backends::GL`
 (`crates/gpui_wgpu/src/wgpu_context.rs:292`), which finds no adapter on Windows, so installing
 `WgpuRenderer` there also means enabling `Backends::DX12`; and the DX12 surface offers only
 `Opaque` alpha, so a window it renders cannot be transparent the way the default renderer's
 can. Both are in
 [`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md).
 
-## 7. Migration, in order
+## 7. What is left
 
-1. Add `PlatformRenderer` (with the cfg-selected native traits), `RendererTarget`, the
-   factory types and the `Debug` newtype to `gpui_platform`.
-2. Change each backend window's renderer field to `Box<dyn PlatformRenderer>`, move the
-   inherent methods of §3 onto the trait, and port the call sites. The Linux headless window
-   is the one that need not change: it holds a `HeadlessRenderer`
-   (`crates/gpui_linux/src/linux/headless/window.rs:57`) and never calls a method on it, and
-   a headless window has no native surface for a factory to be handed.
-3. Add `renderer_factory` to `WindowOptions`/`WindowParams` and the builder; forward it
-   through `WindowHost::new`; each backend consults it before its default.
-4. Add a test that installs a custom renderer through the factory, asserts its `draw` was
-   called, and asserts that omitting the call still draws.
+Landed as §6 lists. The Linux headless window is the one backend that did not change: it holds
+a `HeadlessRenderer` (`crates/gpui_linux/src/linux/headless/window.rs:57`) and never calls a
+method on it, and a headless window has no native surface for a factory to be handed.
 
-Step 4's pattern is already proven on one platform by `TestPlatform` (§4), so it is the
-first thing to port rather than the last.
-
-Two optional items, neither of which injection needs:
+Two optional items remain, neither of which injection needs:
 
 - **Move `DirectXRenderer` to a `gpui_directx` crate**, the way Metal moved to
   `gpui_apple` and wgpu already has its own; `gpui_windows` re-exports the few names it
@@ -402,10 +399,10 @@ Two optional items, neither of which injection needs:
 
 ## 8. What can be verified here, and what cannot
 
-Steps 1–4 are platform-agnostic in shape and land on the Linux and headless paths, which
-compile and run on this host; `TestPlatform` is the working proof the pattern holds. The
-macOS and Windows halves of step 2 need a macOS or Windows host — and so does the *only*
-thing that would catch a mis-wired native hook.
+The seam is platform-agnostic in shape and lands on the Linux and headless paths, which
+compile and run on this host; `TestPlatform` is the working proof the pattern holds, and §6's
+last commit runs it. The macOS and Windows halves need a macOS or Windows host — and so does
+the *only* thing that would catch a mis-wired native hook.
 
 The tools repository records that as a standing gap: every Linux gate can be green while
 a platform backend does not compile. It is closed by

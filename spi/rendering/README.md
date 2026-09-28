@@ -25,7 +25,7 @@ its own folder, because it is a surface an application meets rather than part of
 
 | chapter | subject |
 | --- | --- |
-| [`renderer-seam.md`](renderer-seam.md) | the seam: `PlatformRenderer`, the typed target, the factory, recovery, and the upstream patch set. `SceneRenderer` itself is unchanged |
+| [`renderer-seam.md`](renderer-seam.md) | the seam: `PlatformRenderer`, the typed target, the factory, recovery, and the implementation order. `SceneRenderer` itself is unchanged |
 | [`foreign-texture.md`](foreign-texture.md) | Path A: importing a texture produced outside GPUI, the erasure, the colour-space invariant, and what each platform can actually do |
 | [`inline-commands.md`](inline-commands.md) | Path B: drawing into the window's own pass, the pipeline-state isolation matrix, and the coordinate bridge |
 | [`verification.md`](verification.md) | what a test can assert, and which platform each check needs |
@@ -41,19 +41,24 @@ is the measurement its Windows clause rests on,
 [`../../decisions/shared-surface.md`](../../decisions/shared-surface.md) is the shared-buffer
 measurement that reopens it, and
 [`../../decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md) is
-what §6's patch 06 and §10 rest on.
+what §6's macOS commit and §10 rest on.
 [`rendering-project/`](../rendering-project/README.md) gathers symlinks to all of them.
 
 ## Status
 
-Specified, not implemented. None of the seam exists in the tree: there is no
-`crates/gpui_platform/src/platform_renderer.rs`, no `PlatformRenderer`, `RendererFactory`,
-`RendererTarget` or `ImportedTextureHandle`, no `renderer_factory` on `WindowParams` or
-`WindowOptions`, and no patch 04–07 in any backend's `window.rs` — that is the whole of §6
-of [`renderer-seam.md`](renderer-seam.md), unapplied. `SceneRenderer` is unchanged, as that
-chapter assumes: its only implementors are the four backends' renderers and the test and
-headless windows. Nothing here describes shipped behaviour, and the platform claims rest on
-the probes the chapters cite rather than on this branch.
+The seam is implemented on `bite_v1.22.0-pre-renderer-seam` (PR #4), unmerged: the contracts,
+the factory, and each backend's window, as §6 of [`renderer-seam.md`](renderer-seam.md) lists.
+`SceneRenderer` is unchanged, as that chapter assumes: its only implementors are the four
+backends' renderers and the test and headless windows.
+
+The dual-path primitives are not. Nothing imports a texture produced outside GPUI or draws an
+application's commands into the window's pass: there is no `CustomRenderPrimitive`, no
+`ImportedTextureHandle`, no `GpuCanvas`, and no renderer samples an RGBA foreign texture —
+Metal's `draw_surfaces` is the YCbCr video path, wgpu's arm is empty, and DirectX's returns an
+error. Those are [`foreign-texture.md`](foreign-texture.md) and
+[`inline-commands.md`](inline-commands.md), budgeted separately from §6.
+
+The platform claims rest on the probe printouts the chapters cite, not on this branch.
 
 ## How this set was reconciled
 
@@ -68,7 +73,7 @@ what each proposed, and what became of it.
 | draft | became |
 | --- | --- |
 | `dual-path-render-extension.md` — the RFC, transcribed as received | the shape of `foreign-texture.md` and `inline-commands.md` |
-| `scene-renderer-seam.md` | `renderer-seam.md` — its §3 (native hooks) and its migration order are kept; its §1 (widen the trait) and its process-wide factory (§2, §4, §5) are not |
+| `scene-renderer-seam.md` | `renderer-seam.md` — its §3 (native hooks) and the order it works in are kept; its §1 (widen the trait) and its process-wide factory (§2, §4, §5) are not |
 | `dual-path-ioc-architecture.md` | `renderer-seam.md` for the factory, the target and the trait, `foreign-texture.md` for the primitive; its finding that `PaintSurface` already half-exists is why Path A keeps that variant's shape rather than inventing one — though not its macOS-only YCbCr drawing, which [`foreign-texture.md`](foreign-texture.md) §1 states once |
 | `dual-path-implementation-spec.md` | `renderer-seam.md` (recovery), `foreign-texture.md` (colour space), `inline-commands.md` (state isolation), `verification.md` |
 | `wgpu-target-adaptors.md` | `renderer-seam.md` (the typed target), `foreign-texture.md` (HAL extraction), `inline-commands.md` (the coordinate bridge) |
@@ -189,7 +194,7 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
   and a same-adapter guarantee the same-device route does not need. Future work this milestone
   unblocks.
 - **Windows presentation for a non-D3D11 renderer.** Measured: `WgpuRenderer` can present
-  on a Windows window, on Direct3D 12 — which `gpui_wgpu` does not enable today, so patch 07
+  on a Windows window, on Direct3D 12 — which `gpui_wgpu` does not enable today, so the Windows commit
   is a backend change as well as plumbing — and the DX12 surface offers only `Opaque` alpha,
   so transparency is the one capability the default renderer has that this one does not.
   [`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md).

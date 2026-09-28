@@ -3,7 +3,7 @@
 - **Evidence for** [decision 0002](0002-render-extension-device-model.md) — item 2's Windows
   clause, that Path A and Path B there require installing `gpui_wgpu::WgpuRenderer`. Kept as
   evidence, not as a proposal: what the design does with the answer is
-  [`../spi/rendering/renderer-seam.md`](../spi/rendering/renderer-seam.md) §6's patch 07.
+  [`../spi/rendering/renderer-seam.md`](../spi/rendering/renderer-seam.md) §6's Windows commit.
 - **The question:** can `gpui_wgpu::WgpuRenderer` own a Windows window's presentation?
   **Answered: yes — on Direct3D 12, and not on the backends `gpui_wgpu` asks for today.**
 - **The probe** is the crate at `probes/windows-wgpu-present`, on `bite_v1.22.0-pre`
@@ -29,7 +29,7 @@ Three things follow, and the first is the one that would have cost a patch:
   `Backends::VULKAN | Backends::GL` (`crates/gpui_wgpu/src/wgpu_context.rs:292`) — right for
   Linux, and never run on Windows, where it finds no adapter at all: *"vulkan
   drivers/libraries could not be loaded ... dx12 not requested, gl found no adapters"*. So
-  `WgpuRenderer::new` fails on Windows **before** presentation is reached, and patch 07 is
+  `WgpuRenderer::new` fails on Windows **before** presentation is reached, and the Windows commit is
   not plumbing alone: `gpui_wgpu` has to enable `DX12` on Windows.
 - **Once it does, presentation works.** A surface built from `RawWindowHandle::Win32` over
   the `HWND` finds the DX12 adapter, configures, acquires a frame and presents it.
@@ -97,4 +97,4 @@ DX12 with the dcomp tree live: PRESENT OK
   [`../spi/rendering/verification.md`](../spi/rendering/verification.md) §1 describes rather
   than the capability list.
 - **Resize and device loss on the wgpu surface** — §1's rows, and the acceptance test for
-  patch 07 rather than a question about it.
+  the Windows commit rather than a question about it.

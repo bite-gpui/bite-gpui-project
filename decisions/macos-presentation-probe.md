@@ -1,7 +1,7 @@
 # Evidence: the macOS presentation probe
 
 - **Evidence for** [`../spi/rendering/renderer-seam.md`](../spi/rendering/renderer-seam.md) —
-  §6's patch 06 and §10's first reopen trigger, which it turns out not to fire. Kept as
+  §6's macOS commit and §10's first reopen trigger, which it turns out not to fire. Kept as
   evidence, not as a proposal: what the design does with the answer is that patch.
 - **The question:** can `gpui_wgpu::WgpuRenderer` present on a macOS window, and whose
   `CAMetalLayer` is the view's backing layer? **Answered: yes, on Metal — and the layer
@@ -32,7 +32,7 @@ Two findings, and the second corrects this spike's own prior:
   on Windows.** `Backends::VULKAN | Backends::GL` (`crates/gpui_wgpu/src/wgpu_context.rs:292`)
   cannot even create a surface here — *"Failed to create surface for any enabled backend"* —
   where on Windows it created one and then found no adapter. Either way `WgpuRenderer::new`
-  fails before a frame, so patch 06 needs `Backends::METAL` for the same reason patch 07 needs
+  fails before a frame, so the macOS commit needs `Backends::METAL` for the same reason the Windows one needs
   `Backends::DX12`. `GL` does **not** answer on macOS, which the spike listed as the thing to
   rule out.
 - **wgpu does not require the view to have a `CAMetalLayer`, and does not care about the
@@ -87,7 +87,7 @@ METAL, after the layer arrived: PRESENT OK
   `-[NSView makeBackingLayer]` return the renderer's layer
   (`crates/gpui_macos/src/window.rs:3237`), because wgpu neither needs that layer to be a
   `CAMetalLayer` nor minds when it arrives. Patch 06 is plumbing plus `Backends::METAL`, the
-  same shape as patch 07.
+  same shape as the Windows commit.
 - **A wgpu renderer need not vend a layer at all**, subject to §4's one unmeasured corner.
 - **Transparency is available here, unlike Windows:** `alpha_modes = [Opaque, PostMultiplied]`
   against the DX12 surface's `[Opaque]` only.
@@ -97,7 +97,7 @@ METAL, after the layer arrived: PRESENT OK
 - **A `makeBackingLayer` that returns nil.** The probe's layerless view is a plain `NSView`,
   which AppKit gives a default `CALayer`, so `raw-window-metal`'s `[view layer]` still finds
   one. A GPUI view overrides that method to return the *renderer's* pointer, which for a wgpu
-  renderer would be null — so patch 06 has to either keep `layer_ptr` non-null or stop
+  renderer would be null — so the macOS commit has to either keep `layer_ptr` non-null or stop
   returning it, and the probe narrows that decision without making it.
 - **Hardware.** Apple's paravirtual GPU is a real Metal device rather than a software one, but
   it is still one device.
