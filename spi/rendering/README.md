@@ -58,39 +58,38 @@ Metal's `draw_surfaces` is the YCbCr video path, wgpu's arm is empty, and Direct
 error. Those are [`foreign-texture.md`](foreign-texture.md) and
 [`inline-commands.md`](inline-commands.md), budgeted separately from §6.
 
+The seam's test runs for the pull requests: `bite-ci.yml`'s `tests` job runs
+`cargo test -p gpui_authoring --lib` on Linux, where the test lives.
+
 The platform claims rest on the probe printouts the chapters cite.
 
 ## Next
 
 Ordered by what unblocks what.
 
-1. **Make the citations canonical.** The seam merged into `bite_v1.22.0-pre`, which is the ref
-   `script/check-citations` resolves against, so the implementation now sits at the ref the
-   documents cite. Refresh the checkout, run the checker, and fix the lines the seam shifted —
-   the four backends' `window.rs`, `gpui_windows/src/events.rs`, `gpui_apple/src/metal_renderer.rs`
-   and `gpui_platform/src/window.rs`. §3's Windows rows and §5.2's `WinSceneRenderer` snippet
-   then take real citations instead of prose.
-2. **Run the tests on CI.** `bite-ci.yml` runs `cargo check` on macOS and Windows and the
-   distribution target-table check, and upstream's `run_tests.yml` is gated to the
-   `zed-industries`/`zed-extensions` owners, so it is skipped here: the seam's test passes
-   locally (`cargo test -p gpui_authoring --lib`, 346) and nothing runs it in CI. A Linux job
-   over the changed packages is the gap, and the point where a failure stops being hypothetical.
-3. **Path A** ([`foreign-texture.md`](foreign-texture.md)): the RGBA sampling fragment path and
+The first two items this list carried are done. The citations were re-pointed to the merged ref
+-- the merge moved lines in every file the chapters cite, and §3's Windows rows and §5.2 took
+real citations with them. And `bite-ci.yml` has a `tests` job: `cargo test -p gpui_authoring
+--lib` on Linux, 346 passing, which is the seam's test running for the pull requests rather
+than only locally. The job's filter is narrow; widening it to the changed packages is what is
+left of that item.
+
+1. **Path A** ([`foreign-texture.md`](foreign-texture.md)): the RGBA sampling fragment path and
    pipeline, `CustomRenderPrimitive` and `ImportedTextureHandle`, and the extractor. Its home in
    `gpui_wgpu` is the batch arm that is empty today.
-4. **Path B** ([`inline-commands.md`](inline-commands.md)): pause/restore in each renderer, the
+2. **Path B** ([`inline-commands.md`](inline-commands.md)): pause/restore in each renderer, the
    inline primitive, and the coordinate bridge.
-5. **A third-party renderer.** The point of the seam is that a renderer which is not a
+3. **A third-party renderer.** The point of the seam is that a renderer which is not a
    backend's can be installed — the test's recording renderer already is one. A Blade/Vulkan
    crate implementing `PlatformRenderer` is the affordance this was built for; the default-
    renderer question under Open is what would make it more than an affordance.
-6. **The deferred bridge** ([0002](../../decisions/0002-render-extension-device-model.md)): the
+4. **The deferred bridge** ([0002](../../decisions/0002-render-extension-device-model.md)): the
    cross-device shared-handle route is measured in
    [`shared-surface.md`](../../decisions/shared-surface.md) and deferred, and macOS adoption is
    the one corner left unmeasured.
 
-Porting the branch to the other targets is the replay in `tools`, and it wants step 1 done
-first.
+Porting the branch to the other targets is the replay in `tools`, and the canonical pass it
+wanted is done.
 
 ## How this set was reconciled
 
