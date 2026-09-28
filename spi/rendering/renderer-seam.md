@@ -77,6 +77,13 @@ two rows are genuinely native: the macOS window hosts a `CAMetalLayer` and hands
 (`crates/gpui_macos/src/window.rs:3237`), and the Windows window drives a
 DirectComposition visual tree.
 
+**The Windows row is not the whole story.** The implementation also needs two operations the
+design's table did not list, both native to Direct3D and both on `WinSceneRenderer` (§5.2)
+rather than the shared lifecycle: a `resize` that returns a `Result`, because a swap chain that
+cannot be resized is a failure the window acts on by invalidating the devices, and
+`mark_drawable`, the state a Direct3D renderer keeps between a device loss and the forced render
+that follows it.
+
 **The ruling this implies.** The first draft read this table as "widen `SceneRenderer`
 with the generalising rows, defaulted". That is not needed, and it costs something: the
 window is going to hold a `Box<dyn PlatformRenderer>` after this change, so every method
@@ -165,6 +172,8 @@ pub trait MacSceneRenderer: SceneRenderer {
 #[cfg(target_os = "windows")]
 pub trait WinSceneRenderer: SceneRenderer {
     fn set_background_appearance(&mut self, appearance: WindowBackgroundAppearance);
+    fn resize(&mut self, size: Size<DevicePixels>) -> anyhow::Result<()>;
+    fn mark_drawable(&mut self) {}
 }
 
 // The native hook as a supertrait, without a second copy of the lifecycle: a trait's
