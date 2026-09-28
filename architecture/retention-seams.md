@@ -290,6 +290,50 @@ rather than entity, not a third axis. **And `StrictNotify` is two empty bodies, 
 a `false`**, so the axis can cost nothing — which is what makes AB a recomposition of A's spine
 rather than a different engine.
 
+### A miss is not reconciled by diffing element trees
+
+The next idea a reader reaches for is to give each view a `VNode` tree, keep the previous one, and on
+a miss diff old against new to emit minimal layout, text and primitive patches — virtual-DOM
+diffing, scoped to the miss branch. It is recorded here as **not taken**, because the reasons against
+it are structural rather than a matter of taste, and it is the alternative that will otherwise be
+re-proposed.
+
+1. **There is no old tree to diff.** A node retains its *output record*, its Taffy root and its cache
+   key; it does not retain its elements. An element is `AnyElement(ArenaBox<dyn ElementObject>)`
+   (`element.rs:601`) — a type-erased arena object, neither `Clone` nor `PartialEq`, dropped with the
+   frame. The tree is consumed by the walk precisely so that it need not be kept, and a retained
+   element tree is the per-frame cost retention exists to avoid.
+2. **GPUI's elements are not comparable data, and a diff is made of comparison.** The erasure above
+   is what makes a props diff unworkable, and A says the same from the other side: `.cached()` is the
+   one place props equality exists, it is opt-in, and its own note is that it requires `PartialEq`
+   "since callbacks cannot be compared and a hand-written `PartialEq` has to choose to skip them".
+   The tree being diffed would therefore have to be a *different* element representation — a new
+   authoring model, against the aim of an unchanged upstream surface.
+3. **It is a third reconciliation mechanism over state this design already diffs, on inputs.**
+   `reuse`/`reuse_layout` compares a `ReadSet` and a cache key; B's layout node compares a style,
+   child and measurement fingerprint before writing Taffy at all; `.cached()` compares a value. All
+   three compare *inputs*, which are small comparable values. A `VNode` diff compares *outputs*,
+   which are the expensive thing to materialize — and on a miss, `render()` has already been run to
+   produce them.
+4. **A miss is already minimal, and the record's contents are deliberately opaque.** A rebuilt node
+   re-attaches its clean children as `Child(node, phase)` items, so a miss does not tear primitives
+   down and rebuild them from scratch. And R0 declined to publish the record's contents for the same
+   reason a patch list fails here: the transfer is move-based and order-sensitive. Patches that
+   borrow the record they are about to replace do not compile, which is that objection as a borrow
+   error rather than as an argument.
+
+What is right in that direction is already here, and it is the half worth keeping: **two levels of
+identity**. A `ViewKey` is macro identity — which mount, so a whole sub-view can replay — and element
+identity within a node is micro identity, `(node, Location::caller(), nth)`, overridden by an explicit
+key. That split is R4, and it is what keeps a reordered list from churning element state; B's keyed
+layout lookup for a `uniform_list` row without an `ElementId` is the same idea one level down. No tree
+diff is needed to say it.
+
+Two smaller corrections to that sketch, for the record: the sensor is **not** an O(1) early exit in
+general — B's test is a single `u64` compare only in the nothing-was-updated case, and scans the read
+set otherwise — and its `ReadSet` is `{entities, globals}`, a strict subset of §4's, which would
+reintroduce R3's untracked ambient inputs.
+
 ## 8. Blockers resolved (as designed)
 
 The open items divide into three classes: fatal semantic hazards, frame-isolation invariants, and
