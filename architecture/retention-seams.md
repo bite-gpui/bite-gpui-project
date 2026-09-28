@@ -397,6 +397,40 @@ rather than a subtree. That is the smallest useful piece of this direction, and 
 read re-parented from the view's `ReadSet` onto the slot, which is the authoring-model change in
 miniature.
 
+### What the continuum gets right, and what it cannot order
+
+Read as "where can the work be cut — nothing, a property, a structure, or everything", the four tiers
+are a real description, and two things in the sketch are worth keeping as framing rather than as
+mechanism. **Every tier produces the same shape of output**: whatever built the primitives, they are
+written contiguously at the frame's cursors, which is the discipline that retires buffer splicing. And
+**the post-walk lifecycle is shared** — §7's reconcile → sweep → age. So the continuum's two ends are
+the two things this document already has: AB at the top, status quo at the bottom.
+
+What it cannot do is *order the middle*. "If only leaf signals changed" is a test on the record, and
+the record's partition was written either by the author — an annotation no existing `render` uses — or
+by comparing the previous output with the new one, which is Tier 2's own work. So the chain cannot
+choose Tier 1 over Tier 2 at runtime; that choice was made in the authoring API, which is the second
+objection above. And Tier 2 is not viable at all, so a chain whose middle rung is missing is better
+read as what §10 already records: **AB, with status quo as the fallback**, and R13's boundary deciding
+where the top stops.
+
+Four specifics should not come back with it:
+
+- **The cost column conflates evaluation with the frame.** Tier 0 skips render, layout and shaping,
+  but the frame still sorts and gathers its lanes per primitive either way — which is why A's
+  reuse-shaped fixtures come out 23–64% faster and not 95% faster, and why `O(1)` is the wrong bound
+  for Tier 0.
+- **`primitives: Vec<u8>` on the record is the per-node scene buffer A deleted**, its ablation table
+  recording *"since removed: the frame is the cache, nothing is copied at paint"*.
+- **`ambient_mask: u32` masks R3's per-input identity into a bitfield**, so a hover entering one
+  hitbox while leaving another would dirty every hover reader.
+- **Tier 1's layout path needs a method the engine does not have.** A node's style is written when
+  `request_layout` builds it, and `LayoutEngine` has no per-node style mutation, so
+  `taffy.set_style(layout_id, …)` is a fourth capability on the published trait — an R1-shaped
+  addition on top of the partition and the patch protocol. Tier 3's `request_layout_keyed` is the
+  other direction: the method §6 removed, because the node owns the `LayoutId` that `request_layout`
+  returned and there is no key to pass.
+
 ## 9. Blockers resolved (as designed)
 
 The open items divide into three classes: fatal semantic hazards, frame-isolation invariants, and
