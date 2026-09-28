@@ -87,6 +87,56 @@ The four modes are corners of that space; §10 is the matrix. The point of the f
 row: **AB is A's spine with B's sensor**, so it is a recomposition rather than a third engine. §7
 shows where each axis is consulted, in one frame.
 
+### The mount the stack already has: `slot`
+
+Retention hangs a `ViewKey` on a *mount*, and the stack already has a second kind:
+`EntitySlotExt::slot` (`crates/gpui_authoring/src/elements/slot.rs:16`). It is the middle tier — finer
+than a view, coarser than a property — and it is the cheapest place to become retention-shaped,
+because it is **already a reuse boundary** and only has to become an *invalidation* boundary too.
+
+| it has today | where | what retention calls it |
+| --- | --- | --- |
+| an element id that is the root of its subtree's id space, "so an entity rendered twice in different places needs a slot id per place" | `crates/gpui_authoring/src/elements/slot.rs:16` | R4's occurrence, reached from the author's side |
+| a record keyed by the caller's `GlobalElementId` in the frame's element-state map — `prepaint_range`, `paint_range`, `ViewElementCacheKey`, `accessed_entities` | `view.rs:426` | the store's `ViewRecord`, but `pub(crate)` and index-based: §2's finding 4 |
+| a cache test of bounds, content mask, text style and `dirty_views.contains(its own entity)` | `view.rs:442` | a `ReadSet`, and the sensor's question |
+| contents laid out with `layout_as_root` and painted at an origin, while the parent gets an empty box sized by the slot's own style | `view.rs:459` | R6's orphan — and the reason the size has to be definite |
+| reads re-registered into the enclosing scope on a hit | `view.rs:448` | **the gap** |
+
+The last row is the inconsistency, and it is the same one the previous alternatives were about: **a
+slot reuses like a node and invalidates like an element.** Its subtree's reads are captured, but they
+are also registered outward — and under §5's `ViewRetention`, where a read belongs to the node that
+made it, they would land on the enclosing view's node. That is the bubbling A removed for child
+*views* ("the window's tracked entities now come from `consumers`"); a slot is not a view, so it has
+no scope of its own for them to land in. So what a slot's reads invalidate is the view around it.
+
+Five things make it consistent. §5 does not change for any of them — the slot is the same `ViewKey`
+axis at a second granularity, which is why this is the cheap direction rather than a fifth mode:
+
+1. **Node identity.** The second kind of mount, after `Entity<V: Render>`: an element that declares
+   itself one, with the `ViewKey` its `id` already is.
+2. **Reads scoped to it.** The `accessed_entities` it already keeps becomes its `ReadSet` rather than
+   being re-registered outward, so `consumers` points at the slot. This is also what would let a
+   slot's builder read a *model* and have that invalidate the slot: today only the slot's own entity
+   busts its cache, which is all its own test asserts.
+3. **Its layout root made a child of the slot's node**, rather than a detached root painted at an
+   origin. That is the same change that *relaxes the definite-size contract*: the contents are
+   detached today, which is why nothing can measure them, while a node owns a Taffy subtree and its
+   measurement — so a slot sized from its contents becomes measurable, with R5's caveat that a measure
+   closure which cannot be detached makes the node frame-bound.
+4. **Its record made the store's.** The prepaint/paint range pair stays inside authoring (R0); the slot
+   stops being an entry in the element-state map.
+5. **The inspector branch goes with R12**, not before it (`is_inspector_picking`,
+   `crates/gpui_authoring/src/elements/slot.rs:128`).
+
+**What this buys and what it does not — the honest version.** It makes the *attribution* right, which
+is a prerequisite for anything finer. It does **not** by itself stop the enclosing view re-rendering,
+and neither would a slot being a node: a dirty node rebuilds its ancestors, because a parent's output
+points into its children's ranges, so a replayed parent would replay a child's stale prepaint. A's own
+plan has the item that removes this — *"Fine-grained caching: a dirty descendant rebuilds through
+clean ancestors"* — and its two missing pieces are R7's captured ambient context at each child
+reference, and layout-change reporting from Taffy. So the slot work is the identity half and that item
+is the payoff half; a leaf change stays expensive until both are done.
+
 ## 5. R0 — the recorder (resolved)
 
 **The blocker.** An out-of-tree `ViewRetention` needs to record and replay a view's slice of the
@@ -393,9 +443,9 @@ subtree slot the stack already has. `slot`'s contract is that it must be given a
 because measuring would mean building it
 ([`reactive-layer.md`](reactive-layer.md) §"The contract that comes with it"); a slot whose builder
 returns a `T` — a colour, a string — has no such problem, and re-running it costs one closure call
-rather than a subtree. That is the smallest useful piece of this direction, and it still needs the
-read re-parented from the view's `ReadSet` onto the slot, which is the authoring-model change in
-miniature.
+rather than a subtree. That is the smallest useful piece of this direction, and it needs the read
+re-parented from the view's `ReadSet` onto the slot — which is §4's work on the slot, not an authoring
+change — plus somewhere for the `T` to go, which is.
 
 ### What the continuum gets right, and what it cannot order
 
