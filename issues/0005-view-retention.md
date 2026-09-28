@@ -121,7 +121,7 @@ The frequently quoted "60% → 15% CPU while scrolling" is **`gpui-fast`'s own t
 figure, on `gpui-fast`** (its README and PR #2), and the view tree's are paired criterion
 runs on its now-deleted branch. Neither is a measurement this stack has produced, and the
 harness that would produce one now exists upstream (`#64842`) rather than here.
-[`../../uses/README.md`](../../uses/README.md) §"Measurement policy" already rules on this shape:
+[`../../.uses/README.md`](../../.uses/README.md) §"Measurement policy" already rules on this shape:
 a number that appears in public has a committed, two-column benchmark here that produces
 it, with the run recorded. If the stack adopts retention, that benchmark has to be written,
 not quoted.
