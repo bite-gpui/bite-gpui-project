@@ -14,7 +14,7 @@
 | --- | --- |
 | the canonical ref, and what every citation resolves against | `bite_v1.22.0-pre`, tip `a2884d2de7` (the merge of #5) |
 | what the canonical ref already carries | the renderer seam (#4) and the fork's CI file (#5). **None** of Path A |
-| Path A, whole | `bite_v1.22.0-pre-path-a`, eleven commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
+| Path A, whole | `bite_v1.22.0-pre-path-a`, fourteen commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
 | the checkout the work is in | `.tools/worktrees/wt-seam` in the zed clone |
 | the other repositories, and what each is for | [`../../references.md`](../../references.md) |
 
@@ -30,7 +30,7 @@ canonical ref. `#6` is green on the fork's CI; what is left for it is the review
 | item | chapter | where it is | evidence |
 | --- | --- | --- | --- |
 | the renderer seam: `PlatformRenderer`, the typed `RendererTarget`, the factory, the native hooks | [`renderer-seam.md`](renderer-seam.md) | the canonical ref | PR #4 |
-| the offscreen contract: the three methods ungated, `render_scene` split from `read_pixels`, `PixelBuffer` in place of `image::RgbaImage` | [`renderer-seam.md`](renderer-seam.md) §4 | `bite_v1.22.0-pre-path-a` | `gpui_engine`'s 7 tests, ubuntu CI |
+| the offscreen contract: the three methods ungated, `render_scene` split from `read_pixels`, `PixelBuffer` in place of `image::RgbaImage`, and all three renderers implementing it in the same shape | [`README.md`](README.md) | `bite_v1.22.0-pre-path-a` | `gpui_engine`'s 7 tests, ubuntu CI. Direct3D's "offscreen" is its window's swap chain — it has no headless constructor — so its `render_scene` is "rendered and not presented", which is what its rows already build a hidden window for |
 | Path A's scene half: `CustomRenderPrimitive::Texture`, `ImportedTextureHandle`, `to_quad_record`, `ObservingRenderer` | [`foreign-texture.md`](foreign-texture.md) | same branch | `cargo test -p gpui_engine --lib` |
 | Path A's authoring half: `Window::paint_imported_texture`, `painted_imported_textures` | [`foreign-texture.md`](foreign-texture.md) §3 | same branch | the radii row in `gpui_authoring`'s 347 tests |
 | the wgpu arm, the offscreen target and the readback | [`foreign-texture.md`](foreign-texture.md) §7 | same branch | 3 rows — the sRGB round trip, the ordering, the device identity — skipped with a logged warning where the machine has no adapter |
@@ -55,12 +55,6 @@ Small and independent, and none of them blocks anything in §4.
   resource does not expose the device that made it. So on macOS that half of the rule rests on the
   application; it is not closable by writing code
   ([`producer-reach.md`](producer-reach.md) §3).
-- **`DirectXRenderer`'s offscreen override is test-gated.** In `crates/gpui_windows/src/directx_renderer.rs`
-  it overrides only `render_scene_to_image`, under `#[cfg(any(test, feature = "test-support"))]`, so
-  in a normal build the Direct3D renderer reports offscreen rendering unsupported and implements
-  neither `render_scene` nor `read_pixels`. `WgpuRenderer` overrides all three ungated; the Direct3D
-  renderer should have the same shape. It is not on Path A's route — a producer renders into its own
-  texture — so it sits below the first two.
 - **The pull-request test job's filter is narrow.** `bite-ci.yml`'s `tests` job runs
   `cargo test -p gpui_authoring -p gpui_engine --lib` and nothing else, so every other crate's tests
   are local-only — `gpui_wgpu`'s need a GPU adapter, and its older tests fail rather than skip
@@ -77,9 +71,9 @@ three renderers, so the decision that was M1's first step is taken and the acces
 each platform still lacks is [`producer-reach.md`](producer-reach.md) §7, and none of it blocks
 anything below.
 
-**M2 — the gaps in §3. Mostly done.** The Metal token builder, the exact encoder and the arm's first
-two rows landed with the reach. What is left of M2 is the offscreen gate on Direct3D and, if it is
-wanted, a wider test filter.
+**M2 — the gaps in §3. Done for Path A.** The Metal token builder, the exact encoder, the arm's two
+rows, the Direct3D renderer's offscreen shape, and the wgpu token's reach through the facade all
+landed. What is left in §3 is the test filter and the citation churn, neither of which is Path A.
 
 **M3 — `GpuCanvas`.** [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md). The surface an
 application meets; with M1 built, the token its callback returns is one an application can

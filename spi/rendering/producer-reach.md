@@ -63,7 +63,7 @@ that was handed nothing still reads `device` and `queue` out of the same place.
 
 | renderer | device it lends | token builder an application can name | tested |
 | --- | --- | --- | --- |
-| `WgpuRenderer` | the shared `GpuContext` slot — both `device` and `queue` | `gpui_wgpu::ImportedTextureExt` on a `wgpu::TextureView`, which checks the view samples as sRGB and the texture is a `TEXTURE_BINDING` | 3 rows, run locally only |
+| `WgpuRenderer` | the shared `GpuContext` slot — both `device` and `queue` | `gpui::ImportedTextureExt` — `gpui_wgpu`'s trait, re-exported by the platform crate the way the other two are — on a `wgpu::TextureView`, which checks the view samples as sRGB and the texture is a `TEXTURE_BINDING` | 3 rows, run locally only |
 | `MetalRenderer` | its `MTLDevice` | `gpui::MetalTextureExt` on a `metal::TextureRef`, which checks the declaration is sRGB and the usage includes `ShaderRead` | 2 rows, `macos-14` |
 | `DirectXRenderer` | its `ID3D11Device` | `gpui::DirectXTextureExt` on an `ID3D11Texture2D`, which checks `B8G8R8A8` and `SHADER_RESOURCE` | 3 rows, `windows-latest` |
 
@@ -157,8 +157,10 @@ The reach is built everywhere; the gaps are not the same gap.
 - **Linux / `WgpuRenderer` — complete in tree, ungated in CI only.** The three rows pass on a Linux
   host that has an adapter and are excluded from CI, because they need that adapter and
   `gpui_wgpu`'s older tests fail rather than skip without one
-  ([`milestones.md`](milestones.md) §3). Nothing else is missing: the accessor hands over the slot
-  and `ImportedTextureExt` builds the token from a view.
+  ([`milestones.md`](milestones.md) §3). Nothing else is missing: the accessor hands over the slot,
+  `ImportedTextureExt` builds the token from a view, and Linux reaches it as
+  `gpui::ImportedTextureExt` — `gpui_linux` re-exports it for the reason `gpui_macos` re-exports
+  Metal's.
 - **Windows / `DirectXRenderer` — complete for a Direct3D 11 producer**, which is what a Media
   Foundation or DXVA decoder is: `device_any` hands it the device the platform built, so a texture
   made on that device needs no handle and nothing to synchronise. A **wgpu** producer under this
@@ -187,7 +189,10 @@ The reach is built everywhere; the gaps are not the same gap.
   high-level door, but nothing has run it. That is a second measurement beside §6's, not code.
 - **The payload types are a published surface, and the versions come with them.** An application
   that downcasts `device_any`'s answer to `ID3D11Device` or `metal::Device` has to depend on the
-  same crate version the backend does, and build a token with a type the backend publishes
-  (`DirectXTextureExt`, `ImportedTextureExt`, `MetalTextureExt`). That is the commitment
+  same crate version the backend does, and build a token with a type the backend publishes. All
+  three are reachable from the facade as `gpui::ImportedTextureExt`, `gpui::DirectXTextureExt` and
+  `gpui::MetalTextureExt` — except on Windows, where a factory-installed `WgpuRenderer` takes its
+  token from `gpui_wgpu` directly, because that is the crate the renderer comes from. That is the
+  commitment
   [`0004`](../../decisions/0004-producer-device-rendezvous.md) names under "what would reopen this",
   and it is why [`foreign-texture.md`](foreign-texture.md) §8 keeps the payload question open.

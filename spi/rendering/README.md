@@ -62,11 +62,16 @@ Direct3D — and the producer's reach, so an application can obtain the device i
 as well as paint one. None of it is on the canonical ref: there Metal's `draw_surfaces` is still
 the YCbCr video path and wgpu's arm is untouched.
 
+What that adds up to is that the three consumer arms and the three producers are level: each
+renderer samples an RGBA foreign texture, lends its device, has a token builder an application names
+as `gpui::…` — the wgpu one through the platform crate, the Direct3D one not at all when the window
+installed `WgpuRenderer` — and implements the offscreen contract, which Direct3D was the last to do.
+
 What that still does not add up to is Path A being *finished*, and
 [`producer-reach.md`](producer-reach.md) is where the remainder lives: two producer routes that need
-a measurement rather than code, and the same-device rule's enforcement on macOS, which no code can
-supply. `GpuCanvas` is unwritten too, and [`inline-commands.md`](inline-commands.md) is still
-nothing but a proposal.
+a measurement rather than code — one of them now probed — and the same-device rule's enforcement on
+macOS, which no code can supply. `GpuCanvas` is unwritten too, and
+[`inline-commands.md`](inline-commands.md) is still nothing but a proposal.
 
 The offscreen mode is the change with reach beyond Path A — `PixelBuffer` is the contract's pixel
 type now, and rendering is separate from reading back — so [`verification.md`](verification.md) §2
@@ -83,9 +88,9 @@ The ordered plan is [`milestones.md`](milestones.md): what is built and where, w
 what order, and the gates a resumer runs. It is there rather than here because the list below had
 grown past what an index should carry, and two copies of a plan are two copies to keep in step.
 
-In one line, the order is: the **gaps beside the reach** — the offscreen gate on Direct3D, and a
-probe for the two producer routes — then `GpuCanvas`, the surface an application meets; then Path B,
-which is independent of all of it; then a third-party renderer; then the deferred bridge, which
+In one line, the order is: **`GpuCanvas`**, the surface an application meets — the three arms and
+the three producers are level, so what is left beside them is a probe rather than code; then Path
+B, which is independent of all of it; then a third-party renderer; then the deferred bridge, which
 needs a probe before it needs a decision. The producer's reach and the three arms are built, and are
 no longer on the list.
 

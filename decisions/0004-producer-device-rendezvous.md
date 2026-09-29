@@ -32,10 +32,13 @@ installed that is not the backend's own, has nothing to lend.
 The accessor is half of the reach; the other half is the **token builder**, and it ships the same
 way. `ImportedTextureExt`, `DirectXTextureExt` and `MetalTextureExt` are each defined in the crate
 that names the API — which is also where the payload is downcast — and re-exported through the
-facade, so an application depends on one crate and writes `gpui::DirectXTextureExt` or
-`gpui::MetalTextureExt`. They are not traits *for* `Window`, so the orphan rule that decides the
-accessor's home does not constrain them; what they add to the decision is that the per-backend
-payload types become published surface, which "what would reopen this" names.
+facade, so an application writes `gpui::ImportedTextureExt`, `gpui::DirectXTextureExt` or
+`gpui::MetalTextureExt`. The one exception is a Windows window whose factory installed
+`WgpuRenderer` rather than the platform's own renderer: that one takes its token from `gpui_wgpu`,
+the crate the renderer comes from, because none of the platform crates depend on it. They are not
+traits *for* `Window`, so the orphan rule that decides the accessor's home does not constrain them;
+what they add to the decision is that the per-backend payload types become published surface, which
+"what would reopen this" names.
 
 ## Why
 
