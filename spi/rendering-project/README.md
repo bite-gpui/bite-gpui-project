@@ -30,6 +30,7 @@ The subfolders mirror the sources — `rendering/`, `authoring/`, `decisions/`,
 | [`decisions/shared-surface.md`](../../decisions/shared-surface.md) | the shared-buffer probe that reopens 0002 — Windows adoption and the macOS pool, token and fence measured; macOS adoption open |
 | [`decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md) | the measurement 0002's Windows clause rests on |
 | [`decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md) | the measurement §6's macOS commit and §10 rest on |
+| [`decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md) | the measurement that answers Path A's macOS producer route — wgpu's adapter *is* the `MetalRenderer`'s device |
 | [`architecture/frame-flow.md`](../../architecture/frame-flow.md) | where the seam is entered in a frame |
 | [`architecture/layer-stack.md`](../../architecture/layer-stack.md) | the ruling the extension has to clear |
 

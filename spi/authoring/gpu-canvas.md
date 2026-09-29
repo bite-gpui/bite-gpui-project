@@ -9,6 +9,10 @@
 - **What it is:** the end-user surface. The seam's primitive is a scene type; the person
   who wants a map inside a `div()` should never meet the `Element` trait, and this is the
   shape that keeps them from meeting it.
+- **The hand-rolled version exists**, which is what makes the element the next step rather than a
+  hypothesis: `crates/gpui/examples/path_a.rs` on `bite_v1.22.0-pre-path-a` does by hand what §3
+  describes — compose a `div()`, paint an imported texture, let an ordinary box over it — so what
+  `GpuCanvas` adds is the spelling, not a capability.
 
 ## 1. The cost it absorbs
 

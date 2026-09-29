@@ -70,7 +70,7 @@ Producer and consumer must be the **same device**, not merely the same API:
 | --- | --- | --- |
 | wgpu → `WgpuRenderer` (Linux, and Windows with it installed) | `wgpu::TextureView` | the same `wgpu::Device`; wgpu validates and rejects a mismatch |
 | Direct3D 11 (Media Foundation, DXVA, a D3D11 engine) → `DirectXRenderer` (Windows default) | the `ID3D11Texture2D` itself, and no handle | the same `ID3D11Device` — the one [`producer-reach.md`](producer-reach.md) has the window lend — and Direct3D enforces it by name: the renderer's `CreateShaderResourceView` refuses a resource another device made |
-| a Metal producer, or a wgpu one on GPUI's own `MTLDevice` → GPUI's Metal renderer (macOS) | the raw `id<MTLTexture>` | the same GPU. The device is lent and the token comes from `MetalTextureExt`, which checks the declaration the sampler needs — but Metal is the one platform that cannot *enforce* the device half: a resource does not expose the device that made it, so a texture from another device composites rather than failing ([`producer-reach.md`](producer-reach.md) §7) |
+| a Metal producer, or a wgpu one — Linux's arms minus the slot — → GPUI's Metal renderer (macOS) | the raw `id<MTLTexture>` | the same GPU, and on macOS that is the same *object*: wgpu's adapter is the `MTLDevice` `MetalRenderer` created, pointer for pointer ([`../decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md)). The device is lent and the token comes from `MetalTextureExt`, which checks the declaration the sampler needs — but Metal is the one platform that cannot *enforce* the device half: a resource does not expose the device that made it, so a texture from another device composites rather than failing ([`producer-reach.md`](producer-reach.md) §7) |
 | wgpu (D3D12) → GPUI's `DirectXRenderer` (D3D11, Windows default) | *none, this milestone* | **out of scope** for a *wgpu* producer — a shared handle would bridge it as future work, so a window with one installed uses `WgpuRenderer` instead. A Direct3D 11 producer needs no bridge, and the second row is it |
 
 The last row is the one that moved. It was *impossible*, on the reading that wgpu offers
@@ -332,7 +332,8 @@ of `draw_surfaces` — so there is no second pass and no intermediate target.
 
 - **How a producer reaches the device — closed.** `Window::device_any` and a token builder on each of
   the three arms are built, and [`0004`](../../decisions/0004-producer-device-rendezvous.md) is the
-  decision; what is left of it is the two producer routes that need a measurement,
+  decision; what is left of it is one producer route that still needs a measurement — Windows's Tier
+  2 bridge — beside macOS's, which the producer probe answered,
   [`producer-reach.md`](producer-reach.md) §7.
 - **The erasure vs a cfg-gated `wgpu` in the engine** (§3). Recommendation: erasure, and
   it is the same argument the target's typing rests on, applied from the other side.

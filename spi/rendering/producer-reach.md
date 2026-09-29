@@ -1,7 +1,7 @@
 # The producer's reach
 
 - **Status:** built. The whole of Path A is on `bite_v1.22.0-pre-path-a` (PR #6), and the accessor a
-  producer reaches the device through is its last commit; the decision behind that accessor is
+  producer reaches the device through is built on it; the decision behind that accessor is
   [`0004`](../../decisions/0004-producer-device-rendezvous.md), decided. What each platform's
   producer half still lacks is §7, and it is not the same gap anywhere.
 - **Assumes:** [`foreign-texture.md`](foreign-texture.md) — the primitive, the token, and what a
@@ -32,8 +32,8 @@ of the primitive, so no chapter about the primitive answers it.
 | --- | --- | --- |
 | the primitive, the token, the encoder both shaders read | `crates/gpui_engine/src/custom_render.rs` | built, `bite_v1.22.0-pre-path-a` |
 | the window call | `Window::paint_imported_texture`, `crates/gpui_authoring/src/window.rs` | built, same branch |
-| the arm, per renderer | wgpu, Direct3D, Metal | built; wgpu and Direct3D have rows on CI, Metal has none |
-| the producer's reach | `Window::device_any` and the per-backend token builder | built for wgpu and Direct3D; Metal lends its device and has no builder (§7) |
+| the arm, per renderer | wgpu, Direct3D, Metal | built, all three: Direct3D's rows and Metal's run on CI, wgpu's only where the machine has an adapter |
+| the producer's reach | `Window::device_any` and the per-backend token builder | built, all three; what each platform still lacks is §7, and it is not the same gap anywhere |
 
 ## 2. One rendezvous, two directions
 
@@ -179,14 +179,19 @@ The reach is built everywhere; the gaps are not the same gap.
   `MacSceneRenderer` and `WgpuRenderer` has no `layer_ptr`. So a macOS window's consumer is always
   `MetalRenderer` and its token is always the raw handle — which is why the builder was the whole of
   the gap rather than one of two ways around it.
-- **A wgpu producer on macOS is unmeasured, and it is the same probe as §6's.** A producer that
-  renders with wgpu does not need `WgpuRenderer` in the window; it needs its wgpu device to *be*
-  GPUI's `MTLDevice`, so the texture it makes is visible to the Metal renderer that samples the raw
-  handle. `wgpu-hal` has the pieces — `Adapter::expose` over a raw device
-  (`wgpu-hal-29.0.4/src/metal/mod.rs:424`), `Device::device_from_raw`
-  (`wgpu-hal-29.0.4/src/metal/device.rs:376`) and `Device::texture_from_raw` (`:358`) — and
-  `wgpu::Instance::create_adapter_from_hal` (`wgpu-29.0.4/src/api/instance.rs:390`) is the
-  high-level door, but nothing has run it. That is a second measurement beside §6's, not code.
+- **A wgpu producer on macOS needs no handover — measured, not argued.** A producer that renders with
+  wgpu does not need `WgpuRenderer` in the window; it needs its wgpu device to *be* GPUI's `MTLDevice`,
+  so the texture it makes is visible to the Metal renderer that samples the raw handle. It is: wgpu's
+  adapter on macOS is the `MTLDevice` `MetalRenderer` created, **pointer for pointer**, under every
+  power preference, and a `Bgra8UnormSrgb` texture wgpu made — filled both ways a producer would, a
+  `write_texture` copy and a render-pass clear — was sampled through `MetalTextureExt` and read back
+  byte for byte
+  ([`../decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md)). So
+  the route needs neither `Device::device_from_raw` (`wgpu-hal-29.0.4/src/metal/device.rs:376`) nor
+  `wgpu::Instance::create_adapter_from_hal` (`wgpu-29.0.4/src/api/instance.rs:390`) — a power
+  preference is the whole of it, because `AdapterShared::expose` is private and a device can be
+  enumerated but not *addressed*. What that leaves unmeasured is a two-GPU Mac, and it is why the
+  finding is load-bearing rather than convenient: there the preference is still the only lever.
 - **The payload types are a published surface, and the versions come with them.** An application
   that downcasts `device_any`'s answer to `ID3D11Device` or `metal::Device` has to depend on the
   same crate version the backend does, and build a token with a type the backend publishes. All

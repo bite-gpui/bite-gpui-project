@@ -33,7 +33,7 @@ its own folder, because it is a surface an application meets rather than part of
 | [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 
-Six documents outside this folder are part of the work rather than of the design:
+Seven documents outside this folder are part of the work rather than of the design:
 [`../../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)
 decides which devices a producer may use and
 [`../../decisions/0004-producer-device-rendezvous.md`](../../decisions/0004-producer-device-rendezvous.md)
@@ -45,7 +45,9 @@ is the measurement its Windows clause rests on,
 [`../../decisions/shared-surface.md`](../../decisions/shared-surface.md) is the shared-buffer
 measurement that reopens it, and
 [`../../decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md) is
-what §6's macOS commit and §10 rest on.
+what §6's macOS commit and §10 rest on, and
+[`../../decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md) is
+the producer probe, which answers §2's macOS row.
 [`rendering-project/`](../rendering-project/README.md) gathers symlinks to all of them.
 
 ## Status
@@ -67,11 +69,18 @@ renderer samples an RGBA foreign texture, lends its device, has a token builder 
 as `gpui::…` — the wgpu one through the platform crate, the Direct3D one not at all when the window
 installed `WgpuRenderer` — and implements the offscreen contract, which Direct3D was the last to do.
 
+A runnable demo ties the two halves together: `cargo run -p gpui --example path_a` on
+`bite_v1.22.0-pre-path-a` asks the window for its device, refills a texture on it every frame, hands
+the renderer a token from a paint callback, and paints an ordinary `div()` over the composite. Its
+producer differs per platform, because the renderer does — wgpu on Linux and macOS, Direct3D 11 on
+Windows.
+
 What that still does not add up to is Path A being *finished*, and
-[`producer-reach.md`](producer-reach.md) is where the remainder lives: two producer routes that need
-a measurement rather than code — one of them now probed — and the same-device rule's enforcement on
-macOS, which no code can supply. `GpuCanvas` is unwritten too, and
-[`inline-commands.md`](inline-commands.md) is still nothing but a proposal.
+[`producer-reach.md`](producer-reach.md) is where the remainder lives: the Windows bridge —
+[0002](../../decisions/0002-render-extension-device-model.md)'s deferred tier, which needs a
+measurement before it needs code — and the same-device rule's enforcement on macOS, which no code can
+supply at all. The macOS producer route was a third, and it is measured now. `GpuCanvas` is
+unwritten too, and [`inline-commands.md`](inline-commands.md) is still nothing but a proposal.
 
 The offscreen mode is the change with reach beyond Path A — `PixelBuffer` is the contract's pixel
 type now, and rendering is separate from reading back — so [`verification.md`](verification.md) §2
@@ -88,11 +97,11 @@ The ordered plan is [`milestones.md`](milestones.md): what is built and where, w
 what order, and the gates a resumer runs. It is there rather than here because the list below had
 grown past what an index should carry, and two copies of a plan are two copies to keep in step.
 
-In one line, the order is: **`GpuCanvas`**, the surface an application meets — the three arms and
-the three producers are level, so what is left beside them is a probe rather than code; then Path
+In one line, the order is: **`GpuCanvas`**, the surface an application meets — the three arms, the
+three producers and the demo are level, so what is left beside them is the canvas itself; then Path
 B, which is independent of all of it; then a third-party renderer; then the deferred bridge, which
-needs a probe before it needs a decision. The producer's reach and the three arms are built, and are
-no longer on the list.
+needs a probe before it needs a decision. The producer's reach, the three arms and the macOS probe
+are done, and are no longer on the list.
 
 The list this section used to hold is closed. The citations were re-pointed to the merged ref — the
 merge moved lines in every file the chapters cite, and §3's Windows rows and §5.2 took real
