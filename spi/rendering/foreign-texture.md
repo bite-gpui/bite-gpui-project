@@ -70,7 +70,7 @@ Producer and consumer must be the **same device**, not merely the same API:
 | --- | --- | --- |
 | wgpu → `WgpuRenderer` (Linux, and Windows with it installed) | `wgpu::TextureView` | the same `wgpu::Device`; wgpu validates and rejects a mismatch |
 | Direct3D 11 (Media Foundation, DXVA, a D3D11 engine) → `DirectXRenderer` (Windows default) | the `ID3D11Texture2D` itself, and no handle | the same `ID3D11Device` — the one [`producer-reach.md`](producer-reach.md) has the window lend — and Direct3D enforces it by name: the renderer's `CreateShaderResourceView` refuses a resource another device made |
-| wgpu (Metal backend) → GPUI's Metal renderer (macOS) | the raw `id<MTLTexture>` | the same GPU; a raw driver handle bypasses wgpu's bookkeeping. The device is lent, and the token is built by hand — [`producer-reach.md`](producer-reach.md) §7 |
+| a Metal producer, or a wgpu one on GPUI's own `MTLDevice` → GPUI's Metal renderer (macOS) | the raw `id<MTLTexture>` | the same GPU. The device is lent and the token comes from `MetalTextureExt`, which checks the declaration the sampler needs — but Metal is the one platform that cannot *enforce* the device half: a resource does not expose the device that made it, so a texture from another device composites rather than failing ([`producer-reach.md`](producer-reach.md) §7) |
 | wgpu (D3D12) → GPUI's `DirectXRenderer` (D3D11, Windows default) | *none, this milestone* | **out of scope** for a *wgpu* producer — a shared handle would bridge it as future work, so a window with one installed uses `WgpuRenderer` instead. A Direct3D 11 producer needs no bridge, and the second row is it |
 
 The last row is the one that moved. It was *impossible*, on the reading that wgpu offers
@@ -242,17 +242,16 @@ The fixture in [`verification.md`](verification.md) §1 is what verifies the rul
 reads the format from the consumer, so it needs the fragment path to exist first, and on
 `bite_v1.22.0-pre-path-a` it does.
 
-**That the round trip is the identity depends on the encoder, and one of the three is approximate.**
-The two same-device arms differ in how much of the transfer they have to undo. *wgpu's* requires an
-sRGB view, so the sampler decodes to linear and the fragment re-encodes with the exact piecewise
-transfer (`crates/gpui_wgpu/src/shaders.wgsl:224`) — the round trip is the identity on sRGB bytes.
-*Direct3D's* takes the non-sRGB counterpart of the same texture and writes the sample straight
-through, so there is no transfer function to cancel at all. *Metal's* decodes like wgpu's, but
-`linear_to_srgb` in `crates/gpui_apple/src/shaders.metal` is `pow(color, 1/2.2)`
-(`crates/gpui_apple/src/shaders.metal:954`) — the ≈2.2 approximation, the only encoder that file
-has — so a producer's bytes come back near the ones it wrote rather than equal to them. It is the
-one colour answer of the three that is not exact, and the Metal arm has no test to catch it; §8
-keeps it open.
+**All three arms are exact now, and they differ in how much of the transfer they have to undo.**
+*wgpu's* requires an sRGB view, so the sampler decodes to linear and the fragment re-encodes with
+the exact piecewise transfer (`crates/gpui_wgpu/src/shaders.wgsl:224`) — the round trip is the
+identity on sRGB bytes. *Direct3D's* takes the non-sRGB counterpart of the same texture and writes
+the sample straight through, so there is no transfer function to cancel at all. *Metal's* also
+requires an sRGB view and decodes like wgpu's; its fragment re-encodes through
+`linear_to_srgb_exact`, the piecewise curve, rather than through the ≈2.2 approximation that file's
+`linear_to_srgb` is (`crates/gpui_apple/src/shaders.metal:954`). The approximation is what the
+rest of the Metal pipeline uses and what the UI's look was built on, so the imported path has an
+encoder of its own rather than changing it under everything else.
 
 ## 5. Extracting the handle
 
@@ -314,7 +313,7 @@ shares the encoder itself.
 | renderer | work |
 | --- | --- |
 | `WgpuRenderer` | **built** on `bite_v1.22.0-pre-path-a`, three rows that run locally only. The arm is a batch of its own rather than `PrimitiveBatch::Surfaces` — that one's items are YCbCr video with a `CVPixelBuffer` behind them — and its fragment re-encodes, because the view is sRGB and the target is not |
-| `MetalRenderer` | **built** on the same branch: `draw_imported_textures` beside `draw_surfaces`, which stays the YCbCr path. **It has no test**, so "built" means it type-checks and its shader compiles |
+| `MetalRenderer` | **built** on the same branch: `draw_imported_textures` beside `draw_surfaces`, which stays the YCbCr path. Its fragment re-encodes through `linear_to_srgb_exact`, because the ≈2.2 approximation that file otherwise uses is not reversible on a producer's bytes (§4). Two rows run on `macos-14` |
 | `DirectXRenderer` | **built** on `bite_v1.22.0-pre-path-a`, three rows on CI, and it no longer returns an unsupported error (`crates/gpui_windows/src/directx_renderer.rs:833` is what the *canonical* ref does). Its view is the texture's non-sRGB counterpart where wgpu's is sRGB, so there is no transfer function to cancel: this shader file has only `linear_to_srgb`'s ≈2.2 approximation, which would not cancel one exactly |
 
 Two things the arms share and one they do not. Each reuses the quads' instance record and vertex
@@ -331,10 +330,10 @@ of `draw_surfaces` — so there is no second pass and no intermediate target.
 
 ## 8. Open
 
-- **How a producer reaches the device — closed.** `Window::device_any` and a per-backend token
-  builder are built, and [`0004`](../../decisions/0004-producer-device-rendezvous.md) is the decision;
-  what is left of it — a validated Metal builder, a Metal test, and two unmeasured producer routes —
-  is [`producer-reach.md`](producer-reach.md) §7.
+- **How a producer reaches the device — closed.** `Window::device_any` and a token builder on each of
+  the three arms are built, and [`0004`](../../decisions/0004-producer-device-rendezvous.md) is the
+  decision; what is left of it is the two producer routes that need a measurement,
+  [`producer-reach.md`](producer-reach.md) §7.
 - **The erasure vs a cfg-gated `wgpu` in the engine** (§3). Recommendation: erasure, and
   it is the same argument the target's typing rests on, applied from the other side.
 - **Which sampler slot, and whether the payload should carry it.** The drafts say
@@ -344,16 +343,11 @@ of `draw_surfaces` — so there is no second pass and no intermediate target.
   only pass the flag down. Whether the *application* or the renderer owns the convention
   is unsettled — the drafts hand it to the application, which means every producer has to
   know GPUI's UV direction.
-- **Metal's producer half.** `MetalRenderer` lends its device now (`device_any`), so the accessor
-  half is closed; what is missing is the builder — `gpui_engine::MetalTexture` is a raw pointer with
-  a public field, and nothing validates its format the way the wgpu and Direct3D extensions do. It
-  is the one gap that has no alternative, because a macOS window cannot run `WgpuRenderer`;
-  [`producer-reach.md`](producer-reach.md) §7 carries it.
-- **The Metal arm's colour round trip is approximate, and its test is missing.** Its fragment
-  decodes the sRGB sample and re-encodes with `linear_to_srgb`'s `pow(1/2.2)` approximation
-  (`crates/gpui_apple/src/shaders.metal:954`), where wgpu's is the exact piecewise curve — §4. Either
-  the Metal arm gets the exact encoder or this records why it does not need one; there is no Metal
-  row to decide it for us.
+- **Metal's producer half — closed.** `MetalRenderer` lends its device (`device_any`) and
+  `MetalTextureExt` builds the token from a texture on it, validating the sRGB declaration and
+  `ShaderRead` as the wgpu and Direct3D extensions validate theirs. What the arm does not have is
+  Direct3D's enforcement of the same-device rule: a Metal resource does not expose the device that
+  made it, so a texture from another device composites rather than failing — §2's table says so now.
 - **Whether the raw Metal handle needs an `MTLSharedEvent`.** Only if a producer ever
   renders on a second device; on one device, order within the frame is the
   synchronisation. The drafts proposed the event because they had already assumed a

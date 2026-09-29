@@ -63,9 +63,10 @@ as well as paint one. None of it is on the canonical ref: there Metal's `draw_su
 the YCbCr video path and wgpu's arm is untouched.
 
 What that still does not add up to is Path A being *finished*, and
-[`producer-reach.md`](producer-reach.md) is where the remainder lives: a validated Metal token
-builder, a Metal row, and two producer routes that need a measurement rather than code. `GpuCanvas`
-is unwritten too, and [`inline-commands.md`](inline-commands.md) is still nothing but a proposal.
+[`producer-reach.md`](producer-reach.md) is where the remainder lives: two producer routes that need
+a measurement rather than code, and the same-device rule's enforcement on macOS, which no code can
+supply. `GpuCanvas` is unwritten too, and [`inline-commands.md`](inline-commands.md) is still
+nothing but a proposal.
 
 The offscreen mode is the change with reach beyond Path A — `PixelBuffer` is the contract's pixel
 type now, and rendering is separate from reading back — so [`verification.md`](verification.md) §2
@@ -82,11 +83,11 @@ The ordered plan is [`milestones.md`](milestones.md): what is built and where, w
 what order, and the gates a resumer runs. It is there rather than here because the list below had
 grown past what an index should carry, and two copies of a plan are two copies to keep in step.
 
-In one line, the order is: the **gaps beside the reach** — a validated Metal token, a Metal row,
-and the offscreen gate on Direct3D — because they are what keeps the three arms even; then
-`GpuCanvas`, the surface an application meets; then Path B, which is independent of all of it; then
-a third-party renderer; then the deferred bridge, which needs a probe before it needs a decision.
-The producer's reach itself is built, and is no longer on the list.
+In one line, the order is: the **gaps beside the reach** — the offscreen gate on Direct3D, and a
+probe for the two producer routes — then `GpuCanvas`, the surface an application meets; then Path B,
+which is independent of all of it; then a third-party renderer; then the deferred bridge, which
+needs a probe before it needs a decision. The producer's reach and the three arms are built, and are
+no longer on the list.
 
 The list this section used to hold is closed. The citations were re-pointed to the merged ref — the
 merge moved lines in every file the chapters cite, and §3's Windows rows and §5.2 took real

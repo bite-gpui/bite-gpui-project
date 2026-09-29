@@ -14,7 +14,7 @@
 | --- | --- |
 | the canonical ref, and what every citation resolves against | `bite_v1.22.0-pre`, tip `a2884d2de7` (the merge of #5) |
 | what the canonical ref already carries | the renderer seam (#4) and the fork's CI file (#5). **None** of Path A |
-| Path A, whole | `bite_v1.22.0-pre-path-a`, eight commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
+| Path A, whole | `bite_v1.22.0-pre-path-a`, ten commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
 | the checkout the work is in | `.tools/worktrees/wt-seam` in the zed clone |
 | the other repositories, and what each is for | [`../../references.md`](../../references.md) |
 
@@ -34,19 +34,14 @@ canonical ref. `#6` is green on the fork's CI; what is left for it is the review
 | Path A's scene half: `CustomRenderPrimitive::Texture`, `ImportedTextureHandle`, `to_quad_record`, `ObservingRenderer` | [`foreign-texture.md`](foreign-texture.md) | same branch | `cargo test -p gpui_engine --lib` |
 | Path A's authoring half: `Window::paint_imported_texture`, `painted_imported_textures` | [`foreign-texture.md`](foreign-texture.md) §3 | same branch | the radii row in `gpui_authoring`'s 347 tests |
 | the wgpu arm, the offscreen target and the readback | [`foreign-texture.md`](foreign-texture.md) §7 | same branch | 3 rows — the sRGB round trip, the ordering, the device identity — skipped with a logged warning where the machine has no adapter |
-| the Metal arm | [`foreign-texture.md`](foreign-texture.md) §7 | same branch | **type-checked and shader-compiled only — no test exists** |
+| the Metal arm | [`foreign-texture.md`](foreign-texture.md) §7 | same branch | 2 rows on `macos-14` — the colour round trip and the boundary check — plus the shader compile the `macos` job already did |
 | the Direct3D arm and its CI job | [`foreign-texture.md`](foreign-texture.md) §7 | same branch | 3 rows on `windows-latest`, WARP |
-| the producer's reach: `Window::device_any`, and a token builder per backend | [`producer-reach.md`](producer-reach.md) | same branch | the Direct3D colour row takes its device through the accessor — the route an application has — instead of the renderer's own field |
+| the producer's reach: `Window::device_any`, and a token builder on each of the three arms (`ImportedTextureExt`, `DirectXTextureExt`, `MetalTextureExt`) | [`producer-reach.md`](producer-reach.md) | same branch | the Direct3D and Metal rows take their device through the accessor — the route an application has — instead of the renderer's own field |
 
 ## 3. The gaps beside the reach
 
-Small and independent. The first four are per platform, and they are
-[`producer-reach.md`](producer-reach.md) §7:
+Small and independent, and none of them blocks anything in §4.
 
-- **macOS has no validated producer token.** `MetalRenderer::device_any` lends the device, but the
-  token is built by hand out of `gpui_engine::MetalTexture`, a raw pointer with a public field, so
-  nothing checks the pixel format at the boundary the way `ImportedTextureExt` and
-  `DirectXTextureExt` do. A `MetalTextureExt` in `gpui_apple` is the missing piece.
 - **A wgpu producer on macOS is unmeasured.** `WgpuRenderer` cannot be installed in a macOS window
   — its `PlatformRenderer` impl is cfg'd out there, because a macOS window's renderer must answer
   `MacSceneRenderer` and a wgpu renderer has no `layer_ptr` — so a macOS window's consumer is always
@@ -54,18 +49,18 @@ Small and independent. The first four are per platform, and they are
   GPUI's own `MTLDevice` to share it, which is `wgpu-hal`'s
   `metal::Device::device_from_raw` and `wgpu::Instance::create_adapter_from_hal`, and nothing has
   run it; see [`producer-reach.md`](producer-reach.md) §7.
-- **Metal has no test.** Its arm in `crates/gpui_apple/src/metal_renderer.rs` is the only one of the
-  three that nothing exercises, and `MetalRenderer::new_headless` exists, so the row is writable.
-- **Metal's colour round trip is approximate.** Its fragment re-encodes with `linear_to_srgb`'s
-  `pow(1/2.2)` approximation where wgpu's is the exact piecewise curve, so macOS does not return a
-  producer's sRGB bytes unchanged ([`foreign-texture.md`](foreign-texture.md) §4, §8). Either make
-  it exact or record why not; the missing row is what would have caught it.
+- **Metal cannot enforce the same-device rule.** Each arm checks what its sampler needs at the
+  boundary, but only Direct3D refuses a texture from *another* device by name — wgpu panics inside
+  its own storage, which is loud rather than named, and Metal has no API for it at all, because a
+  resource does not expose the device that made it. So on macOS that half of the rule rests on the
+  application; it is not closable by writing code
+  ([`producer-reach.md`](producer-reach.md) §3).
 - **`DirectXRenderer`'s offscreen override is test-gated.** In `crates/gpui_windows/src/directx_renderer.rs`
   it overrides only `render_scene_to_image`, under `#[cfg(any(test, feature = "test-support"))]`, so
   in a normal build the Direct3D renderer reports offscreen rendering unsupported and implements
   neither `render_scene` nor `read_pixels`. `WgpuRenderer` overrides all three ungated; the Direct3D
   renderer should have the same shape. It is not on Path A's route — a producer renders into its own
-  texture — so it sits below the three above.
+  texture — so it sits below the first two.
 - **The pull-request test job's filter is narrow.** `bite-ci.yml`'s `tests` job runs
   `cargo test -p gpui_authoring -p gpui_engine --lib` and nothing else, so every other crate's tests
   are local-only — `gpui_wgpu`'s need a GPU adapter, and its older tests fail rather than skip
@@ -82,9 +77,9 @@ three renderers, so the decision that was M1's first step is taken and the acces
 each platform still lacks is [`producer-reach.md`](producer-reach.md) §7, and none of it blocks
 anything below.
 
-**M2 — the gaps in §3.** Independent of everything above, cheap, and it is what keeps the Direct3D
-and Metal arms honest: a validated Metal token, an exact encoder for the Metal arm and its first
-test row, and the offscreen gate on Direct3D.
+**M2 — the gaps in §3. Mostly done.** The Metal token builder, the exact encoder and the arm's first
+two rows landed with the reach. What is left of M2 is the offscreen gate on Direct3D and, if it is
+wanted, a wider test filter.
 
 **M3 — `GpuCanvas`.** [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md). The surface an
 application meets; with M1 built, the token its callback returns is one an application can
@@ -101,7 +96,7 @@ anything above.
 
 ## 5. The gates
 
-**`.meta`.** `script/check-citations` — 322 citations, 0 unresolved when this was written. It
+**`.meta`.** `script/check-citations` — 324 citations, 0 unresolved when this was written. It
 resolves against the canonical ref, so a document may not cite `path:line` for a file that exists
 only on a branch: name it, as `producer-reach.md` does for `crates/gpui_engine/src/custom_render.rs`
 and the two `imported_texture.rs` files. `.meta` is its own repository; never `git add` the zed
@@ -120,6 +115,7 @@ triggers and every job is skipped, because they are gated on the repository owne
 | `macos` | the Metal backend compiles | the HLSL equivalent: `xcrun metal` runs in a build script, and a build script runs for the **host** |
 | `windows` | the Direct3D backend compiles in release | release is the profile whose build script compiles the HLSL with `fxc`, and whose Rust includes the resulting byte arrays — so the release-only arms are compiled here and nowhere else |
 | `windows-path-a` | the Direct3D arm's three rows | they need a device and a swap chain; a hosted runner has WARP, which is why a pass says "mechanically possible on one adapter" |
+| `macos-path-a` | the Metal arm's two rows | they need a Metal device, and a hosted runner's is real rather than emulated — the presentation probe records `Apple Paravirtual device`. Debug is enough here, because `gpui_apple`'s build script compiles the shaders in every profile |
 | `tests` | the engine's and authoring's rows | they need no display and no GPU |
 
 **Locally.** The Windows backend cannot be built natively, but it type-checks against the target:
@@ -155,5 +151,7 @@ evidence beside the decision it produced. A probe still running lives with the w
   works both ways", which the code did not have.
 - **The bridge decision** (M5): 0002 defers it, and the second probe answers whether the direction
   worth having works at all.
-- **Metal's producer half**: [`foreign-texture.md`](foreign-texture.md) §8, unresolved since before
-  the arms were written.
+- **The macOS producer route that needs a probe**: a wgpu producer on GPUI's own `MTLDevice`
+  ([`producer-reach.md`](producer-reach.md) §7). Metal's own producer half is closed — the device is
+  lent and `MetalTextureExt` builds the token — so what has no home document is the measurement, not
+  the code.

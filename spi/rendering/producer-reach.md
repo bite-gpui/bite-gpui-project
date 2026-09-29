@@ -64,7 +64,7 @@ that was handed nothing still reads `device` and `queue` out of the same place.
 | renderer | device it lends | token builder an application can name | tested |
 | --- | --- | --- | --- |
 | `WgpuRenderer` | the shared `GpuContext` slot — both `device` and `queue` | `gpui_wgpu::ImportedTextureExt` on a `wgpu::TextureView`, which checks the view samples as sRGB and the texture is a `TEXTURE_BINDING` | 3 rows, run locally only |
-| `MetalRenderer` | its `MTLDevice` | **none** — `gpui_apple` exports nothing, and `gpui_engine::MetalTexture` is a raw pointer a producer fills itself | **none** |
+| `MetalRenderer` | its `MTLDevice` | `gpui::MetalTextureExt` on a `metal::TextureRef`, which checks the declaration is sRGB and the usage includes `ShaderRead` | 2 rows, `macos-14` |
 | `DirectXRenderer` | its `ID3D11Device` | `gpui::DirectXTextureExt` on an `ID3D11Texture2D`, which checks `B8G8R8A8` and `SHADER_RESOURCE` | 3 rows, `windows-latest` |
 
 Two facts behind the table:
@@ -76,10 +76,13 @@ Two facts behind the table:
   on the renderer's trait. It answers `None` for a renderer with nothing to lend, which is an answer
   rather than a failure. The anchor is
   [`0004`](../../decisions/0004-producer-device-rendezvous.md)'s decision, and §5 is why.
-- **The token builder is the half that is uneven.** wgpu's and Direct3D's check the format at the
-  boundary, where the failure is a producer's mistake and the message can name it; Metal's payload
-  is `MetalTexture(pub *mut c_void)`, so a producer builds the token by hand and there is no
-  boundary to check at. §7 has it.
+- **The three token builders agree; the device check does not.** Each checks what its sampler needs
+  before a token exists — an sRGB view, `B8G8R8A8` with `SHADER_RESOURCE`, an sRGB declaration with
+  `ShaderRead` — so a producer's mistake is named at the boundary rather than composited. What they
+  cannot all do is refuse a texture from *another* device: wgpu panics inside its own storage,
+  Direct3D names the mismatch (`CreateShaderResourceView` refuses it), and Metal has no API for it,
+  because a resource does not expose the device that made it. On macOS the same-device rule rests on
+  the application rather than on the renderer.
 
 The factory's input does not close it either. `RendererTarget`'s one erased field
 (`crates/gpui_platform/src/platform_renderer.rs:129`) is an **input**, and what each platform puts
@@ -161,20 +164,19 @@ The reach is built everywhere; the gaps are not the same gap.
   made on that device needs no handle and nothing to synchronise. A **wgpu** producer under this
   renderer is not on it and cannot be — wgpu has no Direct3D 11 backend — so that is 0002's Tier 2
   and §6's bridge, a different piece of work rather than a gap in this one.
-- **macOS / `MetalRenderer` — the device is lent and the builder is not written.** `device_any`
-  hands the `MTLDevice` the renderer created, so a producer can make a texture on it; but
-  `gpui_engine::MetalTexture` is a raw `*mut c_void` with a public field, so the token is built by
-  hand, and unlike wgpu's and Direct3D's nothing validates the pixel format at the boundary. A
-  `MetalTextureExt` in `gpui_apple` — the shape the other two arms have — is the missing piece, and
-  the arm has no test either.
-- **On macOS that builder is not optional, because the alternative is gone.** The drafts' other route
-  was to run the window itself on `WgpuRenderer` and use the wgpu token, and that is not available:
-  the `platform_renderer` module carrying `WgpuRenderer`'s `PlatformRenderer` impl sits behind
+- **macOS / `MetalRenderer` — complete but for the device check.** `device_any` hands the `MTLDevice`
+  the renderer created, `MetalTextureExt` builds the token from a texture on it, and two rows run on
+  `macos-14`. What it does not have is Direct3D's enforcement of the same-device rule: a Metal
+  resource does not expose the device that made it, so a texture from another device composites
+  rather than failing, and that half of the rule rests on the application.
+- **Why the builder mattered more on macOS than on the other two.** The drafts' other route was to
+  run the window itself on `WgpuRenderer` and use the wgpu token, and that is not available: the
+  `platform_renderer` module carrying `WgpuRenderer`'s `PlatformRenderer` impl sits behind
   `#[cfg(not(any(target_family = "wasm", target_os = "macos")))]`
   (`crates/gpui_wgpu/src/gpui_wgpu.rs`), because a macOS window's renderer must answer
   `MacSceneRenderer` and `WgpuRenderer` has no `layer_ptr`. So a macOS window's consumer is always
-  `MetalRenderer` and its token is always the raw handle, which is why the missing `MetalTextureExt`
-  is the whole of the macOS gap rather than one of two ways around it.
+  `MetalRenderer` and its token is always the raw handle — which is why the builder was the whole of
+  the gap rather than one of two ways around it.
 - **A wgpu producer on macOS is unmeasured, and it is the same probe as §6's.** A producer that
   renders with wgpu does not need `WgpuRenderer` in the window; it needs its wgpu device to *be*
   GPUI's `MTLDevice`, so the texture it makes is visible to the Metal renderer that samples the raw
@@ -186,6 +188,6 @@ The reach is built everywhere; the gaps are not the same gap.
 - **The payload types are a published surface, and the versions come with them.** An application
   that downcasts `device_any`'s answer to `ID3D11Device` or `metal::Device` has to depend on the
   same crate version the backend does, and build a token with a type the backend publishes
-  (`DirectXTextureExt`, `ImportedTextureExt`). That is the commitment
+  (`DirectXTextureExt`, `ImportedTextureExt`, `MetalTextureExt`). That is the commitment
   [`0004`](../../decisions/0004-producer-device-rendezvous.md) names under "what would reopen this",
   and it is why [`foreign-texture.md`](foreign-texture.md) §8 keeps the payload question open.

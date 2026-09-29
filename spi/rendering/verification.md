@@ -4,11 +4,10 @@
   [`renderer-seam.md`](renderer-seam.md), [`foreign-texture.md`](foreign-texture.md),
   [`inline-commands.md`](inline-commands.md) and [`gpu-canvas.md`](../authoring/gpu-canvas.md).
   Path A's rows below have implementations on one branch — `bite_v1.22.0-pre-path-a` carries the
-  encoding and scale rows in `gpui_authoring`, the three that need a device in `gpui_wgpu`, and the
-  three that run in `gpui_windows`' tests on a Windows runner — while the citations here stay
-  written against the canonical ref. The producer's reach is implemented too; what is still
-  *proposed* rather than written is the Metal arm's own row, and
-  [`producer-reach.md`](producer-reach.md) §7 is where it and the other leftovers live.
+  encoding and scale rows in `gpui_authoring`, the three that need a device in `gpui_wgpu`, the
+  three that run in `gpui_windows`' tests on a Windows runner, and the two in `gpui_apple`'s on a
+  macOS one — while the citations here stay written against the canonical ref. The producer's reach
+  is implemented too, so the rows still *proposed* rather than written are Path B's.
 - **Why it is a chapter of its own:** most of this feature's failure modes are silent — a
   wrong scale factor, a missed gamma, a leaked pipeline, a device that is not the one the
   texture came from. None is a compile error, and three of the four platforms cannot be
@@ -25,7 +24,7 @@ Each row is an assertion a test can make, not a thing to look at:
 | premultiplied alpha | fringes at rounded corners and antialiased edges | a known RGBA fixture composites to a known pixel on readback |
 | Path A colour space | a washed-out composite | an sRGB fixture round-trips byte for byte; with the fragment's re-encode missing the same fixture shifts by ≈2.2 (`[200, 100, 50]` reads back as `[147, 32, 8]`) |
 | Path A ordering | a texture sampled before the pass that fills it | a frame whose producer submits in its paint callback composites the texture; the same frame with that submission removed does not |
-| Path A device identity | a texture from a second device | the bind fails loudly. It does not *name* the mismatch: wgpu refuses a resource from another device by panicking inside its own storage, so what a test can assert is that it cannot be silent |
+| Path A device identity | a texture from a second device | it fails loudly, or cannot be checked at all: wgpu refuses a resource from another device by panicking inside its own storage, Direct3D refuses it by name (`CreateShaderResourceView`), and Metal has no API for it — a resource does not expose the device that made it — so on macOS that half of the rule is the application's to keep |
 | the producer's reach | Path A being a demonstration rather than a capability | an application holding only a `Window` — not a renderer — obtains the device its texture is made on: `device_any` returns it, and a token built on it composites. The Direct3D colour row already takes its device this way; what an application-only row would add is the downcast, which needs no device of its own |
 | Outcome B end to end | a Windows configuration nothing has ever composited | on `windows-latest`, a window with `WgpuRenderer` installed composites a pushed texture, and the same window with the default renderer reports it unsupported |
 | Path B state isolation | UI corruption *after* an injected draw | a quad drawn after an injected command matches the same quad with no injection |
@@ -56,8 +55,9 @@ compile-time property, and "each backend compiles" is CI.
   the renderer's crate can hold the concrete renderer, which is exactly the door an application does
   not have ([`producer-reach.md`](producer-reach.md) §4).
 - **On a macOS host.** The Metal arm, and the `MacSceneRenderer` hook — nothing else catches a
-  mis-wired native hook. The arm has no test yet, so what macOS gates today is that its Rust
-  type-checks and its shader compiles, not that it samples anything.
+  mis-wired native hook. Two rows run there now, on `macos-14`: the colour round trip and the
+  boundary check the producer's `MetalTextureExt` answers for. The device-identity row is the one
+  row macOS cannot have, for §1's reason.
 - **On a Windows host.** The Direct3D arm and `WinSceneRenderer`, and — for
   [`foreign-texture.md`](foreign-texture.md) — the whole Windows configuration. The arm's three rows
   run on `windows-latest` and they pass there, on WARP, which is why they are a result about one
@@ -80,6 +80,7 @@ real platforms, because standard GitHub-hosted runners are free for a public rep
 | `cargo check -p gpui` | macos-14 | the only place the Metal shaders are compiled at all: `gpui_apple`'s build script runs `xcrun metal`, and a build script runs for the **host** |
 | `cargo check --release -p gpui` | windows-latest | release is the profile whose build script compiles the HLSL with `fxc` and whose Rust includes the result, which is also what makes the job unsatisfiable anywhere but Windows |
 | `cargo test --release -p gpui_windows imported_texture` | windows-latest | Path A's Direct3D rows: they need a device and a swap chain, which no Linux gate has and no cross-compile reaches. Filtered to those three rows, because the crate's older tests have never run on a runner. It asserts that at least one ran, so the filter cannot pass vacuously |
+| `cargo test -p gpui_apple imported_texture` | macos-14 | Path A's Metal rows: they need a Metal device, and a hosted runner's is a real one — `Apple Paravirtual device` — so unlike the Windows rows there is no emulation caveat. Filtered to those two rows and guarded the same way. Debug rather than release, because `gpui_apple`'s build script compiles the shaders in every profile |
 
 **Cross-compiling was tried first and is not enough, though it earned its keep.** A Linux
 job checking `--target x86_64-pc-windows-msvc` found

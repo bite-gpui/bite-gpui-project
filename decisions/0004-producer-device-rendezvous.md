@@ -29,6 +29,14 @@ application writes is a trait in the facade, because that is the lowest crate th
 `None` is an answer rather than a failure: a renderer that draws offscreen, or one a factory
 installed that is not the backend's own, has nothing to lend.
 
+The accessor is half of the reach; the other half is the **token builder**, and it ships the same
+way. `ImportedTextureExt`, `DirectXTextureExt` and `MetalTextureExt` are each defined in the crate
+that names the API — which is also where the payload is downcast — and re-exported through the
+facade, so an application depends on one crate and writes `gpui::DirectXTextureExt` or
+`gpui::MetalTextureExt`. They are not traits *for* `Window`, so the orphan rule that decides the
+accessor's home does not constrain them; what they add to the decision is that the per-backend
+payload types become published surface, which "what would reopen this" names.
+
 ## Why
 
 **The anchor, not the direction, was the fork.** Both directions of the rendezvous serve someone, and
