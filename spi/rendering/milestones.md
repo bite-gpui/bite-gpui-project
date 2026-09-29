@@ -14,7 +14,7 @@
 | --- | --- |
 | the canonical ref, and what every citation resolves against | `bite_v1.22.0-pre`, tip `a2884d2de7` (the merge of #5) |
 | what the canonical ref already carries | the renderer seam (#4) and the fork's CI file (#5). **None** of Path A |
-| Path A, whole | `bite_v1.22.0-pre-path-a`, ten commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
+| Path A, whole | `bite_v1.22.0-pre-path-a`, eleven commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
 | the checkout the work is in | `.tools/worktrees/wt-seam` in the zed clone |
 | the other repositories, and what each is for | [`../../references.md`](../../references.md) |
 
