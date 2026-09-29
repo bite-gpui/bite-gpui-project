@@ -3,6 +3,9 @@
 - **Decided:** 2026-09-27
 - **Revised:** 2026-09-28 — the claim that a wgpu producer cannot wrap a native shareable
   resource was wrong. See "Revision" below.
+- **Revised:** 2026-09-29 — item 2's Windows clause was written before the Direct3D arm existed.
+  The default `DirectXRenderer` supports Path A too, for a Direct3D 11 producer; the clause holds
+  only for a *wgpu* producer. See "Revision, 2026-09-29" below.
 - **Status:** decided — the same-device model holds; the shared-handle route is future work,
   corrected and recorded in the revision below
 - **Evidence:** [`../spi/rendering/foreign-texture.md`](../spi/rendering/foreign-texture.md) §2 and §5,
@@ -51,8 +54,9 @@ producer lands decides which mechanism it uses:
    1080p60). A GPU→GPU copy would avoid the host, but only within one device — which is
    tier 2's condition rather than an alternative to it.
 
-On Windows with the default `DirectXRenderer`, tiers 1 and 2 are both closed and only
-tier 3 remains until `WgpuRenderer` is installed.
+On Windows with the default `DirectXRenderer`, tiers 1 and 2 are both closed for a *wgpu*
+producer, and only tier 3 remains until `WgpuRenderer` is installed; a Direct3D 11 producer's
+tier 1 is that renderer itself, which is the revision below.
 
 ## The rendezvous is one slot, and it works both ways
 
@@ -79,6 +83,10 @@ The seam therefore does not need "GPUI provides a canvas/context to the applicat
 rendezvous, which exists today for device recovery, and the erased payload above it. What
 it cannot do is accept a resource from a *second* device, which is what §"What was
 rejected" is about.
+
+The second direction — a producer reading `device` and `queue` out of the slot — is what
+[`0004`](0004-producer-device-rendezvous.md) builds: `Window::device_any` is that read, and
+it took a route to the slot that the code did not have.
 
 ## What was rejected
 
@@ -178,6 +186,20 @@ synchronise. The costs listed above do not go away — synchronisation, and a sa
 requirement whose LUIDs cannot be compared from inside either device — so the decision keeps
 the same-device model for this milestone and records the bridge as future work.
 [`shared-surface.md`](shared-surface.md) measures that it works.
+
+## Revision, 2026-09-29: Windows is a choice of renderer, not one renderer
+
+Item 2 said "on Windows both paths require `gpui_wgpu::WgpuRenderer`" and that the default
+`DirectXRenderer` "supports neither". The first half is the *wgpu* reading and still holds — a wgpu
+producer has no Direct3D 11 backend, so under the default renderer it is cross-device by
+construction. The second half does not: a Direct3D 11 producer — Media Foundation, DXVA, a D3D11
+engine — makes its texture on the device the default renderer already draws from, and the arm that
+samples it is built ([`../spi/rendering/foreign-texture.md`](../spi/rendering/foreign-texture.md)
+§7). So the Windows answer is a choice of renderer per window rather than a required one:
+`DirectXRenderer` for a Direct3D 11 producer, `WgpuRenderer` for a wgpu one — and they cannot be the
+same window, because the tier follows the renderer. The accessor both use is
+[`0004`](0004-producer-device-rendezvous.md). Path B remains unbuilt, so this revision is about
+Path A alone.
 
 ## What would reopen it
 

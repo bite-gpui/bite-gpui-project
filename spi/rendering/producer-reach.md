@@ -1,18 +1,19 @@
 # The producer's reach
 
-- **Status:** proposed. The gap it names is in the tree rather than in these documents: Path A's
-  *consumer* half is built on `bite_v1.22.0-pre-path-a` and `bite_v1.22.0-pre-path-a-directx`,
-  and nothing on any platform can hand a renderer a texture yet. Citations resolve against the
-  canonical ref, so they point at what is there; a branch name says where the rest lives.
+- **Status:** built. The whole of Path A is on `bite_v1.22.0-pre-path-a` (PR #6), and the accessor a
+  producer reaches the device through is its last commit; the decision behind that accessor is
+  [`0004`](../../decisions/0004-producer-device-rendezvous.md), decided. What each platform's
+  producer half still lacks is §7, and it is not the same gap anywhere.
 - **Assumes:** [`foreign-texture.md`](foreign-texture.md) — the primitive, the token, and what a
-  renderer has to draw — and [`renderer-seam.md`](renderer-seam.md) — the factory, the target,
-  and the rule that post-construction queries belong on the renderer.
-- **Why it is a chapter:** §7 of `foreign-texture.md` asks what each *renderer* has to do, and
-  every row of it can be answered — as of this branch all three are — while nothing can make the
-  texture the renderer then samples. The producer's side is a second obligation, and it is the one
-  that decides whether Path A is a capability or a demonstration.
-- **Target crates:** `gpui_platform` (where a rendezvous would go), `gpui_wgpu`, `gpui_windows`,
-  `gpui_apple`.
+  renderer has to draw — and [`renderer-seam.md`](renderer-seam.md) — the factory, the target, and
+  the rule that post-construction queries belong on the renderer.
+- **Why it is a chapter:** §7 of `foreign-texture.md` asks what each *renderer* has to do, and every
+  row of it can be answered while nothing can make the texture the renderer then samples. The
+  producer's side is a second obligation, and it was the one that decided whether Path A is a
+  capability or a demonstration — every other step in §1's table was built before it. It stays a
+  chapter now that it is built, because the shape was a decision and what is left is per platform.
+- **Target crates:** `gpui_platform` (where the accessor lives), `gpui_authoring` (which forwards
+  it), `gpui_wgpu`, `gpui_windows`, `gpui_apple`.
 
 ## 1. The two halves
 
@@ -23,28 +24,28 @@ A foreign texture arrives in two steps, and the device rule in
    `ImportedTextureHandle`;
 2. the renderer resolves the token and samples it.
 
-Step 2 is what the chapters specify, and it is built. Step 1 needs the device *before* anything
-can be made on it, which is a question about who holds the device and how it is handed over — and
-that question is not answered by any chapter.
+Step 2 is what the chapters specify. Step 1 needs the device *before* anything can be made on it,
+which is a question about who holds the device and how it is handed over — and it is not a property
+of the primitive, so no chapter about the primitive answers it.
 
 | step | where | state |
 | --- | --- | --- |
 | the primitive, the token, the encoder both shaders read | `crates/gpui_engine/src/custom_render.rs` | built, `bite_v1.22.0-pre-path-a` |
 | the window call | `Window::paint_imported_texture`, `crates/gpui_authoring/src/window.rs` | built, same branch |
 | the arm, per renderer | wgpu, Direct3D, Metal | built; wgpu and Direct3D have rows on CI, Metal has none |
-| **the producer's reach** | **nothing** | **not built on any platform** |
+| the producer's reach | `Window::device_any` and the per-backend token builder | built for wgpu and Direct3D; Metal lends its device and has no builder (§7) |
 
 ## 2. One rendezvous, two directions
 
 "It has to be the renderer's device" does not say who creates it. Two configurations satisfy the
 rule, and they serve different producers:
 
-| direction | what happens | what exists |
+| direction | what happens | where it is |
 | --- | --- | --- |
-| **gpui → app** | gpui creates the device; the application asks for it and renders a texture on it | nothing, on any platform, in a build an application gets |
+| **gpui → app** | gpui creates the device; the application asks for it and renders a texture on it | built — `Window::device_any` hands the renderer's device, the gpui→app half of [0002](../../decisions/0002-render-extension-device-model.md)'s "one slot, and it works both ways" |
 | **app → gpui** | the application creates the device and installs a renderer that adopts it | wgpu only, and only through a factory |
 
-The second is why `GpuContext` is a shared `Rc` rather than a field:
+`GpuContext` is a shared `Rc` rather than a field for the second reason:
 `GpuContext = Rc<RefCell<Option<WgpuContext>>>` (`crates/gpui_wgpu/src/wgpu_renderer.rs:168`),
 whose `WgpuContext` exposes `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
 (`crates/gpui_wgpu/src/wgpu_context.rs:9`). An application that owns the slot and returns
@@ -54,81 +55,74 @@ requires installing a factory, which is the boundary
 [0002](../../decisions/0002-render-extension-device-model.md) states as "Path A is the window
 owner's capability".
 
-What is missing is the other direction: a window whose renderer gpui built cannot be handed a
-texture by anything.
+The two directions are one rendezvous rather than two, and that is what the reach turned out to be:
+the slot a factory would have been given is the slot a window's `device_any` returns, so a producer
+that was handed nothing still reads `device` and `queue` out of the same place.
 
-## 3. What each platform can do
+## 3. What each renderer lends, and what an application can name
 
-| renderer | token type an application can name | device it can be given | device it hands out | tested |
-| --- | --- | --- | --- | --- |
-| `WgpuRenderer` | yes — `gpui_wgpu` re-exports the extractor | yes, through a factory it installs | no | 3 rows, ubuntu CI |
-| `MetalRenderer` | the type is public (`gpui_engine::MetalTexture`) | no — `MetalRenderer::new` calls `create_device()` itself (`crates/gpui_apple/src/metal_renderer.rs:195`) | no | **none** |
-| `DirectXRenderer` | no — `pub(crate)` | no | no | 3 rows, windows CI |
+| renderer | device it lends | token builder an application can name | tested |
+| --- | --- | --- | --- |
+| `WgpuRenderer` | the shared `GpuContext` slot — both `device` and `queue` | `gpui_wgpu::ImportedTextureExt` on a `wgpu::TextureView`, which checks the view samples as sRGB and the texture is a `TEXTURE_BINDING` | 3 rows, run locally only |
+| `MetalRenderer` | its `MTLDevice` | **none** — `gpui_apple` exports nothing, and `gpui_engine::MetalTexture` is a raw pointer a producer fills itself | **none** |
+| `DirectXRenderer` | its `ID3D11Device` | `gpui::DirectXTextureExt` on an `ID3D11Texture2D`, which checks `B8G8R8A8` and `SHADER_RESOURCE` | 3 rows, `windows-latest` |
 
-Three facts behind that table:
+Two facts behind the table:
 
-- **The accessors that exist are test-gated.** `WgpuRenderer::device` and `queue` carry
-  `#[cfg(any(test, feature = "test-support", feature = "bench-support"))]`, and so do
-  `DirectXTextureExt` and `DirectXRenderer::device` on the Direct3D branch. They are not in the
-  build an application gets, so they are not a reach even though they are `pub`.
-- **The Direct3D types are crate-private besides.** `crates/gpui_windows/src/directx_renderer.rs`
-  and `directx_devices.rs` expose nothing, so an application cannot name the renderer to build one
-  either.
-- **Metal is closed in both directions.** Its renderer picks its own device at construction, so
-  not even the app→gpui configuration is available — which is
-  [`foreign-texture.md`](foreign-texture.md) §8's open question, and the only place the gap had
-  been noticed.
+- **The device is reached through the window, not the renderer.** `PlatformWindow::with_renderer`
+  hands out `&mut dyn SceneRenderer` (`crates/gpui_platform/src/platform_window.rs:151`) and no
+  device, and the seam refuses to widen `SceneRenderer` for a platform-shaped concern, so the
+  accessor is `device_any` on `PlatformWindow` — which `Window` forwards to — rather than a method
+  on the renderer's trait. It answers `None` for a renderer with nothing to lend, which is an answer
+  rather than a failure. The anchor is
+  [`0004`](../../decisions/0004-producer-device-rendezvous.md)'s decision, and §5 is why.
+- **The token builder is the half that is uneven.** wgpu's and Direct3D's check the format at the
+  boundary, where the failure is a producer's mistake and the message can name it; Metal's payload
+  is `MetalTexture(pub *mut c_void)`, so a producer builds the token by hand and there is no
+  boundary to check at. §7 has it.
 
 The factory's input does not close it either. `RendererTarget`'s one erased field
 (`crates/gpui_platform/src/platform_renderer.rs:129`) is an **input**, and what each platform puts
 in it is a *surface configuration* or the platform's device bundle for its own renderer: X11 sends
 `&WgpuSurfaceConfig` (`crates/gpui_linux/src/linux/x11/window.rs:783`), Windows sends
-`&DirectXDevices` (`crates/gpui_windows/src/events.rs:1322`). There is no path from a window back
-to a device its renderer holds.
+`&DirectXDevices` (`crates/gpui_windows/src/events.rs:1322`). Before the accessor there was no path
+from a window back to a device its renderer holds; `device_any` is that path, and it needs no target
+field because it is answered after the renderer exists.
 
-## 4. Why the tests do not show it
+## 4. Why the tests still do not show the whole of it
 
-Every Path A test so far lives in the renderer's own crate and holds the concrete renderer:
+Every Path A row lives in a renderer's own crate and holds the concrete renderer:
 `WgpuRenderer::new_offscreen` plus `WgpuRenderer::device`, or a `DirectXRenderer` built on a hidden
-window plus `DirectXRenderer::device`. The test therefore plays the producer itself, which is what
-makes the rows real — both halves really do run — and is also why they say nothing about the step
-an application would take, because that step does not exist to exercise. A resumer should read
-"three Path A tests pass on `windows-latest`" as "the arm works", not as "Path A is usable".
+window. The Direct3D colour row has moved one step towards an application — it takes its device
+through `device_any`, the route an application has, rather than through the renderer's own field —
+but the test is still its own producer, because a test in the crate that names `ID3D11Texture2D` can
+call `to_imported_handle` on the device it holds. So the rows prove the arm and the reach work; what
+they cannot prove is that the two together are *enough* for an application, because a test is not
+one. A resumer should read "three Path A tests pass on `windows-latest`" as "the arm and the
+accessor work", not as "Path A is usable".
 
-## 5. Two shapes for the rendezvous
+## 5. The shape the reach took
 
-**(a) An erased accessor on the renderer's trait, reached through the window.** The seam's own rule
-already says where a post-construction query belongs — "on the renderer, not on the factory's
-input" ([`renderer-seam.md`](renderer-seam.md) §5.6) — and the erasure is the same idiom as the
-target's:
+[`0004`](../../decisions/0004-producer-device-rendezvous.md) is decided, and the shape is the third
+anchor the drafts did not have: the accessor hangs on the **window**.
 
-```rust
-// crates/gpui_platform/src/platform_renderer.rs, beside `RendererTarget::backend`
-fn device(&self) -> Option<&dyn Any>;
-```
+- **Erased on the shared traits, typed in the crate that owns the type.**
+  `PlatformRenderer::device_any`, `PlatformWindow::device_any` and `Window::device_any` return
+  `Option<Rc<dyn Any>>`, because the shared trait must not name `ID3D11Device` or `MTLDevice`; the
+  typed form an application writes is a trait in the facade, because that is the lowest crate that
+  can name both a `Window` and a backend's types — no backend crate depends on `gpui_authoring`, so
+  none of them can implement a trait for `Window`.
+- **Owned rather than borrowed.** The only route from a window to a renderer is a closure, and no
+  borrow outlives one, so a `&dyn Any` accessor cannot be written at all; `Rc<dyn Any>` costs an
+  allocation per call and removes the lifetime.
+- **`None` is an answer.** A renderer that draws offscreen, or one a factory installed that is not
+  the backend's own, has nothing to lend.
 
-`WgpuRenderer` returns its `WgpuContext`, `DirectXRenderer` its `DirectXDevices`, `MetalRenderer`
-the `MTLDevice` §8 is waiting for. The obstacle is the reach, not the accessor:
-`PlatformWindow::with_renderer` hands out `&mut dyn SceneRenderer`
-(`crates/gpui_platform/src/platform_window.rs:151`), which has no such method, and the seam refuses
-to widen `SceneRenderer` for a platform-shaped concern. So this needs either a second accessor on
-`PlatformWindow`, or a generic escape on `SceneRenderer` — and the rejected alternative is worth
-naming: a downcast from the window to a backend's own type is what the target's typing already
-refused, for the reason that it makes `gpui_platform` depend on a backend crate.
-
-**(b) Generalise the slot.** Give each platform's device bundle the shape `GpuContext` already has
-— an `Rc<RefCell<Option<…>>>` the application also holds — and no trait changes at all. On Windows
-that means the platform's `DirectXDevices` becoming reachable (and, if the app-supplied direction is
-wanted, acceptable as an input). Cheap per platform, and it is the mechanism the wgpu path already
-uses; but it is one slot type per platform and it still requires the application to install a
-renderer.
-
-The two are complementary rather than alternatives: (a) answers "I have a texture, lend me your
-device", which is a 3D engine or a map renderer; (b) answers "here is my device, decode on it",
-which is Media Foundation, because `IMFDXGIDeviceManager::ResetDevice` wants to be handed a device
-rather than to borrow one. The fork in full — including a third anchor this section's shape
-suggests, because a `Window` already owns its platform window — is decision
-[0004](../../decisions/0004-producer-device-rendezvous.md), which is open.
+The two shapes this chapter used to weigh are the record's rejected alternatives: an accessor on
+`PlatformRenderer` reached through `with_renderer` costs an upcast and a userland downcast, so the
+typed part of the API is a convention rather than a signature; and generalising each platform's
+device bundle to the `GpuContext` shape needs a slot type per platform and still requires the
+application to install a renderer, which is the *other* direction.
 
 ## 6. The tier this leaves on Windows
 
@@ -139,11 +133,9 @@ This is the part worth writing down before anyone proposes a bridge:
   under that renderer a wgpu producer is 0002's Tier 2 *by construction* rather than by omission.
 - **Tier 1 on Windows is not gone, it is a choice of renderer.** A Direct3D 11 producer on
   `DirectXRenderer` — a Media Foundation or DXVA decoder, D3D11 compute, a D3D11 engine — needs no
-  bridge at all, which is the configuration
-  `bite_v1.22.0-pre-path-a-directx` makes possible. A wgpu producer gets Tier 1 on a window that
-  installed `WgpuRenderer`. The two are mutually exclusive *per window*, because the tier follows
-  the renderer: `DirectXRenderer` buys per-pixel transparency and D3D11 Tier 1, `WgpuRenderer` buys
-  wgpu Tier 1 and `Opaque` alone
+  bridge at all. A wgpu producer gets Tier 1 on a window that installed `WgpuRenderer`. The two are
+  mutually exclusive *per window*, because the tier follows the renderer: `DirectXRenderer` buys
+  per-pixel transparency and D3D11 Tier 1, `WgpuRenderer` buys wgpu Tier 1 and `Opaque` alone
   ([`../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md)).
 - **The direction a bridge would need is the one not measured.** Both existing measurements created
   the shared resource on the **D3D12** side and read it from D3D11
@@ -155,19 +147,45 @@ This is the part worth writing down before anyone proposes a bridge:
   [`../decisions/shared-surface.md`](../../decisions/shared-surface.md) §2 probe 6 had no adapter to
   reach. So a second probe comes before that bridge, not after it.
 
-## 7. Open
+## 7. What is left, per platform
 
-- **Which direction the rendezvous takes** — lent, adopted, or both — and which of the shapes above
-  it takes, since the anchor rather than the direction is the fork. It is
-  [0004](../../decisions/0004-producer-device-rendezvous.md), open, and it is the next milestone's
-  first step.
-- **Whether the backend payload types become public API.** They have to be nameable for anyone
-  outside a backend crate to construct a token or read a device, which makes them a published
-  surface and therefore a commitment, not an implementation detail.
-- **What Metal's producer half is**, given that its renderer creates its own device: either a
-  constructor that accepts one, or an accessor, and §8 of
-  [`foreign-texture.md`](foreign-texture.md) records the question.
-- **Whether the token should carry its own synchronisation.** It does not need one while producer
-  and consumer share a device and a queue ([`foreign-texture.md`](foreign-texture.md) §6); a bridge
-  would add it to the contract, which is a reason to decide the direction before the token's shape
-  is frozen.
+The reach is built everywhere; the gaps are not the same gap.
+
+- **Linux / `WgpuRenderer` — complete in tree, ungated in CI only.** The three rows pass on a Linux
+  host that has an adapter and are excluded from CI, because they need that adapter and
+  `gpui_wgpu`'s older tests fail rather than skip without one
+  ([`milestones.md`](milestones.md) §3). Nothing else is missing: the accessor hands over the slot
+  and `ImportedTextureExt` builds the token from a view.
+- **Windows / `DirectXRenderer` — complete for a Direct3D 11 producer**, which is what a Media
+  Foundation or DXVA decoder is: `device_any` hands it the device the platform built, so a texture
+  made on that device needs no handle and nothing to synchronise. A **wgpu** producer under this
+  renderer is not on it and cannot be — wgpu has no Direct3D 11 backend — so that is 0002's Tier 2
+  and §6's bridge, a different piece of work rather than a gap in this one.
+- **macOS / `MetalRenderer` — the device is lent and the builder is not written.** `device_any`
+  hands the `MTLDevice` the renderer created, so a producer can make a texture on it; but
+  `gpui_engine::MetalTexture` is a raw `*mut c_void` with a public field, so the token is built by
+  hand, and unlike wgpu's and Direct3D's nothing validates the pixel format at the boundary. A
+  `MetalTextureExt` in `gpui_apple` — the shape the other two arms have — is the missing piece, and
+  the arm has no test either.
+- **On macOS that builder is not optional, because the alternative is gone.** The drafts' other route
+  was to run the window itself on `WgpuRenderer` and use the wgpu token, and that is not available:
+  the `platform_renderer` module carrying `WgpuRenderer`'s `PlatformRenderer` impl sits behind
+  `#[cfg(not(any(target_family = "wasm", target_os = "macos")))]`
+  (`crates/gpui_wgpu/src/gpui_wgpu.rs`), because a macOS window's renderer must answer
+  `MacSceneRenderer` and `WgpuRenderer` has no `layer_ptr`. So a macOS window's consumer is always
+  `MetalRenderer` and its token is always the raw handle, which is why the missing `MetalTextureExt`
+  is the whole of the macOS gap rather than one of two ways around it.
+- **A wgpu producer on macOS is unmeasured, and it is the same probe as §6's.** A producer that
+  renders with wgpu does not need `WgpuRenderer` in the window; it needs its wgpu device to *be*
+  GPUI's `MTLDevice`, so the texture it makes is visible to the Metal renderer that samples the raw
+  handle. `wgpu-hal` has the pieces — `Adapter::expose` over a raw device
+  (`wgpu-hal-29.0.4/src/metal/mod.rs:424`), `Device::device_from_raw`
+  (`wgpu-hal-29.0.4/src/metal/device.rs:376`) and `Device::texture_from_raw` (`:358`) — and
+  `wgpu::Instance::create_adapter_from_hal` (`wgpu-29.0.4/src/api/instance.rs:390`) is the
+  high-level door, but nothing has run it. That is a second measurement beside §6's, not code.
+- **The payload types are a published surface, and the versions come with them.** An application
+  that downcasts `device_any`'s answer to `ID3D11Device` or `metal::Device` has to depend on the
+  same crate version the backend does, and build a token with a type the backend publishes
+  (`DirectXTextureExt`, `ImportedTextureExt`). That is the commitment
+  [`0004`](../../decisions/0004-producer-device-rendezvous.md) names under "what would reopen this",
+  and it is why [`foreign-texture.md`](foreign-texture.md) §8 keeps the payload question open.

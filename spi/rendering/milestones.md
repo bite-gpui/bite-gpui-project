@@ -14,13 +14,16 @@
 | --- | --- |
 | the canonical ref, and what every citation resolves against | `bite_v1.22.0-pre`, tip `a2884d2de7` (the merge of #5) |
 | what the canonical ref already carries | the renderer seam (#4) and the fork's CI file (#5). **None** of Path A |
-| Path A | `bite_v1.22.0-pre-path-a`, five commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
-| the Direct3D arm, stacked on it | `bite_v1.22.0-pre-path-a-directx`, two commits, PR [#7](https://github.com/bite-gpui/bite-gpui/pull/7) |
+| Path A, whole | `bite_v1.22.0-pre-path-a`, eight commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
 | the checkout the work is in | `.tools/worktrees/wt-seam` in the zed clone |
 | the other repositories, and what each is for | [`../../references.md`](../../references.md) |
 
-`#7` is stacked on `#6` rather than on the canonical ref, so its base has to be retargeted to
-`bite_v1.22.0-pre` once `#6` merges. Both are green on the fork's CI; neither is merged.
+`#6` is the only pull request left open, and it is the whole path: the Direct3D arm was stacked on
+it (`bite_v1.22.0-pre-path-a-directx`, PR [#7](https://github.com/bite-gpui/bite-gpui/pull/7)) and
+the producer's reach on top of that (`bite_v1.22.0-pre-device-rendezvous`, PR
+[#8](https://github.com/bite-gpui/bite-gpui/pull/8)), and both were replayed into `#6` rather than
+merged anywhere else — so the two head branches are obsolete, and `#6`'s base is already the
+canonical ref. `#6` is green on the fork's CI; what is left for it is the review, not a stack.
 
 ## 2. What is built
 
@@ -32,21 +35,33 @@
 | Path A's authoring half: `Window::paint_imported_texture`, `painted_imported_textures` | [`foreign-texture.md`](foreign-texture.md) §3 | same branch | the radii row in `gpui_authoring`'s 347 tests |
 | the wgpu arm, the offscreen target and the readback | [`foreign-texture.md`](foreign-texture.md) §7 | same branch | 3 rows — the sRGB round trip, the ordering, the device identity — skipped with a logged warning where the machine has no adapter |
 | the Metal arm | [`foreign-texture.md`](foreign-texture.md) §7 | same branch | **type-checked and shader-compiled only — no test exists** |
-| the Direct3D arm and its CI job | [`foreign-texture.md`](foreign-texture.md) §7 | `bite_v1.22.0-pre-path-a-directx` | 3 rows on `windows-latest`, WARP |
-| **the producer's reach** | [`producer-reach.md`](producer-reach.md) | **nothing** | **no platform, no configuration, no test** |
+| the Direct3D arm and its CI job | [`foreign-texture.md`](foreign-texture.md) §7 | same branch | 3 rows on `windows-latest`, WARP |
+| the producer's reach: `Window::device_any`, and a token builder per backend | [`producer-reach.md`](producer-reach.md) | same branch | the Direct3D colour row takes its device through the accessor — the route an application has — instead of the renderer's own field |
 
-## 3. The gaps beside the big one
+## 3. The gaps beside the reach
 
-Small, independent, and worth doing while the rendezvous is being decided:
+Small and independent. The first three are per platform, and they are
+[`producer-reach.md`](producer-reach.md) §7:
 
+- **macOS has no validated producer token.** `MetalRenderer::device_any` lends the device, but the
+  token is built by hand out of `gpui_engine::MetalTexture`, a raw pointer with a public field, so
+  nothing checks the pixel format at the boundary the way `ImportedTextureExt` and
+  `DirectXTextureExt` do. A `MetalTextureExt` in `gpui_apple` is the missing piece.
+- **A wgpu producer on macOS is unmeasured.** `WgpuRenderer` cannot be installed in a macOS window
+  — its `PlatformRenderer` impl is cfg'd out there, because a macOS window's renderer must answer
+  `MacSceneRenderer` and a wgpu renderer has no `layer_ptr` — so a macOS window's consumer is always
+  `MetalRenderer` and its token always the raw handle. A wgpu producer would have to render on
+  GPUI's own `MTLDevice` to share it, which is `wgpu-hal`'s
+  `metal::Device::device_from_raw` and `wgpu::Instance::create_adapter_from_hal`, and nothing has
+  run it; see [`producer-reach.md`](producer-reach.md) §7.
+- **Metal has no test.** Its arm in `crates/gpui_apple/src/metal_renderer.rs` is the only one of the
+  three that nothing exercises, and `MetalRenderer::new_headless` exists, so the row is writable.
 - **`DirectXRenderer`'s offscreen override is test-gated.** In `crates/gpui_windows/src/directx_renderer.rs`
   it overrides only `render_scene_to_image`, under `#[cfg(any(test, feature = "test-support"))]`, so
   in a normal build the Direct3D renderer reports offscreen rendering unsupported and implements
   neither `render_scene` nor `read_pixels`. `WgpuRenderer` overrides all three ungated; the Direct3D
-  renderer should have the same shape.
-- **Metal has no test.** Its arm in `crates/gpui_apple/src/metal_renderer.rs` is the only one of the
-  three that nothing exercises, and `MetalRenderer::new_headless` exists, so the row is writable in
-  `gpui_wgpu`'s image.
+  renderer should have the same shape. It is not on Path A's route — a producer renders into its own
+  texture — so it sits below the three above.
 - **The pull-request test job's filter is narrow.** `bite-ci.yml`'s `tests` job runs
   `cargo test -p gpui_authoring -p gpui_engine --lib` and nothing else, so every other crate's tests
   are local-only — `gpui_wgpu`'s need a GPU adapter, and its older tests fail rather than skip
@@ -57,17 +72,18 @@ Small, independent, and worth doing while the rendezvous is being decided:
 
 ## 4. What is next, in order
 
-**M1 — the producer's reach.** [`producer-reach.md`](producer-reach.md). Blocks M3, and blocks any
-claim that Path A is usable. Its first step is a decision, not code —
-[`0004`](../../decisions/0004-producer-device-rendezvous.md), open: which direction the rendezvous
-takes, and which of the three anchors the typed accessor hangs on. The chapter sets out what each
-costs.
+**M1 — the producer's reach. Done.** [`producer-reach.md`](producer-reach.md) and
+[`0004`](../../decisions/0004-producer-device-rendezvous.md). `Window::device_any` is built on all
+three renderers, so the decision that was M1's first step is taken and the accessor exists; what
+each platform still lacks is [`producer-reach.md`](producer-reach.md) §7, and none of it blocks
+anything below.
 
-**M2 — the gaps in §3.** Independent of M1, cheap, and it keeps the Direct3D and Metal arms honest.
+**M2 — the gaps in §3.** Independent of everything above, cheap, and it is what keeps the Direct3D
+and Metal arms honest: a validated Metal token, a Metal row, and the offscreen gate on Direct3D.
 
 **M3 — `GpuCanvas`.** [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md). The surface an
-application meets, and the reason M1 comes first: a canvas whose callback can only return a token
-no application can construct is a demonstration.
+application meets; with M1 built, the token its callback returns is one an application can
+construct, which is what makes the canvas a capability rather than a demonstration.
 
 **M4 — Path B.** [`inline-commands.md`](inline-commands.md). Unstarted. It shares the primitive with
 Path A and needs no device export by definition — the producer draws into the window's own pass —
@@ -80,7 +96,7 @@ anything above.
 
 ## 5. The gates
 
-**`.meta`.** `script/check-citations` — 308 citations, 0 unresolved when this was written. It
+**`.meta`.** `script/check-citations` — 322 citations, 0 unresolved when this was written. It
 resolves against the canonical ref, so a document may not cite `path:line` for a file that exists
 only on a branch: name it, as `producer-reach.md` does for `crates/gpui_engine/src/custom_render.rs`
 and the two `imported_texture.rs` files. `.meta` is its own repository; never `git add` the zed
@@ -130,8 +146,8 @@ evidence beside the decision it produced. A probe still running lives with the w
 ## 6. What has no home yet
 
 - **The rendezvous decision** (M1): [`0004`](../../decisions/0004-producer-device-rendezvous.md),
-  open. It amends 0002's "the rendezvous is one slot, and it works both ways", which the code does
-  not implement.
+  decided and built. It supplies the gpui→app half of 0002's "the rendezvous is one slot, and it
+  works both ways", which the code did not have.
 - **The bridge decision** (M5): 0002 defers it, and the second probe answers whether the direction
   worth having works at all.
 - **Metal's producer half**: [`foreign-texture.md`](foreign-texture.md) §8, unresolved since before

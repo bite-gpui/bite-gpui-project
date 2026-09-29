@@ -3,12 +3,12 @@
 - **Status:** proposed, as the test plan for
   [`renderer-seam.md`](renderer-seam.md), [`foreign-texture.md`](foreign-texture.md),
   [`inline-commands.md`](inline-commands.md) and [`gpu-canvas.md`](../authoring/gpu-canvas.md).
-  Path A's rows below have implementations on two branches — `bite_v1.22.0-pre-path-a` carries the
-  encoding and scale rows in `gpui_authoring` and the three that need a device in `gpui_wgpu`, and
-  `bite_v1.22.0-pre-path-a-directx` the three that run in `gpui_windows`' tests on a Windows runner
-  — while the citations here stay written against the canonical ref. The row that is still
-  *proposed* rather than implemented is the producer's reach, and
-  [`producer-reach.md`](producer-reach.md) is where its absence lives.
+  Path A's rows below have implementations on one branch — `bite_v1.22.0-pre-path-a` carries the
+  encoding and scale rows in `gpui_authoring`, the three that need a device in `gpui_wgpu`, and the
+  three that run in `gpui_windows`' tests on a Windows runner — while the citations here stay
+  written against the canonical ref. The producer's reach is implemented too; what is still
+  *proposed* rather than written is the Metal arm's own row, and
+  [`producer-reach.md`](producer-reach.md) §7 is where it and the other leftovers live.
 - **Why it is a chapter of its own:** most of this feature's failure modes are silent — a
   wrong scale factor, a missed gamma, a leaked pipeline, a device that is not the one the
   texture came from. None is a compile error, and three of the four platforms cannot be
@@ -26,7 +26,7 @@ Each row is an assertion a test can make, not a thing to look at:
 | Path A colour space | a washed-out composite | an sRGB fixture round-trips byte for byte; with the fragment's re-encode missing the same fixture shifts by ≈2.2 (`[200, 100, 50]` reads back as `[147, 32, 8]`) |
 | Path A ordering | a texture sampled before the pass that fills it | a frame whose producer submits in its paint callback composites the texture; the same frame with that submission removed does not |
 | Path A device identity | a texture from a second device | the bind fails loudly. It does not *name* the mismatch: wgpu refuses a resource from another device by panicking inside its own storage, so what a test can assert is that it cannot be silent |
-| the producer's reach | Path A being a demonstration rather than a capability | nothing yet, which is the point: an application holding only a `Window` — not a renderer — has to obtain the device its texture is made on. No such path exists, so no row can be written, and closing that is [`producer-reach.md`](producer-reach.md) |
+| the producer's reach | Path A being a demonstration rather than a capability | an application holding only a `Window` — not a renderer — obtains the device its texture is made on: `device_any` returns it, and a token built on it composites. The Direct3D colour row already takes its device this way; what an application-only row would add is the downcast, which needs no device of its own |
 | Outcome B end to end | a Windows configuration nothing has ever composited | on `windows-latest`, a window with `WgpuRenderer` installed composites a pushed texture, and the same window with the default renderer reports it unsupported |
 | Path B state isolation | UI corruption *after* an injected draw | a quad drawn after an injected command matches the same quad with no injection |
 | Path B scissor | drawing outside the element | an injected command cannot paint outside its device scissor rect |
@@ -61,8 +61,10 @@ compile-time property, and "each backend compiles" is CI.
 - **On a Windows host.** The Direct3D arm and `WinSceneRenderer`, and — for
   [`foreign-texture.md`](foreign-texture.md) — the whole Windows configuration. The arm's three rows
   run on `windows-latest` and they pass there, on WARP, which is why they are a result about one
-  adapter rather than about hardware. What Windows still cannot show is the producer's reach: the
-  default renderer supports Path A's consumer half now, and nothing can feed it.
+  adapter rather than about hardware. The producer's reach is exercised there too — the colour row
+  takes its device through `device_any` — so what Windows still cannot show is the *application's*
+  route, because a test is its own producer
+  ([`producer-reach.md`](producer-reach.md) §4).
 
 ## 3. The gate
 

@@ -21,11 +21,11 @@ The subfolders mirror the sources — `rendering/`, `authoring/`, `decisions/`,
 | [`rendering/foreign-texture.md`](../rendering/foreign-texture.md) | Path A — importing a texture produced outside GPUI |
 | [`rendering/inline-commands.md`](../rendering/inline-commands.md) | Path B — drawing into the window's own pass |
 | [`rendering/verification.md`](../rendering/verification.md) | the matrix, and the platform each check needs |
-| [`rendering/producer-reach.md`](../rendering/producer-reach.md) | the other half of Path A — how a producer gets the device — and what each platform can do today |
+| [`rendering/producer-reach.md`](../rendering/producer-reach.md) | the other half of Path A — how a producer gets the device — what each platform lends now, and what is left |
 | [`rendering/milestones.md`](../rendering/milestones.md) | what is built and where, what is next in what order, and the gates a resumer runs |
 | [`authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface |
 | [`decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md) | decision 0002 — which devices a producer may use, and which it may not |
-| [`decisions/0004-producer-device-rendezvous.md`](../../decisions/0004-producer-device-rendezvous.md) | decision 0004, open — how a producer reaches the device: the anchor fork, and the tier facts under it |
+| [`decisions/0004-producer-device-rendezvous.md`](../../decisions/0004-producer-device-rendezvous.md) | decision 0004 — how a producer reaches the device: the window lends it, erased on the shared traits and typed in the facade |
 | [`decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) | the first measurement 0002 rests on |
 | [`decisions/shared-surface.md`](../../decisions/shared-surface.md) | the shared-buffer probe that reopens 0002 — Windows adoption and the macOS pool, token and fence measured; macOS adoption open |
 | [`decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md) | the measurement 0002's Windows clause rests on |

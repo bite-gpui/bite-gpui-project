@@ -1,13 +1,14 @@
 # Path A: importing a texture produced outside GPUI
 
-- **Status:** proposed, and built on branches. Nothing of it is in `bite_v1.22.0-pre`;
-  `bite_v1.22.0-pre-path-a` carries the primitive, the token, the `window.` call, the wgpu and Metal
-  arms, the extractor and the readback, and `bite_v1.22.0-pre-path-a-directx` the Direct3D arm. The
+- **Status:** proposed, and built on a branch. Nothing of it is in `bite_v1.22.0-pre`;
+  `bite_v1.22.0-pre-path-a` carries the whole of it — the primitive, the token, the `window.` call,
+  the wgpu, Metal and Direct3D arms, the extractor, the readback, and the producer's reach. The
   citations below still resolve against the canonical ref, so read this chapter as what was built
-  until the branches land.
+  until the branch lands.
 - **The other half of it:** what is here is the *consumer* — a renderer that samples a texture.
   How a producer gets the device its texture has to be made on is
-  [`producer-reach.md`](producer-reach.md), and that is not built anywhere.
+  [`producer-reach.md`](producer-reach.md), and it is built on the same branch; what each platform
+  still lacks is that chapter's §7.
 - **Assumes:** [`renderer-seam.md`](renderer-seam.md) — a renderer is installable at all.
 - **Companion:** [`inline-commands.md`](inline-commands.md) is the other path; the two
   share one scene primitive.
@@ -68,10 +69,11 @@ Producer and consumer must be the **same device**, not merely the same API:
 | producer → consumer | payload | constraint |
 | --- | --- | --- |
 | wgpu → `WgpuRenderer` (Linux, and Windows with it installed) | `wgpu::TextureView` | the same `wgpu::Device`; wgpu validates and rejects a mismatch |
-| wgpu (Metal backend) → GPUI's Metal renderer (macOS) | the raw `id<MTLTexture>` | the same GPU; a raw driver handle bypasses wgpu's bookkeeping |
-| wgpu (D3D12) → GPUI's `DirectXRenderer` (D3D11, Windows default) | *none, this milestone* | **out of scope** — a shared handle would bridge it as future work, so the milestone installs `WgpuRenderer` instead |
+| Direct3D 11 (Media Foundation, DXVA, a D3D11 engine) → `DirectXRenderer` (Windows default) | the `ID3D11Texture2D` itself, and no handle | the same `ID3D11Device` — the one [`producer-reach.md`](producer-reach.md) has the window lend — and Direct3D enforces it by name: the renderer's `CreateShaderResourceView` refuses a resource another device made |
+| wgpu (Metal backend) → GPUI's Metal renderer (macOS) | the raw `id<MTLTexture>` | the same GPU; a raw driver handle bypasses wgpu's bookkeeping. The device is lent, and the token is built by hand — [`producer-reach.md`](producer-reach.md) §7 |
+| wgpu (D3D12) → GPUI's `DirectXRenderer` (D3D11, Windows default) | *none, this milestone* | **out of scope** for a *wgpu* producer — a shared handle would bridge it as future work, so a window with one installed uses `WgpuRenderer` instead. A Direct3D 11 producer needs no bridge, and the second row is it |
 
-The third row is the one that moved. It was *impossible*, on the reading that wgpu offers
+The last row is the one that moved. It was *impossible*, on the reading that wgpu offers
 neither a shareable resource nor a way to adopt one; the second half was wrong, so the row is
 reachable rather than closed. GPUI's Windows renderer is Direct3D 11
 (`crates/gpui_windows/src/directx_renderer.rs:2092`) while wgpu is Direct3D 12, and a
@@ -299,9 +301,9 @@ shares the encoder itself.
 
 | renderer | work |
 | --- | --- |
-| `WgpuRenderer` | **built** on `bite_v1.22.0-pre-path-a`, three rows on CI. The arm is a batch of its own rather than `PrimitiveBatch::Surfaces` — that one's items are YCbCr video with a `CVPixelBuffer` behind them — and its fragment re-encodes, because the view is sRGB and the target is not |
+| `WgpuRenderer` | **built** on `bite_v1.22.0-pre-path-a`, three rows that run locally only. The arm is a batch of its own rather than `PrimitiveBatch::Surfaces` — that one's items are YCbCr video with a `CVPixelBuffer` behind them — and its fragment re-encodes, because the view is sRGB and the target is not |
 | `MetalRenderer` | **built** on the same branch: `draw_imported_textures` beside `draw_surfaces`, which stays the YCbCr path. **It has no test**, so "built" means it type-checks and its shader compiles |
-| `DirectXRenderer` | **built** on `bite_v1.22.0-pre-path-a-directx`, three rows on CI, and it no longer returns an unsupported error (`crates/gpui_windows/src/directx_renderer.rs:833` is what the *canonical* ref does). Its view is the texture's non-sRGB counterpart where wgpu's is sRGB, so there is no transfer function to cancel: this shader file has only `linear_to_srgb`'s ≈2.2 approximation, which would not cancel one exactly |
+| `DirectXRenderer` | **built** on `bite_v1.22.0-pre-path-a`, three rows on CI, and it no longer returns an unsupported error (`crates/gpui_windows/src/directx_renderer.rs:833` is what the *canonical* ref does). Its view is the texture's non-sRGB counterpart where wgpu's is sRGB, so there is no transfer function to cancel: this shader file has only `linear_to_srgb`'s ≈2.2 approximation, which would not cancel one exactly |
 
 Two things the arms share and one they do not. Each reuses the quads' instance record and vertex
 entry point — `CustomRenderPrimitive::to_quad_record` is the engine's encode into it — so the
@@ -317,10 +319,10 @@ of `draw_surfaces` — so there is no second pass and no intermediate target.
 
 ## 8. Open
 
-- **How a producer reaches the device at all.** Not built, on any platform, in a build an
-  application gets — [`producer-reach.md`](producer-reach.md), which is where the two shapes it
-  could take are set out. It is the largest of these and the only one that blocks the path being
-  usable.
+- **How a producer reaches the device — closed.** `Window::device_any` and a per-backend token
+  builder are built, and [`0004`](../../decisions/0004-producer-device-rendezvous.md) is the decision;
+  what is left of it — a validated Metal builder, a Metal test, and two unmeasured producer routes —
+  is [`producer-reach.md`](producer-reach.md) §7.
 - **The erasure vs a cfg-gated `wgpu` in the engine** (§3). Recommendation: erasure, and
   it is the same argument the target's typing rests on, applied from the other side.
 - **Which sampler slot, and whether the payload should carry it.** The drafts say
@@ -330,9 +332,11 @@ of `draw_surfaces` — so there is no second pass and no intermediate target.
   only pass the flag down. Whether the *application* or the renderer owns the convention
   is unsettled — the drafts hand it to the application, which means every producer has to
   know GPUI's UV direction.
-- **Metal's producer half.** `MetalRenderer` constructs its own device
-  (`crates/gpui_apple/src/metal_renderer.rs:195`), so it is the one renderer that neither lends a
-  device nor can be given one; [`producer-reach.md`](producer-reach.md) §3 and §7 carry it now.
+- **Metal's producer half.** `MetalRenderer` lends its device now (`device_any`), so the accessor
+  half is closed; what is missing is the builder — `gpui_engine::MetalTexture` is a raw pointer with
+  a public field, and nothing validates its format the way the wgpu and Direct3D extensions do. It
+  is the one gap that has no alternative, because a macOS window cannot run `WgpuRenderer`;
+  [`producer-reach.md`](producer-reach.md) §7 carries it.
 - **Whether the raw Metal handle needs an `MTLSharedEvent`.** Only if a producer ever
   renders on a second device; on one device, order within the frame is the
   synchronisation. The drafts proposed the event because they had already assumed a

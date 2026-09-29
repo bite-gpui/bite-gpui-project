@@ -29,13 +29,15 @@ its own folder, because it is a surface an application meets rather than part of
 | [`foreign-texture.md`](foreign-texture.md) | Path A: importing a texture produced outside GPUI, the erasure, the colour-space invariant, and what each platform can actually do |
 | [`inline-commands.md`](inline-commands.md) | Path B: drawing into the window's own pass, the pipeline-state isolation matrix, and the coordinate bridge |
 | [`verification.md`](verification.md) | what a test can assert, and which platform each check needs |
-| [`producer-reach.md`](producer-reach.md) | the other half of Path A: how a producer gets the device it has to make its texture on, and what each platform can do today |
+| [`producer-reach.md`](producer-reach.md) | the other half of Path A: how a producer gets the device it has to make its texture on, what each platform lends now, and what is left |
 | [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 
-Four documents outside this folder are part of the work rather than of the design:
+Six documents outside this folder are part of the work rather than of the design:
 [`../../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)
-decides which devices a producer may use,
+decides which devices a producer may use and
+[`../../decisions/0004-producer-device-rendezvous.md`](../../decisions/0004-producer-device-rendezvous.md)
+decides how a producer reaches one,
 [`../../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) is the
 measurement that decision rests on,
 [`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md)
@@ -53,17 +55,17 @@ the factory, and each backend's window, as §6 of [`renderer-seam.md`](renderer-
 `SceneRenderer` is unchanged, as that chapter assumes: its only implementors are the four
 backends' renderers and the test and headless windows.
 
-The dual-path primitives are not on the canonical ref. `bite_v1.22.0-pre-path-a` carries Path A's
-engine and authoring halves, the wgpu and Metal arms, and the offscreen mode in the renderer
-contract that the whole path is asserted through; `bite_v1.22.0-pre-path-a-directx` carries the
-Direct3D arm. All three renderers can therefore sample an RGBA foreign texture on the branches —
-wgpu and Direct3D with rows on CI, Metal with none — while on the canonical ref Metal's
-`draw_surfaces` is still the YCbCr video path and wgpu's arm is untouched.
+The dual-path primitives are not on the canonical ref, but Path A is whole on one branch.
+`bite_v1.22.0-pre-path-a` (PR #6) carries Path A's engine and authoring halves, the offscreen mode
+in the renderer contract that the path is asserted through, all three arms — wgpu, Metal and
+Direct3D — and the producer's reach, so an application can obtain the device its texture is made on
+as well as paint one. None of it is on the canonical ref: there Metal's `draw_surfaces` is still
+the YCbCr video path and wgpu's arm is untouched.
 
-What that does not add up to is Path A being *usable*, and that is
-[`producer-reach.md`](producer-reach.md): nothing on any platform can hand a renderer a texture,
-because nothing can hand a producer the device to make one on. `GpuCanvas` is unwritten too, and
-[`inline-commands.md`](inline-commands.md) is still nothing but a proposal.
+What that still does not add up to is Path A being *finished*, and
+[`producer-reach.md`](producer-reach.md) is where the remainder lives: a validated Metal token
+builder, a Metal row, and two producer routes that need a measurement rather than code. `GpuCanvas`
+is unwritten too, and [`inline-commands.md`](inline-commands.md) is still nothing but a proposal.
 
 The offscreen mode is the change with reach beyond Path A — `PixelBuffer` is the contract's pixel
 type now, and rendering is separate from reading back — so [`verification.md`](verification.md) §2
@@ -80,10 +82,11 @@ The ordered plan is [`milestones.md`](milestones.md): what is built and where, w
 what order, and the gates a resumer runs. It is there rather than here because the list below had
 grown past what an index should carry, and two copies of a plan are two copies to keep in step.
 
-In one line, the order is: the **producer's reach** first, because it is what makes Path A a
-capability rather than a demonstration; then the two small gaps beside it; then `GpuCanvas`; then
-Path B, which is independent of all of it; then a third-party renderer; then the deferred bridge,
-which needs a probe before it needs a decision.
+In one line, the order is: the **gaps beside the reach** — a validated Metal token, a Metal row,
+and the offscreen gate on Direct3D — because they are what keeps the three arms even; then
+`GpuCanvas`, the surface an application meets; then Path B, which is independent of all of it; then
+a third-party renderer; then the deferred bridge, which needs a probe before it needs a decision.
+The producer's reach itself is built, and is no longer on the list.
 
 The list this section used to hold is closed. The citations were re-pointed to the merged ref — the
 merge moved lines in every file the chapters cite, and §3's Windows rows and §5.2 took real
@@ -200,10 +203,13 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
 - **Path A is the window owner's capability.** The device is the one the factory that built
   the renderer chose, so a widget inside someone else's window cannot be a producer; a
   producer on another device reaches it only through the shared-handle bridge (see Open).
-- **Windows takes the same-device route.** Path A and Path B on Windows run under
-  `gpui_wgpu::WgpuRenderer`, as on Linux, and the payload is the `wgpu::TextureView`; the
-  default `DirectXRenderer` supports neither. The shared-handle bridge that would reach it from
-  a foreign device is measured and deferred, not part of this milestone.
+- **Windows takes the same-device route, on whichever renderer matches the producer.** A wgpu
+  producer runs under `gpui_wgpu::WgpuRenderer`, as on Linux, and the payload is the
+  `wgpu::TextureView`; a Direct3D 11 producer runs under the default `DirectXRenderer`, whose arm
+  is built, and the payload is its own `ID3D11Texture2D`. They are exclusive per window, because
+  the tier follows the renderer — `DirectXRenderer` buys per-pixel transparency and `WgpuRenderer`
+  buys wgpu. The shared-handle bridge that would reach either from a wgpu producer's foreign device
+  is measured and deferred, not part of this milestone.
 - **The factory is invoked once, before the first frame.** Recovery is therefore
   self-sufficient on the returned renderer, and post-construction queries belong on the
   renderer's trait rather than on the factory's input.
