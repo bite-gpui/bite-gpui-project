@@ -232,15 +232,27 @@ property of the view, and the usage flags must include `TextureUsages::TEXTURE_B
 **Not a Windows special case, after all.** The surface format is the renderer's choice, and the
 wgpu renderer picks a non-sRGB one on every platform — `preferred_formats = [Bgra8Unorm,
 Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:359`) — so a Windows window running
-`WgpuRenderer` shows the same `*_UNORM` surface convention the rule above states, and
+`WgpuRenderer` shows the same `*_UNORM` surface convention the rule above states, and the default
 `DirectXRenderer`'s `B8G8R8A8_UNORM` target
-(`crates/gpui_windows/src/directx_renderer.rs:32`) belongs to the renderer that supports
-neither path today. The presentation probe measured the DX12 surface offering `Bgra8UnormSrgb` and
-`Bgra8Unorm` alike, so the choice is not one the platform makes
+(`crates/gpui_windows/src/directx_renderer.rs:32`) is that convention on the renderer that supports
+Path A for a Direct3D 11 producer. The presentation probe measured the DX12 surface offering
+`Bgra8UnormSrgb` and `Bgra8Unorm` alike, so the choice is not one the platform makes
 ([`../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md)).
 The fixture in [`verification.md`](verification.md) §1 is what verifies the rules themselves: it
 reads the format from the consumer, so it needs the fragment path to exist first, and on
 `bite_v1.22.0-pre-path-a` it does.
+
+**That the round trip is the identity depends on the encoder, and one of the three is approximate.**
+The two same-device arms differ in how much of the transfer they have to undo. *wgpu's* requires an
+sRGB view, so the sampler decodes to linear and the fragment re-encodes with the exact piecewise
+transfer (`crates/gpui_wgpu/src/shaders.wgsl:224`) — the round trip is the identity on sRGB bytes.
+*Direct3D's* takes the non-sRGB counterpart of the same texture and writes the sample straight
+through, so there is no transfer function to cancel at all. *Metal's* decodes like wgpu's, but
+`linear_to_srgb` in `crates/gpui_apple/src/shaders.metal` is `pow(color, 1/2.2)`
+(`crates/gpui_apple/src/shaders.metal:954`) — the ≈2.2 approximation, the only encoder that file
+has — so a producer's bytes come back near the ones it wrote rather than equal to them. It is the
+one colour answer of the three that is not exact, and the Metal arm has no test to catch it; §8
+keeps it open.
 
 ## 5. Extracting the handle
 
@@ -337,6 +349,11 @@ of `draw_surfaces` — so there is no second pass and no intermediate target.
   a public field, and nothing validates its format the way the wgpu and Direct3D extensions do. It
   is the one gap that has no alternative, because a macOS window cannot run `WgpuRenderer`;
   [`producer-reach.md`](producer-reach.md) §7 carries it.
+- **The Metal arm's colour round trip is approximate, and its test is missing.** Its fragment
+  decodes the sRGB sample and re-encodes with `linear_to_srgb`'s `pow(1/2.2)` approximation
+  (`crates/gpui_apple/src/shaders.metal:954`), where wgpu's is the exact piecewise curve — §4. Either
+  the Metal arm gets the exact encoder or this records why it does not need one; there is no Metal
+  row to decide it for us.
 - **Whether the raw Metal handle needs an `MTLSharedEvent`.** Only if a producer ever
   renders on a second device; on one device, order within the frame is the
   synchronisation. The drafts proposed the event because they had already assumed a

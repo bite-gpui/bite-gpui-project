@@ -40,7 +40,7 @@ canonical ref. `#6` is green on the fork's CI; what is left for it is the review
 
 ## 3. The gaps beside the reach
 
-Small and independent. The first three are per platform, and they are
+Small and independent. The first four are per platform, and they are
 [`producer-reach.md`](producer-reach.md) §7:
 
 - **macOS has no validated producer token.** `MetalRenderer::device_any` lends the device, but the
@@ -56,6 +56,10 @@ Small and independent. The first three are per platform, and they are
   run it; see [`producer-reach.md`](producer-reach.md) §7.
 - **Metal has no test.** Its arm in `crates/gpui_apple/src/metal_renderer.rs` is the only one of the
   three that nothing exercises, and `MetalRenderer::new_headless` exists, so the row is writable.
+- **Metal's colour round trip is approximate.** Its fragment re-encodes with `linear_to_srgb`'s
+  `pow(1/2.2)` approximation where wgpu's is the exact piecewise curve, so macOS does not return a
+  producer's sRGB bytes unchanged ([`foreign-texture.md`](foreign-texture.md) §4, §8). Either make
+  it exact or record why not; the missing row is what would have caught it.
 - **`DirectXRenderer`'s offscreen override is test-gated.** In `crates/gpui_windows/src/directx_renderer.rs`
   it overrides only `render_scene_to_image`, under `#[cfg(any(test, feature = "test-support"))]`, so
   in a normal build the Direct3D renderer reports offscreen rendering unsupported and implements
@@ -79,7 +83,8 @@ each platform still lacks is [`producer-reach.md`](producer-reach.md) §7, and n
 anything below.
 
 **M2 — the gaps in §3.** Independent of everything above, cheap, and it is what keeps the Direct3D
-and Metal arms honest: a validated Metal token, a Metal row, and the offscreen gate on Direct3D.
+and Metal arms honest: a validated Metal token, an exact encoder for the Metal arm and its first
+test row, and the offscreen gate on Direct3D.
 
 **M3 — `GpuCanvas`.** [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md). The surface an
 application meets; with M1 built, the token its callback returns is one an application can
