@@ -1,6 +1,9 @@
 # Path A: importing a texture produced outside GPUI
 
-- **Status:** proposed. Nothing of it is implemented.
+- **Status:** proposed, and built on a branch. Nothing of it is in `bite_v1.22.0-pre`;
+  `bite_v1.22.0-pre-path-a` carries the primitive, the token, the `window.` call, both renderer
+  arms, the extractor and the readback. The citations below still resolve against the canonical
+  ref, so read this chapter as what to build until the branch lands.
 - **Assumes:** [`renderer-seam.md`](renderer-seam.md) — a renderer is installable at all.
 - **Companion:** [`inline-commands.md`](inline-commands.md) is the other path; the two
   share one scene primitive.
@@ -112,7 +115,7 @@ pub enum CustomRenderPrimitive {
         handle: ImportedTextureHandle,
         bounds: Bounds<ScaledPixels>,
         content_mask: ContentMask<ScaledPixels>,
-        radii: Corners<Pixels>,
+        radii: Corners<ScaledPixels>,
         opacity: f32,
         flip_v: bool,
     },
@@ -141,7 +144,9 @@ Three consequences, each a removal:
   A handle cannot be wrong — it is the resource.
 - **No name to cache across frames.** The application keeps the texture in its own field
   and hands it over each frame. What it must not do is hand over one whose *device* is not
-  the renderer's, which wgpu rejects when the bind group is created.
+  the renderer's, which fails where the bind group is created — and fails there by panicking
+  inside wgpu's own storage rather than by reporting a mismatch this side can name, which is
+  what [`verification.md`](verification.md) §1's device row actually measures.
 
 The surface an application author meets does not change: `GpuCanvas` is the user API
 ([`gpu-canvas.md`](../authoring/gpu-canvas.md)) and the call above is internal to it. What changes is
@@ -156,8 +161,11 @@ once, here:
 | `CustomRenderPrimitive::Texture` | unchanged | it is a texture; the payload is what is imported |
 
 **Bounds are `ScaledPixels`**, like `PaintSurface`'s
-(`crates/gpui_engine/src/scene.rs:220`), not `Pixels`; the element converts at paint time.
-And **`radii` is `Corners<Pixels>`**, not a `CornerRadii` struct.
+(`crates/gpui_engine/src/scene.rs:220`), not `Pixels`; the element converts at paint time. **The
+radii are `ScaledPixels` too**, and a `Corners` rather than a `CornerRadii` struct: a renderer is
+handed scaled pixels and has no scale factor of its own, so the element converts the radii the way
+it converts the bounds, as `paint_quad` does, and typing them `ScaledPixels` is what makes the
+unconverted form fail to compile instead of drawing a corner too tight on a HiDPI display.
 
 The handle is erased, and this is the point where erasure is right rather than a
 compromise:
@@ -195,16 +203,25 @@ A bare `usize` would collide with any other `usize` payload and could not be che
 
 ## 4. The colour-space invariant
 
-Two rules, and getting either wrong is a visible defect rather than a crash:
+Three rules, and getting any of them wrong is a visible defect rather than a crash:
 
-- **The offscreen texture must be sampled as sRGB** — `Rgba8UnormSrgb` or
-  `Bgra8UnormSrgb`. GPUI's swapchain is a `*_UNORM` format treated as sRGB at
-  presentation, so a raw linear texture composites with a ≈2.2 gamma error.
+- **The offscreen texture is declared sRGB** — `Rgba8UnormSrgb` or `Bgra8UnormSrgb`. The
+  declaration is what fixes the *content*, not only the sampling: an sRGB view's stored bytes are
+  sRGB-encoded by construction, so a producer that renders into one and a producer that writes
+  bytes a decoder handed it agree about what they handed over.
+- **The fragment decodes the sample and re-encodes it.** Sampling an sRGB view yields *linear*
+  values, and GPUI's shaders do not work in linear: its target is a `*_UNORM` format they write
+  sRGB-encoded values into, which is why the atlas is non-sRGB as well
+  (`crates/gpui_wgpu/src/wgpu_atlas.rs:367-368`). So the fragment has to put the sample back
+  through `linear_to_srgb` before blending. On bytes that are sRGB-encoded the round trip is the
+  identity, and dropping either half is the ≈2.2 error the first rule alone does not describe —
+  a fixture reads back `[147, 32, 8, 255]` instead of `[200, 100, 50, 255]` when the re-encode is
+  missing ([`verification.md`](verification.md) §1).
 - **The sampler is linear with `AddressMode::ClampToEdge`**, so a clip against a rounded
   corner cannot bleed the opposite edge into the blend.
 
-`to_imported_handle` should validate both and fail early: the format is a property of the
-view, and the usage flags must include `TextureUsages::TEXTURE_BINDING`.
+`to_imported_handle` should validate the format and the usage flags and fail early: the format is a
+property of the view, and the usage flags must include `TextureUsages::TEXTURE_BINDING`.
 
 **Not a Windows special case, after all.** The surface format is the renderer's choice, and the
 wgpu renderer picks a non-sRGB one on every platform — `preferred_formats = [Bgra8Unorm,
@@ -215,9 +232,9 @@ Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:359`) — so a Windows wind
 neither path today. The presentation probe measured the DX12 surface offering `Bgra8UnormSrgb` and
 `Bgra8Unorm` alike, so the choice is not one the platform makes
 ([`../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md)).
-The fixture in [`verification.md`](verification.md) §1 is what verifies the rule itself — and
-that has to wait for the fragment path §1 describes, because until it exists there is no
-consumer to read the format from.
+The fixture in [`verification.md`](verification.md) §1 is what verifies the rules themselves: it
+reads the format from the consumer, so it needs the fragment path to exist first, and on
+`bite_v1.22.0-pre-path-a` it does.
 
 ## 5. Extracting the handle
 

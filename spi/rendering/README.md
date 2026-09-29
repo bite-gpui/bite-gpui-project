@@ -58,6 +58,13 @@ Metal's `draw_surfaces` is the YCbCr video path, wgpu's arm is empty, and Direct
 error. Those are [`foreign-texture.md`](foreign-texture.md) and
 [`inline-commands.md`](inline-commands.md), budgeted separately from §6.
 
+Path A is built on a branch off the canonical ref: `bite_v1.22.0-pre-path-a` carries the primitive
+and the token, the `window.` call, the wgpu and Metal arms, the extractor, and an offscreen mode in
+the renderer contract that the whole path can be asserted through. That last one is the change with
+reach beyond Path A — `PixelBuffer` is the contract's pixel type now, and rendering is separate
+from reading back — so [`verification.md`](verification.md) §2 records where each row runs.
+[`inline-commands.md`](inline-commands.md) is still nothing but a proposal.
+
 The seam's test runs for the pull requests: `bite-ci.yml`'s `tests` job runs
 `cargo test -p gpui_authoring --lib` on Linux, where the test lives.
 

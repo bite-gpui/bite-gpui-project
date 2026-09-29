@@ -3,6 +3,9 @@
 - **Status:** proposed, as the test plan for
   [`renderer-seam.md`](renderer-seam.md), [`foreign-texture.md`](foreign-texture.md),
   [`inline-commands.md`](inline-commands.md) and [`gpu-canvas.md`](../authoring/gpu-canvas.md).
+  Path A's rows below have implementations on `bite_v1.22.0-pre-path-a` — the encoding and scale
+  rows in `gpui_authoring`, the three that need a device in `gpui_wgpu` — while the citations here
+  stay written against the canonical ref.
 - **Why it is a chapter of its own:** most of this feature's failure modes are silent — a
   wrong scale factor, a missed gamma, a leaked pipeline, a device that is not the one the
   texture came from. None is a compile error, and three of the four platforms cannot be
@@ -17,9 +20,9 @@ Each row is an assertion a test can make, not a thing to look at:
 | resize / surface churn | stale swapchain geometry | after `update_drawable_size`, the next frame's scissor and viewport match the new size |
 | DPI / scale factor | a half- or double-scale viewport | `bounds * scale_factor` rounds to the coordinates the platform target reports |
 | premultiplied alpha | fringes at rounded corners and antialiased edges | a known RGBA fixture composites to a known pixel on readback |
-| Path A colour space | a washed-out composite | an sRGB fixture round-trips without a ≈2.2 gamma shift |
+| Path A colour space | a washed-out composite | an sRGB fixture round-trips byte for byte; with the fragment's re-encode missing the same fixture shifts by ≈2.2 (`[200, 100, 50]` reads back as `[147, 32, 8]`) |
 | Path A ordering | a texture sampled before the pass that fills it | a frame whose producer submits in its paint callback composites the texture; the same frame with that submission removed does not |
-| Path A device identity | a texture from a second device | the bind fails, and the failure names the mismatch |
+| Path A device identity | a texture from a second device | the bind fails loudly. It does not *name* the mismatch: wgpu refuses a resource from another device by panicking inside its own storage, so what a test can assert is that it cannot be silent |
 | Outcome B end to end | a Windows configuration nothing has ever composited | on `windows-latest`, a window with `WgpuRenderer` installed composites a pushed texture, and the same window with the default renderer reports it unsupported |
 | Path B state isolation | UI corruption *after* an injected draw | a quad drawn after an injected command matches the same quad with no injection |
 | Path B scissor | drawing outside the element | an injected command cannot paint outside its device scissor rect |
@@ -38,7 +41,13 @@ compile-time property, and "each backend compiles" is CI.
 
 - **On this host, headless.** Every readback row, the scissor and state-isolation rows,
   and device loss, because the Linux renderer is wgpu and wgpu has no display requirement.
-  The `TestPlatform` factory is the existing proof that the pattern works.
+  Two harnesses answer it and they are not interchangeable. The `TestPlatform` factory installs a
+  renderer in a window, which is how a row about the *window* is asserted — the seam's own test is
+  the proof the pattern works. Path A's readback rows are asserted elsewhere instead, on
+  `WgpuRenderer::new_offscreen` in `gpui_wgpu`'s own tests, because what they need is a device and
+  the renderer that owns it: a producer's texture has to be made *on that device* before any of them
+  can run, with no window involved at all. Those tests skip with a logged warning where the machine
+  has no adapter, so they are gates only where a GPU or a software rasteriser exists.
 - **On a macOS host.** The Metal arm, and the `MacSceneRenderer` hook — nothing else
   catches a mis-wired native hook.
 - **On a Windows host.** The Direct3D arm and `WinSceneRenderer`, and — for
