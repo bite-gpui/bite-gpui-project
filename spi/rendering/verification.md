@@ -3,9 +3,12 @@
 - **Status:** proposed, as the test plan for
   [`renderer-seam.md`](renderer-seam.md), [`foreign-texture.md`](foreign-texture.md),
   [`inline-commands.md`](inline-commands.md) and [`gpu-canvas.md`](../authoring/gpu-canvas.md).
-  Path A's rows below have implementations on `bite_v1.22.0-pre-path-a` — the encoding and scale
-  rows in `gpui_authoring`, the three that need a device in `gpui_wgpu` — while the citations here
-  stay written against the canonical ref.
+  Path A's rows below have implementations on two branches — `bite_v1.22.0-pre-path-a` carries the
+  encoding and scale rows in `gpui_authoring` and the three that need a device in `gpui_wgpu`, and
+  `bite_v1.22.0-pre-path-a-directx` the three that run in `gpui_windows`' tests on a Windows runner
+  — while the citations here stay written against the canonical ref. The row that is still
+  *proposed* rather than implemented is the producer's reach, and
+  [`producer-reach.md`](producer-reach.md) is where its absence lives.
 - **Why it is a chapter of its own:** most of this feature's failure modes are silent — a
   wrong scale factor, a missed gamma, a leaked pipeline, a device that is not the one the
   texture came from. None is a compile error, and three of the four platforms cannot be
@@ -23,6 +26,7 @@ Each row is an assertion a test can make, not a thing to look at:
 | Path A colour space | a washed-out composite | an sRGB fixture round-trips byte for byte; with the fragment's re-encode missing the same fixture shifts by ≈2.2 (`[200, 100, 50]` reads back as `[147, 32, 8]`) |
 | Path A ordering | a texture sampled before the pass that fills it | a frame whose producer submits in its paint callback composites the texture; the same frame with that submission removed does not |
 | Path A device identity | a texture from a second device | the bind fails loudly. It does not *name* the mismatch: wgpu refuses a resource from another device by panicking inside its own storage, so what a test can assert is that it cannot be silent |
+| the producer's reach | Path A being a demonstration rather than a capability | nothing yet, which is the point: an application holding only a `Window` — not a renderer — has to obtain the device its texture is made on. No such path exists, so no row can be written, and closing that is [`producer-reach.md`](producer-reach.md) |
 | Outcome B end to end | a Windows configuration nothing has ever composited | on `windows-latest`, a window with `WgpuRenderer` installed composites a pushed texture, and the same window with the default renderer reports it unsupported |
 | Path B state isolation | UI corruption *after* an injected draw | a quad drawn after an injected command matches the same quad with no injection |
 | Path B scissor | drawing outside the element | an injected command cannot paint outside its device scissor rect |
@@ -47,12 +51,18 @@ compile-time property, and "each backend compiles" is CI.
   `WgpuRenderer::new_offscreen` in `gpui_wgpu`'s own tests, because what they need is a device and
   the renderer that owns it: a producer's texture has to be made *on that device* before any of them
   can run, with no window involved at all. Those tests skip with a logged warning where the machine
-  has no adapter, so they are gates only where a GPU or a software rasteriser exists.
-- **On a macOS host.** The Metal arm, and the `MacSceneRenderer` hook — nothing else
-  catches a mis-wired native hook.
+  has no adapter, so they are gates only where a GPU or a software rasteriser exists. That shape is
+  also why they say nothing about the producer's reach: the test *is* the producer, because a test in
+  the renderer's crate can hold the concrete renderer, which is exactly the door an application does
+  not have ([`producer-reach.md`](producer-reach.md) §4).
+- **On a macOS host.** The Metal arm, and the `MacSceneRenderer` hook — nothing else catches a
+  mis-wired native hook. The arm has no test yet, so what macOS gates today is that its Rust
+  type-checks and its shader compiles, not that it samples anything.
 - **On a Windows host.** The Direct3D arm and `WinSceneRenderer`, and — for
-  [`foreign-texture.md`](foreign-texture.md) — the whole Windows configuration, since the
-  default renderer supports neither path.
+  [`foreign-texture.md`](foreign-texture.md) — the whole Windows configuration. The arm's three rows
+  run on `windows-latest` and they pass there, on WARP, which is why they are a result about one
+  adapter rather than about hardware. What Windows still cannot show is the producer's reach: the
+  default renderer supports Path A's consumer half now, and nothing can feed it.
 
 ## 3. The gate
 
@@ -67,6 +77,7 @@ real platforms, because standard GitHub-hosted runners are free for a public rep
 | the distribution checks | ubuntu | the target table and the naming rule, from `bite-gpui/distribution` |
 | `cargo check -p gpui` | macos-14 | the only place the Metal shaders are compiled at all: `gpui_apple`'s build script runs `xcrun metal`, and a build script runs for the **host** |
 | `cargo check --release -p gpui` | windows-latest | release is the profile whose build script compiles the HLSL with `fxc` and whose Rust includes the result, which is also what makes the job unsatisfiable anywhere but Windows |
+| `cargo test --release -p gpui_windows imported_texture` | windows-latest | Path A's Direct3D rows: they need a device and a swap chain, which no Linux gate has and no cross-compile reaches. Filtered to those three rows, because the crate's older tests have never run on a runner. It asserts that at least one ran, so the filter cannot pass vacuously |
 
 **Cross-compiling was tried first and is not enough, though it earned its keep.** A Linux
 job checking `--target x86_64-pc-windows-msvc` found

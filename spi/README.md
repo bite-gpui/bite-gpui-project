@@ -74,7 +74,7 @@ One document per seam, wherever it sits.
 | document | status |
 | --- | --- |
 | [`input/input-policy-seam.md`](input/input-policy-seam.md) | parked — specified but not proposed upstream; no third swap ships |
-| [`rendering/renderer-seam.md`](rendering/renderer-seam.md) | proposed — giving `SceneRenderer` a bootstrap, and the three contracts that follow: the trait a window holds, the typed target a renderer is built against, and the factory the window consults |
+| [`rendering/renderer-seam.md`](rendering/renderer-seam.md) | landed on `bite_v1.22.0-pre`: the trait a window holds, the typed target a renderer is built against, and the factory the window consults. What has been built on top of it, and what is still missing, is [`rendering/milestones.md`](rendering/milestones.md) |
 
 ## Spikes
 

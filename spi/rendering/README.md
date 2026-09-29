@@ -29,6 +29,8 @@ its own folder, because it is a surface an application meets rather than part of
 | [`foreign-texture.md`](foreign-texture.md) | Path A: importing a texture produced outside GPUI, the erasure, the colour-space invariant, and what each platform can actually do |
 | [`inline-commands.md`](inline-commands.md) | Path B: drawing into the window's own pass, the pipeline-state isolation matrix, and the coordinate bridge |
 | [`verification.md`](verification.md) | what a test can assert, and which platform each check needs |
+| [`producer-reach.md`](producer-reach.md) | the other half of Path A: how a producer gets the device it has to make its texture on, and what each platform can do today |
+| [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 
 Four documents outside this folder are part of the work rather than of the design:
@@ -51,19 +53,21 @@ the factory, and each backend's window, as §6 of [`renderer-seam.md`](renderer-
 `SceneRenderer` is unchanged, as that chapter assumes: its only implementors are the four
 backends' renderers and the test and headless windows.
 
-The dual-path primitives are not. Nothing imports a texture produced outside GPUI or draws an
-application's commands into the window's pass: there is no `CustomRenderPrimitive`, no
-`ImportedTextureHandle`, no `GpuCanvas`, and no renderer samples an RGBA foreign texture —
-Metal's `draw_surfaces` is the YCbCr video path, wgpu's arm is empty, and DirectX's returns an
-error. Those are [`foreign-texture.md`](foreign-texture.md) and
-[`inline-commands.md`](inline-commands.md), budgeted separately from §6.
+The dual-path primitives are not on the canonical ref. `bite_v1.22.0-pre-path-a` carries Path A's
+engine and authoring halves, the wgpu and Metal arms, and the offscreen mode in the renderer
+contract that the whole path is asserted through; `bite_v1.22.0-pre-path-a-directx` carries the
+Direct3D arm. All three renderers can therefore sample an RGBA foreign texture on the branches —
+wgpu and Direct3D with rows on CI, Metal with none — while on the canonical ref Metal's
+`draw_surfaces` is still the YCbCr video path and wgpu's arm is untouched.
 
-Path A is built on a branch off the canonical ref: `bite_v1.22.0-pre-path-a` carries the primitive
-and the token, the `window.` call, the wgpu and Metal arms, the extractor, and an offscreen mode in
-the renderer contract that the whole path can be asserted through. That last one is the change with
-reach beyond Path A — `PixelBuffer` is the contract's pixel type now, and rendering is separate
-from reading back — so [`verification.md`](verification.md) §2 records where each row runs.
+What that does not add up to is Path A being *usable*, and that is
+[`producer-reach.md`](producer-reach.md): nothing on any platform can hand a renderer a texture,
+because nothing can hand a producer the device to make one on. `GpuCanvas` is unwritten too, and
 [`inline-commands.md`](inline-commands.md) is still nothing but a proposal.
+
+The offscreen mode is the change with reach beyond Path A — `PixelBuffer` is the contract's pixel
+type now, and rendering is separate from reading back — so [`verification.md`](verification.md) §2
+records where each row runs.
 
 The seam's test runs for the pull requests: `bite-ci.yml`'s `tests` job runs
 `cargo test -p gpui_authoring --lib` on Linux, where the test lives.
@@ -72,28 +76,21 @@ The platform claims rest on the probe printouts the chapters cite.
 
 ## Next
 
-Ordered by what unblocks what.
+The ordered plan is [`milestones.md`](milestones.md): what is built and where, what comes next in
+what order, and the gates a resumer runs. It is there rather than here because the list below had
+grown past what an index should carry, and two copies of a plan are two copies to keep in step.
 
-The first two items this list carried are done. The citations were re-pointed to the merged ref
--- the merge moved lines in every file the chapters cite, and §3's Windows rows and §5.2 took
-real citations with them. And `bite-ci.yml` has a `tests` job: `cargo test -p gpui_authoring
---lib` on Linux, 346 passing, which is the seam's test running for the pull requests rather
-than only locally. The job's filter is narrow; widening it to the changed packages is what is
-left of that item.
+In one line, the order is: the **producer's reach** first, because it is what makes Path A a
+capability rather than a demonstration; then the two small gaps beside it; then `GpuCanvas`; then
+Path B, which is independent of all of it; then a third-party renderer; then the deferred bridge,
+which needs a probe before it needs a decision.
 
-1. **Path A** ([`foreign-texture.md`](foreign-texture.md)): the RGBA sampling fragment path and
-   pipeline, `CustomRenderPrimitive` and `ImportedTextureHandle`, and the extractor. Its home in
-   `gpui_wgpu` is the batch arm that is empty today.
-2. **Path B** ([`inline-commands.md`](inline-commands.md)): pause/restore in each renderer, the
-   inline primitive, and the coordinate bridge.
-3. **A third-party renderer.** The point of the seam is that a renderer which is not a
-   backend's can be installed — the test's recording renderer already is one. A Blade/Vulkan
-   crate implementing `PlatformRenderer` is the affordance this was built for; the default-
-   renderer question under Open is what would make it more than an affordance.
-4. **The deferred bridge** ([0002](../../decisions/0002-render-extension-device-model.md)): the
-   cross-device shared-handle route is measured in
-   [`shared-surface.md`](../../decisions/shared-surface.md) and deferred, and macOS adoption is
-   the one corner left unmeasured.
+The list this section used to hold is closed. The citations were re-pointed to the merged ref — the
+merge moved lines in every file the chapters cite, and §3's Windows rows and §5.2 took real
+citations with them. And `bite-ci.yml` has a `tests` job: `cargo test -p gpui_authoring --lib` on
+Linux, 346 passing — the branch widens it to `-p gpui_engine` as well — which is the seam's test
+running for the pull requests rather than only locally. The job's filter is narrow, and widening it
+to the other packages is still open.
 
 Porting the branch to the other targets is the replay in `tools`, and the canonical pass it
 wanted is done.

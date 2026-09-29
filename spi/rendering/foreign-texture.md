@@ -1,9 +1,13 @@
 # Path A: importing a texture produced outside GPUI
 
-- **Status:** proposed, and built on a branch. Nothing of it is in `bite_v1.22.0-pre`;
-  `bite_v1.22.0-pre-path-a` carries the primitive, the token, the `window.` call, both renderer
-  arms, the extractor and the readback. The citations below still resolve against the canonical
-  ref, so read this chapter as what to build until the branch lands.
+- **Status:** proposed, and built on branches. Nothing of it is in `bite_v1.22.0-pre`;
+  `bite_v1.22.0-pre-path-a` carries the primitive, the token, the `window.` call, the wgpu and Metal
+  arms, the extractor and the readback, and `bite_v1.22.0-pre-path-a-directx` the Direct3D arm. The
+  citations below still resolve against the canonical ref, so read this chapter as what was built
+  until the branches land.
+- **The other half of it:** what is here is the *consumer* — a renderer that samples a texture.
+  How a producer gets the device its texture has to be made on is
+  [`producer-reach.md`](producer-reach.md), and that is not built anywhere.
 - **Assumes:** [`renderer-seam.md`](renderer-seam.md) — a renderer is installable at all.
 - **Companion:** [`inline-commands.md`](inline-commands.md) is the other path; the two
   share one scene primitive.
@@ -295,15 +299,28 @@ shares the encoder itself.
 
 | renderer | work |
 | --- | --- |
-| `WgpuRenderer` | **write the arm.** `PrimitiveBatch::Surfaces` is `{}` today (`crates/gpui_wgpu/src/wgpu_renderer.rs:1546`); it has to bind the imported view to a dedicated fragment sampler slot and draw the quad with the SDF clip, radii and opacity |
-| `MetalRenderer` | already draws `PaintSurface` (`crates/gpui_apple/src/metal_renderer.rs:1137`); downcast the payload to `MetalTexture` and bind it instead of the `CVPixelBuffer` path |
-| `DirectXRenderer` | **nothing, under this design.** It already returns an explicit unsupported error rather than succeeding silently (`crates/gpui_windows/src/directx_renderer.rs:833`), and Windows runs Path A under `WgpuRenderer` (§2), so this renderer is not asked to sample an imported texture |
+| `WgpuRenderer` | **built** on `bite_v1.22.0-pre-path-a`, three rows on CI. The arm is a batch of its own rather than `PrimitiveBatch::Surfaces` — that one's items are YCbCr video with a `CVPixelBuffer` behind them — and its fragment re-encodes, because the view is sRGB and the target is not |
+| `MetalRenderer` | **built** on the same branch: `draw_imported_textures` beside `draw_surfaces`, which stays the YCbCr path. **It has no test**, so "built" means it type-checks and its shader compiles |
+| `DirectXRenderer` | **built** on `bite_v1.22.0-pre-path-a-directx`, three rows on CI, and it no longer returns an unsupported error (`crates/gpui_windows/src/directx_renderer.rs:833` is what the *canonical* ref does). Its view is the texture's non-sRGB counterpart where wgpu's is sRGB, so there is no transfer function to cancel: this shader file has only `linear_to_srgb`'s ≈2.2 approximation, which would not cancel one exactly |
+
+Two things the arms share and one they do not. Each reuses the quads' instance record and vertex
+entry point — `CustomRenderPrimitive::to_quad_record` is the engine's encode into it — so the
+geometry, the content-mask clip and the corner SDF are the quad path's rather than a second
+implementation of them, and each pins a sampler that clamps, so a clip against a rounded corner
+cannot bleed the opposite edge in. What differs is the batch offset a per-primitive draw needs: the
+record buffer holds every custom primitive in the scene and the shader indexes it through the batch
+start, so each arm passes its range's start the way the wgpu one passes
+`first_instance + range.start`.
 
 The bind happens in the *same* pass that composites the quad batch — the generalisation
 of `draw_surfaces` — so there is no second pass and no intermediate target.
 
 ## 8. Open
 
+- **How a producer reaches the device at all.** Not built, on any platform, in a build an
+  application gets — [`producer-reach.md`](producer-reach.md), which is where the two shapes it
+  could take are set out. It is the largest of these and the only one that blocks the path being
+  usable.
 - **The erasure vs a cfg-gated `wgpu` in the engine** (§3). Recommendation: erasure, and
   it is the same argument the target's typing rests on, applied from the other side.
 - **Which sampler slot, and whether the payload should carry it.** The drafts say
@@ -313,6 +330,9 @@ of `draw_surfaces` — so there is no second pass and no intermediate target.
   only pass the flag down. Whether the *application* or the renderer owns the convention
   is unsettled — the drafts hand it to the application, which means every producer has to
   know GPUI's UV direction.
+- **Metal's producer half.** `MetalRenderer` constructs its own device
+  (`crates/gpui_apple/src/metal_renderer.rs:195`), so it is the one renderer that neither lends a
+  device nor can be given one; [`producer-reach.md`](producer-reach.md) §3 and §7 carry it now.
 - **Whether the raw Metal handle needs an `MTLSharedEvent`.** Only if a producer ever
   renders on a second device; on one device, order within the frame is the
   synchronisation. The drafts proposed the event because they had already assumed a

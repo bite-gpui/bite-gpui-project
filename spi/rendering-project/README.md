@@ -21,6 +21,8 @@ The subfolders mirror the sources — `rendering/`, `authoring/`, `decisions/`,
 | [`rendering/foreign-texture.md`](../rendering/foreign-texture.md) | Path A — importing a texture produced outside GPUI |
 | [`rendering/inline-commands.md`](../rendering/inline-commands.md) | Path B — drawing into the window's own pass |
 | [`rendering/verification.md`](../rendering/verification.md) | the matrix, and the platform each check needs |
+| [`rendering/producer-reach.md`](../rendering/producer-reach.md) | the other half of Path A — how a producer gets the device — and what each platform can do today |
+| [`rendering/milestones.md`](../rendering/milestones.md) | what is built and where, what is next in what order, and the gates a resumer runs |
 | [`authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface |
 | [`decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md) | decision 0002 — which devices a producer may use, and which it may not |
 | [`decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) | the first measurement 0002 rests on |
