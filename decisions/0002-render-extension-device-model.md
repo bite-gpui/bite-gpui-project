@@ -26,7 +26,7 @@ GPU resources:
 2. **On Windows both paths require `gpui_wgpu::WgpuRenderer`**, installed through the
    renderer factory. The default `DirectXRenderer` supports neither, and it says so rather
    than succeeding silently: `draw_surfaces` returns an explicit unsupported error
-   (`crates/gpui_windows/src/directx_renderer.rs:833`). Corrected 2026-09-29 for a Direct3D 11
+   (`crates/gpui_windows/src/directx_renderer.rs:852`). Corrected 2026-09-29 for a Direct3D 11
    producer — see the second revision below.
 3. **Sharing a resource across devices is out of scope for this milestone.** No `IOSurface`
    variant, no DXGI shared-handle variant, no dma-buf; the erased texture payload keeps no
@@ -34,7 +34,7 @@ GPU resources:
    [`shared-surface.md`](shared-surface.md) measures the bridge a later milestone could take.
 4. **The device is reached through the factory**, which already carries it:
    `GpuContext = Rc<RefCell<Option<WgpuContext>>>`
-   (`crates/gpui_wgpu/src/wgpu_renderer.rs:168`) with
+   (`crates/gpui_wgpu/src/wgpu_renderer.rs:173`) with
    `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
    (`crates/gpui_wgpu/src/wgpu_context.rs:9`).
 
@@ -72,7 +72,7 @@ let context = match ctx_ref.as_mut() {
 };
 ```
 
-(`crates/gpui_wgpu/src/wgpu_renderer.rs:308`-`:317`). So an application that already has a
+(`crates/gpui_wgpu/src/wgpu_renderer.rs:340`-`:349`). So an application that already has a
 device, adapter and queue it wants to use can build the `WgpuContext`, put it in the slot
 from its own factory, and the renderer adopts it;
 `check_compatible_with_surface` is the guard that the adapter still presents to this
@@ -151,7 +151,7 @@ written and holds, with two riders that
 [`windows-presentation-probe.md`](windows-presentation-probe.md) records. `WgpuRenderer` can
 present on a Windows window, but only on Direct3D 12, and reaching it was a backend change and
 not plumbing alone: the seam's Windows commit is what enables `Backends::DX12`
-(`crates/gpui_wgpu/src/wgpu_context.rs:311`). And the DX12 surface offers `Opaque` alpha alone,
+(`crates/gpui_wgpu/src/wgpu_context.rs:397`). And the DX12 surface offers `Opaque` alpha alone,
 so a window it renders cannot be transparent the way the default renderer's can.
 
 ## Revision, 2026-09-28: adoption is app-reachable

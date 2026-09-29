@@ -57,23 +57,20 @@ the factory, and each backend's window, as §6 of [`renderer-seam.md`](renderer-
 `SceneRenderer` is unchanged, as that chapter assumes: its only implementors are the four
 backends' renderers and the test and headless windows.
 
-The dual-path primitives are not on the canonical ref, but Path A is whole on one branch.
-`bite_v1.22.0-pre-path-a` (PR #6) carries Path A's engine and authoring halves, the offscreen mode
-in the renderer contract that the path is asserted through, all three arms — wgpu, Metal and
-Direct3D — and the producer's reach, so an application can obtain the device its texture is made on
-as well as paint one. None of it is on the canonical ref: there Metal's `draw_surfaces` is still
-the YCbCr video path and wgpu's arm is untouched.
+Path A is on the canonical ref, merged as PR #6 — its engine and authoring halves, the offscreen
+mode in the renderer contract the path is asserted through, all three arms (wgpu, Metal and
+Direct3D), and the producer's reach, so an application can obtain the device its texture is made on
+as well as paint one.
 
 What that adds up to is that the three consumer arms and the three producers are level: each
 renderer samples an RGBA foreign texture, lends its device, has a token builder an application names
 as `gpui::…` — the wgpu one through the platform crate, the Direct3D one not at all when the window
 installed `WgpuRenderer` — and implements the offscreen contract, which Direct3D was the last to do.
 
-A runnable demo ties the two halves together: `cargo run -p gpui --example path_a` on
-`bite_v1.22.0-pre-path-a` asks the window for its device, refills a texture on it every frame, hands
-the renderer a token from a paint callback, and paints an ordinary `div()` over the composite. Its
-producer differs per platform, because the renderer does — wgpu on Linux and macOS, Direct3D 11 on
-Windows.
+A runnable demo ties the two halves together: `cargo run -p gpui --example path_a` asks the window
+for its device, refills a texture on it every frame, hands the renderer a token from a paint
+callback, and paints an ordinary `div()` over the composite. Its producer differs per platform,
+because the renderer does — wgpu on Linux and macOS, Direct3D 11 on Windows.
 
 What that still does not add up to is Path A being *finished*, and
 [`producer-reach.md`](producer-reach.md) is where the remainder lives: the Windows bridge —
@@ -87,7 +84,7 @@ type now, and rendering is separate from reading back — so [`verification.md`]
 records where each row runs.
 
 The seam's test runs for the pull requests: `bite-ci.yml`'s `tests` job runs
-`cargo test -p gpui_authoring --lib` on Linux, where the test lives.
+`cargo test -p gpui_authoring -p gpui_engine --lib` on Linux, where the tests live.
 
 The platform claims rest on the probe printouts the chapters cite.
 
@@ -105,10 +102,10 @@ are done, and are no longer on the list.
 
 The list this section used to hold is closed. The citations were re-pointed to the merged ref — the
 merge moved lines in every file the chapters cite, and §3's Windows rows and §5.2 took real
-citations with them. And `bite-ci.yml` has a `tests` job: `cargo test -p gpui_authoring --lib` on
-Linux, 346 passing — the branch widens it to `-p gpui_engine` as well — which is the seam's test
-running for the pull requests rather than only locally. The job's filter is narrow, and widening it
-to the other packages is still open.
+citations with them. And `bite-ci.yml` has a `tests` job:
+`cargo test -p gpui_authoring -p gpui_engine --lib` on Linux, where the tests live, which is the
+engine's and authoring's rows running for the pull requests rather than only locally. The job's
+filter is narrow, and widening it to the other packages is still open.
 
 Porting the branch to the other targets is the replay in `tools`, and the canonical pass it
 wanted is done.
@@ -159,11 +156,11 @@ RFC's "≈16.0 GB/s at 4K120" is its own formula miscounted — `W × H × 4 × 
    ruling against doing that.
 3. **`set_viewport_size` on `PlatformRenderer`?** **No — and the name is wrong.**
    `SceneRenderer::set_viewport_size` is test-gated
-   (`crates/gpui_engine/src/renderer.rs:32`), has exactly one caller (the test window,
-   `crates/gpui_authoring/src/platform/test/window.rs:531`) and one override
-   (`crates/gpui_apple/src/metal_renderer.rs:1698`). The *production* resize path
+   (`crates/gpui_engine/src/renderer.rs:95`), has exactly one caller (the test window,
+   `crates/gpui_authoring/src/platform/test/window.rs:529`) and one override
+   (`crates/gpui_apple/src/metal_renderer.rs:1813`). The *production* resize path
    already has a name: `WgpuRenderer::update_drawable_size`
-   (`crates/gpui_wgpu/src/wgpu_renderer.rs:1132`). So neither "lift the gate" nor "drop
+   (`crates/gpui_wgpu/src/wgpu_renderer.rs:1297`). So neither "lift the gate" nor "drop
    it" was needed — the contract gets the production name, which is also what makes a
    factory-installed renderer behave exactly as the backend's own.
 4. **Where does the factory live — `Application` or the window?** **The window.**
@@ -207,7 +204,7 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
 
 - **Path A reuses `PaintSurface`'s machinery, and not its drawing.** The variant, its batch,
   its ordering and its content-mask handling are what the primitive is shaped after
-  (`crates/gpui_engine/src/scene.rs:749`); the drawing is new, because `PaintSurface` is
+  (`crates/gpui_engine/src/scene.rs:784`); the drawing is new, because `PaintSurface` is
   itself macOS-only video with a YCbCr fragment path, drawn by one renderer, and every sprite
   and path fragment samples the atlas instead of a texture of its own.
   [`foreign-texture.md`](foreign-texture.md) §1 states it once.
@@ -230,7 +227,7 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
   renderer's trait rather than on the factory's input.
 - **The trait upcast is load-bearing.** `PlatformWindow::with_renderer` and `present`
   hand out `&mut dyn SceneRenderer`
-  (`crates/gpui_platform/src/platform_window.rs:151`, `:157`), and the explicit
+  (`crates/gpui_platform/src/platform_window.rs:150`, `:167`), and the explicit
   `as_scene_renderer` shims are gone, so reaching a `Box<dyn PlatformRenderer>` as a
   `dyn SceneRenderer` is upcasting. Stable since 1.86; `rust-toolchain.toml` is 1.95.
 

@@ -3,11 +3,10 @@
 - **Status:** proposed, as the test plan for
   [`renderer-seam.md`](renderer-seam.md), [`foreign-texture.md`](foreign-texture.md),
   [`inline-commands.md`](inline-commands.md) and [`gpu-canvas.md`](../authoring/gpu-canvas.md).
-  Path A's rows below have implementations on one branch — `bite_v1.22.0-pre-path-a` carries the
-  encoding and scale rows in `gpui_authoring`, the three that need a device in `gpui_wgpu`, the
-  three that run in `gpui_windows`' tests on a Windows runner, and the two in `gpui_apple`'s on a
-  macOS one — while the citations here stay written against the canonical ref. The producer's reach
-  is implemented too, so the rows still *proposed* rather than written are Path B's.
+  Path A's rows below are written: the encoding and scale rows in `gpui_authoring`, the three that
+  need a device in `gpui_wgpu`, the three that run in `gpui_windows`' tests on a Windows runner, and
+  the two in `gpui_apple`'s on a macOS one. The producer's reach is implemented too, so the rows
+  still *proposed* rather than written are Path B's.
 - **Why it is a chapter of its own:** most of this feature's failure modes are silent — a
   wrong scale factor, a missed gamma, a leaked pipeline, a device that is not the one the
   texture came from. None is a compile error, and three of the four platforms cannot be
@@ -96,9 +95,9 @@ Two asymmetries are worth stating, because they look like the same check and are
 - **Windows:** a cross-target `cargo check` in debug is nearly equivalent to a native
   one, because in debug the HLSL is compiled at run time by `D3DCompileFromFile` and the
   Rust includes the generated bindings only when debug assertions are off
-  (`crates/gpui_windows/src/directx_renderer.rs:1889`). The native job is release, so it
+  (`crates/gpui_windows/src/directx_renderer.rs:2002`). The native job is release, so it
   differs where it matters.
-- **macOS:** the same trick does not work. `crates/gpui_apple/src/metal_renderer.rs:37`
+- **macOS:** the same trick does not work. `crates/gpui_apple/src/metal_renderer.rs:38`
   includes `OUT_DIR/shaders.metallib` in every profile, and only a macOS host produces
   it, so a Linux check of the Apple crates type-checks the Rust and not the shaders.
 

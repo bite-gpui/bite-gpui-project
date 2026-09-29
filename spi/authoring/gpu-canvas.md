@@ -10,7 +10,7 @@
   who wants a map inside a `div()` should never meet the `Element` trait, and this is the
   shape that keeps them from meeting it.
 - **The hand-rolled version exists**, which is what makes the element the next step rather than a
-  hypothesis: `crates/gpui/examples/path_a.rs` on `bite_v1.22.0-pre-path-a` does by hand what §3
+  hypothesis: `crates/gpui/examples/path_a.rs` on the canonical ref does by hand what §3
   describes — compose a `div()`, paint an imported texture, let an ordinary box over it — so what
   `GpuCanvas` adds is the spelling, not a capability.
 
@@ -133,7 +133,7 @@ no counterpart in this fork:
   `(&mut self, window: &mut Window, cx: &mut Context<Self>)`
   (`crates/gpui_authoring/src/element.rs:164`, `:180`).
 - **Painting is a `Window` capability, not a `cx` one.** `paint_quad`
-  (`crates/gpui_authoring/src/window.rs:4974`) and `paint_image` (`:5365`) both insert
+  (`crates/gpui_authoring/src/window.rs:5032`) and `paint_image` (`:5423`) both insert
   into the frame's scene, so the hooks are `window.paint_imported_texture` and
   `window.paint_with_callback`, beside them in the same phase. The drafts' separate
   `register_foreign_texture` step between them is gone — it existed to name the texture for

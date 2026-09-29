@@ -1,7 +1,7 @@
 # Milestones
 
 - **Status:** the handoff. What is built, where it is, what is next in what order, and the gates a
-  resumer runs. Written 2026-09-29, against `bite_v1.22.0-pre` at `a2884d2de7`; a citation's line
+  resumer runs. Written 2026-09-29, against `bite_v1.22.0-pre` at `fcde78d01a`; a citation's line
   numbers move whenever that ref does, and `script/check-citations` prints what each one now points
   at.
 - **Read with:** the chapter order in [`README.md`](README.md) for the design — this document is the
@@ -12,33 +12,33 @@
 
 | what | where |
 | --- | --- |
-| the canonical ref, and what every citation resolves against | `bite_v1.22.0-pre`, tip `a2884d2de7` (the merge of #5) |
-| what the canonical ref already carries | the renderer seam (#4) and the fork's CI file (#5). **None** of Path A |
-| Path A, whole | `bite_v1.22.0-pre-path-a`, sixteen commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
+| the canonical ref, and what every citation resolves against | `bite_v1.22.0-pre`, tip `fcde78d01a` (the merge of #6) |
+| what the canonical ref already carries | the renderer seam (#4), the fork's CI file (#5), and Path A whole (#6) |
+| Path A, whole | on the canonical ref, sixteen commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
 | the checkout the work is in | `.tools/worktrees/wt-seam` in the zed clone |
 | the other repositories, and what each is for | [`../../references.md`](../../references.md) |
 
-`#6` is the only pull request left open, and it is the whole path: the Direct3D arm was stacked on
-it (`bite_v1.22.0-pre-path-a-directx`, PR [#7](https://github.com/bite-gpui/bite-gpui/pull/7)) and
-the producer's reach on top of that (`bite_v1.22.0-pre-device-rendezvous`, PR
+`#6` merged as `fcde78d01a`, and it was the whole path: the Direct3D arm was stacked on it
+(`bite_v1.22.0-pre-path-a-directx`, PR [#7](https://github.com/bite-gpui/bite-gpui/pull/7)) and the
+producer's reach on top of that (`bite_v1.22.0-pre-device-rendezvous`, PR
 [#8](https://github.com/bite-gpui/bite-gpui/pull/8)), and both were replayed into `#6` rather than
-merged anywhere else — so the two head branches are obsolete, and `#6`'s base is already the
-canonical ref. `#6` is green on the fork's CI; what is left for it is the review, not a stack.
+merged anywhere else. So no pull request is open, the two head branches are obsolete, and the
+canonical ref carries Path A.
 
 ## 2. What is built, and what is measured
 
 | item | chapter | where it is | evidence |
 | --- | --- | --- | --- |
 | the renderer seam: `PlatformRenderer`, the typed `RendererTarget`, the factory, the native hooks | [`renderer-seam.md`](renderer-seam.md) | the canonical ref | PR #4 |
-| the offscreen contract: the three methods ungated, `render_scene` split from `read_pixels`, `PixelBuffer` in place of `image::RgbaImage`, and all three renderers implementing it in the same shape | [`README.md`](README.md) | `bite_v1.22.0-pre-path-a` | `gpui_engine`'s 7 tests, ubuntu CI. Direct3D's "offscreen" is its window's swap chain — it has no headless constructor — so its `render_scene` is "rendered and not presented", which is what its rows already build a hidden window for |
-| Path A's scene half: `CustomRenderPrimitive::Texture`, `ImportedTextureHandle`, `to_quad_record`, `ObservingRenderer` | [`foreign-texture.md`](foreign-texture.md) | same branch | `cargo test -p gpui_engine --lib` |
-| Path A's authoring half: `Window::paint_imported_texture`, `painted_imported_textures` | [`foreign-texture.md`](foreign-texture.md) §3 | same branch | the radii row in `gpui_authoring`'s 347 tests |
-| the wgpu arm, the offscreen target and the readback | [`foreign-texture.md`](foreign-texture.md) §7 | same branch | 3 rows — the sRGB round trip, the ordering, the device identity — skipped with a logged warning where the machine has no adapter |
-| the Metal arm | [`foreign-texture.md`](foreign-texture.md) §7 | same branch | 2 rows on `macos-14` — the colour round trip and the boundary check — plus the shader compile the `macos` job already did |
-| the Direct3D arm and its CI job | [`foreign-texture.md`](foreign-texture.md) §7 | same branch | 3 rows on `windows-latest`, WARP |
-| the producer's reach: `Window::device_any`, and a token builder on each of the three arms (`ImportedTextureExt`, `DirectXTextureExt`, `MetalTextureExt`) | [`producer-reach.md`](producer-reach.md) | same branch | the Direct3D and Metal rows take their device through the accessor — the route an application has — instead of the renderer's own field |
-| the macOS producer route, measured rather than built: wgpu's adapter *is* the `MetalRenderer`'s own `MTLDevice`, so a wgpu producer there needs a power preference and no handover | [`producer-reach.md`](producer-reach.md) §7 | same branch | the probe's printout, [`../decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md) |
-| the runnable demo: `cargo run -p gpui --example path_a`, a producer per platform, composited under a plain `div()` | [`foreign-texture.md`](foreign-texture.md) §3 | `crates/gpui/examples/path_a.rs`, same branch | compiles for the host, `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`; running it needs a display |
+| the offscreen contract: the three methods ungated, `render_scene` split from `read_pixels`, `PixelBuffer` in place of `image::RgbaImage`, and all three renderers implementing it in the same shape | [`README.md`](README.md) | the canonical ref | `gpui_engine`'s 7 tests, ubuntu CI. Direct3D's "offscreen" is its window's swap chain — it has no headless constructor — so its `render_scene` is "rendered and not presented", which is what its rows already build a hidden window for |
+| Path A's scene half: `CustomRenderPrimitive::Texture`, `ImportedTextureHandle`, `to_quad_record`, `ObservingRenderer` | [`foreign-texture.md`](foreign-texture.md) | the canonical ref | `cargo test -p gpui_engine --lib` |
+| Path A's authoring half: `Window::paint_imported_texture`, `painted_imported_textures` | [`foreign-texture.md`](foreign-texture.md) §3 | the canonical ref | the radii row in `gpui_authoring`'s 347 tests |
+| the wgpu arm, the offscreen target and the readback | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 3 rows — the sRGB round trip, the ordering, the device identity — skipped with a logged warning where the machine has no adapter |
+| the Metal arm | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 2 rows on `macos-14` — the colour round trip and the boundary check — plus the shader compile the `macos` job already did |
+| the Direct3D arm and its CI job | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 3 rows on `windows-latest`, WARP |
+| the producer's reach: `Window::device_any`, and a token builder on each of the three arms (`ImportedTextureExt`, `DirectXTextureExt`, `MetalTextureExt`) | [`producer-reach.md`](producer-reach.md) | the canonical ref | the Direct3D and Metal rows take their device through the accessor — the route an application has — instead of the renderer's own field |
+| the macOS producer route, measured rather than built: wgpu's adapter *is* the `MetalRenderer`'s own `MTLDevice`, so a wgpu producer there needs a power preference and no handover | [`producer-reach.md`](producer-reach.md) §7 | the canonical ref | the probe's printout, [`../decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md) |
+| the runnable demo: `cargo run -p gpui --example path_a`, a producer per platform, composited under a plain `div()` | [`foreign-texture.md`](foreign-texture.md) §3 | `crates/gpui/examples/path_a.rs`, the canonical ref | compiles for the host, `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`; running it needs a display |
 
 ## 3. The gaps beside the reach
 
@@ -122,7 +122,7 @@ Three traps that cost time if they are not known:
   `NotAttempted("llvm-rc")`, because embedding Windows resources needs a resource compiler Linux
   does not have. Check `-p gpui_windows` instead; the facade is CI's job.
 - In debug, the HLSL is compiled at run time by `D3DCompileFromFile`
-  (`crates/gpui_windows/src/directx_renderer.rs:1889` is the release branch that replaces it) and
+  (`crates/gpui_windows/src/directx_renderer.rs:2002` is the release branch that replaces it) and
   the byte arrays come from `crates/gpui_windows/build.rs`, whose shader compilation is
   `#[cfg(all(target_os = "windows", not(debug_assertions)))]`. So a shader error and a `from_bytes`
   arm are both invisible to a local debug check.

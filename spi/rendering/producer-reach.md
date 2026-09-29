@@ -1,6 +1,6 @@
 # The producer's reach
 
-- **Status:** built. The whole of Path A is on `bite_v1.22.0-pre-path-a` (PR #6), and the accessor a
+- **Status:** built. The whole of Path A is on the canonical ref, merged as PR #6, and the accessor a
   producer reaches the device through is built on it; the decision behind that accessor is
   [`0004`](../../decisions/0004-producer-device-rendezvous.md), decided. What each platform's
   producer half still lacks is §7, and it is not the same gap anywhere.
@@ -30,8 +30,8 @@ of the primitive, so no chapter about the primitive answers it.
 
 | step | where | state |
 | --- | --- | --- |
-| the primitive, the token, the encoder both shaders read | `crates/gpui_engine/src/custom_render.rs` | built, `bite_v1.22.0-pre-path-a` |
-| the window call | `Window::paint_imported_texture`, `crates/gpui_authoring/src/window.rs` | built, same branch |
+| the primitive, the token, the encoder both shaders read | `crates/gpui_engine/src/custom_render.rs` | built, the canonical ref |
+| the window call | `Window::paint_imported_texture`, `crates/gpui_authoring/src/window.rs` | built, the canonical ref |
 | the arm, per renderer | wgpu, Direct3D, Metal | built, all three: Direct3D's rows and Metal's run on CI, wgpu's only where the machine has an adapter |
 | the producer's reach | `Window::device_any` and the per-backend token builder | built, all three; what each platform still lacks is §7, and it is not the same gap anywhere |
 
@@ -46,7 +46,7 @@ rule, and they serve different producers:
 | **app → gpui** | the application creates the device and installs a renderer that adopts it | wgpu only, and only through a factory |
 
 `GpuContext` is a shared `Rc` rather than a field for the second reason:
-`GpuContext = Rc<RefCell<Option<WgpuContext>>>` (`crates/gpui_wgpu/src/wgpu_renderer.rs:168`),
+`GpuContext = Rc<RefCell<Option<WgpuContext>>>` (`crates/gpui_wgpu/src/wgpu_renderer.rs:173`),
 whose `WgpuContext` exposes `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
 (`crates/gpui_wgpu/src/wgpu_context.rs:9`). An application that owns the slot and returns
 `WgpuRenderer::new(context, …)` from its own factory ends up holding the device the renderer
@@ -70,7 +70,7 @@ that was handed nothing still reads `device` and `queue` out of the same place.
 Two facts behind the table:
 
 - **The device is reached through the window, not the renderer.** `PlatformWindow::with_renderer`
-  hands out `&mut dyn SceneRenderer` (`crates/gpui_platform/src/platform_window.rs:151`) and no
+  hands out `&mut dyn SceneRenderer` (`crates/gpui_platform/src/platform_window.rs:150`) and no
   device, and the seam refuses to widen `SceneRenderer` for a platform-shaped concern, so the
   accessor is `device_any` on `PlatformWindow` — which `Window` forwards to — rather than a method
   on the renderer's trait. It answers `None` for a renderer with nothing to lend, which is an answer
@@ -85,7 +85,7 @@ Two facts behind the table:
   the application rather than on the renderer.
 
 The factory's input does not close it either. `RendererTarget`'s one erased field
-(`crates/gpui_platform/src/platform_renderer.rs:129`) is an **input**, and what each platform puts
+(`crates/gpui_platform/src/platform_renderer.rs:147`) is an **input**, and what each platform puts
 in it is a *surface configuration* or the platform's device bundle for its own renderer: X11 sends
 `&WgpuSurfaceConfig` (`crates/gpui_linux/src/linux/x11/window.rs:783`), Windows sends
 `&DirectXDevices` (`crates/gpui_windows/src/events.rs:1322`). Before the accessor there was no path

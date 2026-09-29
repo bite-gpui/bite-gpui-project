@@ -17,7 +17,7 @@ was created with:
 
 | backend set | surface from the `HWND` | adapter | a frame presented |
 | --- | --- | --- | --- |
-| `VULKAN \| GL` — what `gpui_wgpu` asked for at the probe (`crates/gpui_wgpu/src/wgpu_context.rs:309`) | created | **none** | — |
+| `VULKAN \| GL` — what `gpui_wgpu` asked for at the probe (`crates/gpui_wgpu/src/wgpu_context.rs:395`) | created | **none** | — |
 | `DX12` | created | `Microsoft Basic Render Driver`, `Dx12`, `Cpu` | **yes** |
 | `VULKAN` | not created | — | — |
 | `GL` | created | **none** | — |
@@ -27,16 +27,16 @@ Three things follow, and the first is the one that would have cost a patch:
 
 - **`gpui_wgpu`'s instance did not enable Direct3D 12.** Its non-wasm instance was
   `Backends::VULKAN | Backends::GL`
-  (`crates/gpui_wgpu/src/wgpu_context.rs:309`) — right for Linux, and never run on Windows,
+  (`crates/gpui_wgpu/src/wgpu_context.rs:395`) — right for Linux, and never run on Windows,
   where it found no adapter at all: *"vulkan drivers/libraries could not be loaded ... dx12 not
   requested, gl found no adapters"*. So `WgpuRenderer::new` failed on Windows **before**
   presentation was reached, and the Windows commit was not plumbing alone: `gpui_wgpu` had to
-  enable `DX12`, which the seam does (`crates/gpui_wgpu/src/wgpu_context.rs:311`).
+  enable `DX12`, which the seam does (`crates/gpui_wgpu/src/wgpu_context.rs:397`).
 - **Once it does, presentation works.** A surface built from `RawWindowHandle::Win32` over
   the `HWND` finds the DX12 adapter, configures, acquires a frame and presents it.
 - **A DirectComposition tree on the same `HWND` does not stop it.** Committing a target,
   visual and composition swap chain the way `gpui_windows` does
-  (`crates/gpui_windows/src/directx_renderer.rs:1047`) and then presenting from wgpu on the
+  (`crates/gpui_windows/src/directx_renderer.rs:1106`) and then presenting from wgpu on the
   same window was accepted. What that does not show is which of the two is *visible* — the
   probe never presents the composition swap chain — so it is "they coexist", not "the
   window can keep both".
@@ -84,7 +84,7 @@ DX12 with the dcomp tree live: PRESENT OK
   default renderer's can. That is the "partly" outcome this spike anticipated, and it
   belongs in the guide and in `WgpuSurfaceConfig`'s documentation rather than in a patch.
 - **Colour space.** The surface offers `Bgra8UnormSrgb` first and accepts it, where GPUI's
-  Windows target is `B8G8R8A8_UNORM` (`crates/gpui_windows/src/directx_renderer.rs:32`).
+  Windows target is `B8G8R8A8_UNORM` (`crates/gpui_windows/src/directx_renderer.rs:34`).
   The probe shows both are reachable; it does not settle which a foreign texture should use,
   which is [`../spi/rendering/foreign-texture.md`](../spi/rendering/foreign-texture.md) §4.
 

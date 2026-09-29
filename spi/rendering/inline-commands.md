@@ -52,15 +52,15 @@ device and the *queue*, and orders by submission; Path B shares the *encoder* it
 orders by the command's position in the pass ([`foreign-texture.md`](foreign-texture.md) §6).
 
 **`order` is the scene's, not the element's.** `Scene::insert_primitive` assigns it
-(`crates/gpui_engine/src/scene.rs:85`, `:95`) and overwrites each primitive's field
-(`:102`–`:131`). An earlier draft had the element call `cx.current_paint_order()`, which
+(`crates/gpui_engine/src/scene.rs:87`, `:97`) and overwrites each primitive's field
+(`:104`–`:133`). An earlier draft had the element call `cx.current_paint_order()`, which
 does not exist and is not needed. The element supplies `bounds` and the `content_mask`
-from `window.content_mask()` (`crates/gpui_authoring/src/window.rs:4588`), and the scene
+from `window.content_mask()` (`crates/gpui_authoring/src/window.rs:4615`), and the scene
 orders it against its siblings.
 
 `content_mask` is not decoration: without it the injected commands draw outside the
 element's box, over the UI around it. `PaintSurface` carries one
-(`crates/gpui_engine/src/scene.rs:749`); the drafts' `InlineCommand` did not.
+(`crates/gpui_engine/src/scene.rs:784`); the drafts' `InlineCommand` did not.
 
 ## 3. The pipeline-state isolation matrix
 
@@ -129,7 +129,7 @@ Two constraints that shape it:
   with* the pass by the engine layer; the renderer has to invoke it from inside the frame
   it owns, which is what the token in §2 is for.
 - **`PrimitiveBatch::Surfaces` is empty today**
-  (`crates/gpui_wgpu/src/wgpu_renderer.rs:1546`), so both paths land in the same place in
+  (`crates/gpui_wgpu/src/wgpu_renderer.rs:1874`), so both paths land in the same place in
   that file.
 
 ## 6. Ordering, and the two cases that are not supported

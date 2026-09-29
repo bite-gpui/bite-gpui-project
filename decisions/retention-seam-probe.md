@@ -10,10 +10,10 @@
 
 ## 1. Every `Window` field is `pub(crate)`
 
-`pub struct Window<'frame>` (`crates/gpui_authoring/src/window.rs:1428`) has `pub(crate) core`
-(`:1431`) and `pub(crate) frame_state` (`:1433`); the frame's `dirty_views` is `pub(crate)` (`:1227`);
+`pub struct Window<'frame>` (`crates/gpui_authoring/src/window.rs:1430`) has `pub(crate) core`
+(`:1433`) and `pub(crate) frame_state` (`:1435`); the frame's `dirty_views` is `pub(crate)` (`:1229`);
 and `WindowInvalidator`, which holds the notified set, is a `pub(crate)` type whose `take_views`
-(`:287`) is `pub` on it.
+(`:289`) is `pub` on it.
 
 **Consequence.** A mode living outside the crate reaches the window only through `pub` methods. So the
 seam's published surface is the *entire* API a mode gets, and a missing accessor is not an

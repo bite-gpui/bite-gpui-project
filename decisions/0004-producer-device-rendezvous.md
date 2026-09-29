@@ -3,9 +3,8 @@
 - **Decided:** 2026-09-29
 - **Status:** decided
 - **Evidence:** [`../spi/rendering/producer-reach.md`](../spi/rendering/producer-reach.md) — the gap,
-  what each platform can do, and what is left of it; `bite_v1.22.0-pre-path-a` (PR #6), whose last
-  commit is the producer's half. `bite_v1.22.0-pre-device-rendezvous` was replayed into that branch
-  and is obsolete.
+  what each platform can do, and what is left of it; PR #6, merged as `fcde78d01a`.
+  `bite_v1.22.0-pre-device-rendezvous` was replayed into that branch and is obsolete.
 - **Touches:** [`0002-render-extension-device-model.md`](0002-render-extension-device-model.md) — the
   device rule this implements, and its "the rendezvous is one slot, and it works both ways", whose
   gpui→app half is the thing the code did not have; [`../spi/rendering/milestones.md`](../spi/rendering/milestones.md)
@@ -24,7 +23,7 @@ application writes is a trait in the facade, because that is the lowest crate th
 | --- | --- |
 | `WgpuRenderer` | the shared `GpuContext` slot — the same `Rc` every window in the process draws through, so a producer reads `device` and `queue` from the rendezvous 0002 already describes instead of a second one |
 | `DirectXRenderer` | its `ID3D11Device`, which the platform built (`WindowsPlatformState.directx_devices`, `crates/gpui_windows/src/platform.rs:84`) and the renderer was constructed from (`crates/gpui_windows/src/window.rs:165`) |
-| `MetalRenderer` | its `MTLDevice`, which it created (`crates/gpui_apple/src/metal_renderer.rs:195`) and is therefore the only holder of |
+| `MetalRenderer` | its `MTLDevice`, which it created (`crates/gpui_apple/src/metal_renderer.rs:197`) and is therefore the only holder of |
 
 `None` is an answer rather than a failure: a renderer that draws offscreen, or one a factory
 installed that is not the backend's own, has nothing to lend.
@@ -46,7 +45,7 @@ what they add to the decision is that the per-backend payload types become publi
 app→gpui is already reachable for wgpu through the factory. What was missing was gpui→app, and the
 question was where a *typed* accessor could hang: a type the application already holds is a `Window`
 or a renderer reached through `PlatformWindow::with_renderer`
-(`crates/gpui_platform/src/platform_window.rs:151`), which hands out `&mut dyn SceneRenderer` and no
+(`crates/gpui_platform/src/platform_window.rs:150`), which hands out `&mut dyn SceneRenderer` and no
 device.
 
 **Owned rather than borrowed.** The only route from a window to a renderer is a closure, and no
@@ -65,8 +64,8 @@ implement a trait for `Window`. The facade depends on both, and `platform_entry.
 its per-platform re-exports live, beside the wasm one.
 
 **What makes the window the right anchor is that it already forwards.** `Window` owns
-`Box<dyn PlatformWindow>` (`crates/gpui_authoring/src/window.rs:1265`) and reaches it for everything
-it does not own itself (`:1787`), so one erased method on each of the two traits is the whole of the
+`Box<dyn PlatformWindow>` (`crates/gpui_authoring/src/window.rs:1267`) and reaches it for everything
+it does not own itself (`:1789`), so one erased method on each of the two traits is the whole of the
 plumbing, and neither `SceneRenderer` nor `PlatformWindow` grows a hardware type.
 
 ## Rejected alternatives

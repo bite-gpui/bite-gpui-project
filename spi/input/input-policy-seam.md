@@ -59,11 +59,11 @@ this crate drives rather than contains" (`crates/gpui_runtime/src/gpui_runtime.r
 
 Input enters at `PlatformWindow::on_input`, whose callback signature is
 `Box<dyn FnMut(PlatformInput) -> DispatchEventResult>`
-(`crates/gpui_platform/src/platform_window.rs:132-133`). The window host wires it
+(`crates/gpui_platform/src/platform_window.rs:131-132`). The window host wires it
 straight through:
 
 ```rust
-// crates/gpui_authoring/src/window.rs:2166-2174
+// crates/gpui_authoring/src/window.rs:2168-2176
 platform_window.on_input({
     let mut cx = cx.to_async();
     Box::new(move |event| {
@@ -159,7 +159,7 @@ Box::new(move |event| {
 ```
 
 `WindowHost` would call `flush` where it already has a per-frame hook —
-`should_render_frame` (`crates/gpui_authoring/src/window.rs:1341`) is the
+`should_render_frame` (`crates/gpui_authoring/src/window.rs:1343`) is the
 narrowest existing one.
 
 ## 4. Semantics the sketch leaves open
@@ -188,12 +188,12 @@ These need answers before this is implementable, and none is obvious.
 This is the finding that makes the seam more than a one-liner, and it is measurable
 in the current code.
 
-`InputRateTracker` (`crates/gpui_authoring/src/window.rs:1464`) latches a
+`InputRateTracker` (`crates/gpui_authoring/src/window.rs:1466`) latches a
 one-second "high rate" sustain when enough input has arrived recently, and the frame
 source uses it to keep presenting:
 
 ```rust
-// crates/gpui_authoring/src/window.rs:2017-2019
+// crates/gpui_authoring/src/window.rs:2019-2021
 let needs_present = request_frame_options.require_presentation
     || needs_present.get()
     || input_rate_tracker.borrow_mut().is_high_rate();
@@ -206,7 +206,7 @@ the display's rate instead of falling back to the inactive cadence.
 `inputs_per_second: 60` and `window: 100ms`, and its test is
 
 ```rust
-// crates/gpui_authoring/src/window.rs:1477-1480
+// crates/gpui_authoring/src/window.rs:1479-1482
 let min_events = self.inputs_per_second as u128 * self.window.as_millis() / 1000;
 if self.timestamps.len() as u128 >= min_events {
 ```
@@ -218,7 +218,7 @@ and would have made the scheme look far more aggressive than it is.)
 **The trap.** The count is fed from dispatch, not arrival:
 
 ```rust
-// crates/gpui_authoring/src/window.rs:6113-6115
+// crates/gpui_authoring/src/window.rs:6171-6173
 let caused_invalidation = self.core.invalidator.update_count() > update_count_before;
 if caused_invalidation {
     self.core.input_rate_tracker.borrow_mut().record_input();

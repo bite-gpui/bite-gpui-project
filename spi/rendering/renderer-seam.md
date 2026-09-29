@@ -28,17 +28,17 @@ below the pipeline.
 ## 2. Where the implementations already are
 
 The separation the extraction was meant to achieve is largely **already done** at this
-ref. `SceneRenderer` is defined at `crates/gpui_engine/src/renderer.rs:16`, and there are
+ref. `SceneRenderer` is defined at `crates/gpui_engine/src/renderer.rs:80`, and there are
 six implementations:
 
 | implementation | crate | `impl` at | window field |
 | --- | --- | --- | --- |
-| `MetalRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1612` | `crates/gpui_macos/src/window.rs:667` |
-| `MetalHeadlessRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1690` | `crates/gpui_apple/src/metal_renderer.rs:1673` |
-| `WgpuRenderer` | `gpui_wgpu` | `crates/gpui_wgpu/src/wgpu_renderer.rs:2433` | `crates/gpui_linux/src/linux/x11/window.rs:272` |
-| `DirectXRenderer` | `gpui_windows` | `crates/gpui_windows/src/directx_renderer.rs:2092` | `crates/gpui_windows/src/window.rs:67` |
+| `MetalRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1719` | `crates/gpui_macos/src/window.rs:667` |
+| `MetalHeadlessRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1805` | `crates/gpui_apple/src/metal_renderer.rs:1788` |
+| `WgpuRenderer` | `gpui_wgpu` | `crates/gpui_wgpu/src/wgpu_renderer.rs:3071` | `crates/gpui_linux/src/linux/x11/window.rs:272` |
+| `DirectXRenderer` | `gpui_windows` | `crates/gpui_windows/src/directx_renderer.rs:2206` | `crates/gpui_windows/src/window.rs:67` |
 | `HeadlessRenderer` | `gpui_linux` | `crates/gpui_linux/src/linux/headless/window.rs:258` | `crates/gpui_linux/src/linux/headless/window.rs:57` |
-| `TestRenderer` | `gpui_authoring` | `crates/gpui_authoring/src/platform/test/window.rs:587` | `crates/gpui_authoring/src/platform/test/window.rs:27` |
+| `TestRenderer` | `gpui_authoring` | `crates/gpui_authoring/src/platform/test/window.rs:585` | `crates/gpui_authoring/src/platform/test/window.rs:25` |
 
 Two of the platforms do not own their renderer at all any more. `gpui_macos` reaches
 Metal through a re-export (`crates/gpui_macos/src/gpui_macos.rs:18`), and both Linux
@@ -51,7 +51,7 @@ display backends already render through `gpui_wgpu` — x11 constructs it at
 **So the extraction was not the work.** A renderer could already live in a crate of its
 own. What was missing was that the *type* was still concrete at every use site: a window
 held `WgpuRenderer`, `renderer::Renderer` (an alias for `MetalRenderer`,
-`crates/gpui_apple/src/metal_renderer.rs:51`) or `RefCell<DirectXRenderer>`, never a
+`crates/gpui_apple/src/metal_renderer.rs:52`) or `RefCell<DirectXRenderer>`, never a
 `dyn SceneRenderer`, and called backend-specific methods that were not on the trait. The
 seam is what changed that: every window field in the table above now holds a
 `Box<dyn PlatformRenderer>` (`crates/gpui_windows/src/window.rs:67`), and the
@@ -65,19 +65,19 @@ window wants from a renderer is a property any *onscreen* renderer has.
 | method | asked by |
 | --- | --- |
 | `draw`, `sprite_atlas` | all (the trait) |
-| `update_drawable_size` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1330`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:1505`, web `crates/gpui_web/src/window.rs:988`, macos `crates/gpui_macos/src/window.rs:3116` |
+| `update_drawable_size` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1330`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:1505`, web `crates/gpui_web/src/window.rs:988`, macos `crates/gpui_macos/src/window.rs:3123` |
 | `update_transparency` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1387`, macos `crates/gpui_macos/src/window.rs:1880` |
 | `set_subpixel_layout` | x11 `crates/gpui_linux/src/linux/x11/window.rs:794`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:671` |
 | `max_texture_size` | x11 `crates/gpui_linux/src/linux/x11/window.rs:798`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:614` |
 | `destroy` | x11 `crates/gpui_linux/src/linux/x11/window.rs:903`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:789`, macos `crates/gpui_macos/src/window.rs:1405` |
-| `device_lost` / `recover` / `needs_redraw` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1778`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:1967`, windows `crates/gpui_windows/src/events.rs:1324` |
-| `gpu_specs` | x11 `crates/gpui_linux/src/linux/x11/window.rs:2002`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:2170`, web `crates/gpui_web/src/window.rs:1007`, windows `crates/gpui_windows/src/window.rs:1073` |
-| `layer`, `layer_ptr`, `set_presents_with_transaction` | macos `crates/gpui_macos/src/window.rs:3106` (defined `crates/gpui_apple/src/metal_renderer.rs:366`) |
-| `set_background_appearance` | windows `crates/gpui_windows/src/window.rs:1064` |
+| `device_lost` / `recover` / `needs_redraw` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1785`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:1974`, windows `crates/gpui_windows/src/events.rs:1324` |
+| `gpu_specs` | x11 `crates/gpui_linux/src/linux/x11/window.rs:2009`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:2177`, web `crates/gpui_web/src/window.rs:1007`, windows `crates/gpui_windows/src/window.rs:1080` |
+| `layer`, `layer_ptr`, `set_presents_with_transaction` | macos `crates/gpui_macos/src/window.rs:3113` (defined `crates/gpui_apple/src/metal_renderer.rs:377`) |
+| `set_background_appearance` | windows `crates/gpui_windows/src/window.rs:1071` |
 
 Everything above the macOS and Windows rows generalises *to an onscreen renderer*. Those
 two rows are genuinely native: the macOS window hosts a `CAMetalLayer` and hands it out
-(`crates/gpui_macos/src/window.rs:3257`), and the Windows window drives a
+(`crates/gpui_macos/src/window.rs:3264`), and the Windows window drives a
 DirectComposition visual tree.
 
 **The Windows row is not the whole story.** The implementation also needs two operations the
@@ -107,7 +107,7 @@ comment says an onscreen renderer needs only `draw` and `sprite_atlas`. So
 `TestPlatform` accepts a renderer factory
 (`crates/gpui_authoring/src/platform/test/platform.rs:54`), `TestWindow` takes the result
 as `Option<Box<dyn SceneRenderer>>` and falls back to `TestRenderer::new()`
-(`crates/gpui_authoring/src/platform/test/window.rs:86`), and `HeadlessAppContext::new`
+(`crates/gpui_authoring/src/platform/test/window.rs:84`), and `HeadlessAppContext::new`
 threads the same factory through
 (`crates/gpui_authoring/src/app/headless_app_context.rs:68`). That is the whole design,
 working, on one platform: **a factory returning a boxed trait object, with the backend's
@@ -150,11 +150,11 @@ handles the renderer was built with, and the shared trait must not name `metal::
 `ID3D11Device*`.
 
 **What `set_viewport_size`'s collision turned into.** Both drafts treated the test-gated
-`SceneRenderer::set_viewport_size` (`crates/gpui_engine/src/renderer.rs:32`) as a problem
+`SceneRenderer::set_viewport_size` (`crates/gpui_engine/src/renderer.rs:95`) as a problem
 to resolve by lifting the gate or dropping a duplicate. Neither is needed once the
 lifecycle is on `PlatformRenderer`: the test-gated method keeps its one caller
-(`crates/gpui_authoring/src/platform/test/window.rs:531`) and its one override
-(`crates/gpui_apple/src/metal_renderer.rs:1698`), and the production path gets the name
+(`crates/gpui_authoring/src/platform/test/window.rs:529`) and its one override
+(`crates/gpui_apple/src/metal_renderer.rs:1813`), and the production path gets the name
 it already has.
 
 ### 5.2 The native hooks stay on the platform
@@ -303,8 +303,8 @@ The renderer, unlike the layout engine and the pipeline, cannot be built on the
 `gpui_authoring` side: it needs the window's surface, which only the platform window
 has. So the field must reach `Platform::open_window`
 (`crates/gpui_platform/src/platform.rs:95`), and `gpui_authoring` already builds the
-`WindowParams` for that call (`crates/gpui_authoring/src/window.rs:1757`). The boundary
-is `WindowHost::new` (`crates/gpui_authoring/src/window.rs:1441`, called from
+`WindowParams` for that call (`crates/gpui_authoring/src/window.rs:1759`). The boundary
+is `WindowHost::new` (`crates/gpui_authoring/src/window.rs:1443`, called from
 `crates/gpui_authoring/src/app.rs:1270`), and each backend does:
 
 ```rust
@@ -321,7 +321,7 @@ every backend must then defer building its default renderer until first use, or 
 and throw it away).
 
 `WindowOptions` is destructured **exhaustively** at this site
-(`crates/gpui_authoring/src/window.rs:1726`), so a field added to it stops the build until the
+(`crates/gpui_authoring/src/window.rs:1728`), so a field added to it stops the build until the
 line forwarding it is written: the options field does not compile without its forwarding
 line. That is better than a test — the compiler is the check — and it is why the two land as
 one commit.
@@ -338,12 +338,12 @@ resize or a device loss. Two consequences:
   (`crates/gpui_linux/src/linux/x11/window.rs:794`).
 - **`recover` has to rebuild from what the renderer already holds.** Its shape at this
   ref is the model: `WgpuRenderer::recover<W>(&mut self, window: &W)`
-  (`crates/gpui_wgpu/src/wgpu_renderer.rs:2131`), called from `present` guarded by
-  `device_lost()` on x11 (`crates/gpui_linux/src/linux/x11/window.rs:1778`, `:1765`) and
-  wayland (`crates/gpui_linux/src/linux/wayland/window.rs:1967`, `:1960`). The subtle
+  (`crates/gpui_wgpu/src/wgpu_renderer.rs:2523`), called from `present` guarded by
+  `device_lost()` on x11 (`crates/gpui_linux/src/linux/x11/window.rs:1782`, `:1785`) and
+  wayland (`crates/gpui_linux/src/linux/wayland/window.rs:1971`, `:1974`). The subtle
   part is that windows share one GPU context
   (`GpuContext = Rc<RefCell<Option<WgpuContext>>>`,
-  `crates/gpui_wgpu/src/wgpu_renderer.rs:168`): the first window to notice rebuilds it
+  `crates/gpui_wgpu/src/wgpu_renderer.rs:173`): the first window to notice rebuilds it
   with `WgpuContext::new_rejecting_software`
   (`crates/gpui_wgpu/src/wgpu_context.rs:76`) and the rest adopt what it left. The same
   protocol is needed on all four platforms — macOS and Windows lose devices too — and it
@@ -384,17 +384,17 @@ platform commit carries its own, rather than one commit enabling both for the ot
 
 **Factory footprint: ~180 LOC across four backends, plus the wgpu implementation.** The
 dual-path primitives are *not* in this budget: Path A adds a fragment path and a pipeline to
-two renderers — wgpu's batch arm is empty today (`crates/gpui_wgpu/src/wgpu_renderer.rs:1546`)
+two renderers — wgpu's batch arm is empty today (`crates/gpui_wgpu/src/wgpu_renderer.rs:1874`)
 and the only surface fragment that samples a non-atlas texture is a YCbCr one
-(`crates/gpui_wgpu/src/shaders.wgsl:1350`) — and Path B adds pause/restore to each. Neither is
+(`crates/gpui_wgpu/src/shaders.wgsl:1390`) — and Path B adds pause/restore to each. Neither is
 a change to a `window.rs`, and keeping the two budgets separate is what the drafts' single
 "<150 LOC" claim obscured.
 
 Two things the Windows commit needs that the factory does not cover, both measured after this
 section was written. `gpui_wgpu`'s instance asked for `Backends::VULKAN | Backends::GL`
-(`crates/gpui_wgpu/src/wgpu_context.rs:309`), which finds no adapter on Windows, so that commit
+(`crates/gpui_wgpu/src/wgpu_context.rs:395`), which finds no adapter on Windows, so that commit
 also enables `Backends::DX12` and the macOS one `Backends::METAL`
-(`crates/gpui_wgpu/src/wgpu_context.rs:311`); and the DX12 surface offers only `Opaque` alpha,
+(`crates/gpui_wgpu/src/wgpu_context.rs:397`); and the DX12 surface offers only `Opaque` alpha,
 so a window it renders cannot be transparent the way the default renderer's can. Both are in
 [`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md).
 
@@ -432,7 +432,7 @@ platform in CI.
   decision owed about its test-gated `set_viewport_size`.
 - **Presentation timing stays below the pipeline.** `SceneRenderer::draw` still returns
   whether it presented, and `PlatformWindow::present`
-  (`crates/gpui_platform/src/platform_window.rs:157`) still feeds that back to the
+  (`crates/gpui_platform/src/platform_window.rs:167`) still feeds that back to the
   backend's frame loop. Nothing here gives a `FramePipeline` a vblank.
 - **No custom GPU primitives yet.** `CustomRenderPrimitive`, texture import and inline
   injection are [`foreign-texture.md`](foreign-texture.md) and
