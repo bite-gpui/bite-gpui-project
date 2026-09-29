@@ -25,6 +25,7 @@ The subfolders mirror the sources — `rendering/`, `authoring/`, `decisions/`,
 | [`rendering/milestones.md`](../rendering/milestones.md) | what is built and where, what is next in what order, and the gates a resumer runs |
 | [`authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface |
 | [`decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md) | decision 0002 — which devices a producer may use, and which it may not |
+| [`decisions/0004-producer-device-rendezvous.md`](../../decisions/0004-producer-device-rendezvous.md) | decision 0004, open — how a producer reaches the device: the anchor fork, and the tier facts under it |
 | [`decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) | the first measurement 0002 rests on |
 | [`decisions/shared-surface.md`](../../decisions/shared-surface.md) | the shared-buffer probe that reopens 0002 — Windows adoption and the macOS pool, token and fence measured; macOS adoption open |
 | [`decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md) | the measurement 0002's Windows clause rests on |

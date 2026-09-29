@@ -58,10 +58,10 @@ Small, independent, and worth doing while the rendezvous is being decided:
 ## 4. What is next, in order
 
 **M1 — the producer's reach.** [`producer-reach.md`](producer-reach.md). Blocks M3, and blocks any
-claim that Path A is usable. Its first step is a decision, not code: which direction the rendezvous
-takes (gpui lends the device, the application lends one, or both), whether it is an erased accessor
-on the renderer's trait reached through the window, or a shared slot per platform. The chapter sets
-out the two shapes and what each costs.
+claim that Path A is usable. Its first step is a decision, not code —
+[`0004`](../../decisions/0004-producer-device-rendezvous.md), open: which direction the rendezvous
+takes, and which of the three anchors the typed accessor hangs on. The chapter sets out what each
+costs.
 
 **M2 — the gaps in §3.** Independent of M1, cheap, and it keeps the Direct3D and Metal arms honest.
 
@@ -129,8 +129,9 @@ evidence beside the decision it produced. A probe still running lives with the w
 
 ## 6. What has no home yet
 
-- **The rendezvous decision** (M1): it amends 0002's "the rendezvous is one slot, and it works both
-  ways", which the code does not implement.
+- **The rendezvous decision** (M1): [`0004`](../../decisions/0004-producer-device-rendezvous.md),
+  open. It amends 0002's "the rendezvous is one slot, and it works both ways", which the code does
+  not implement.
 - **The bridge decision** (M5): 0002 defers it, and the second probe answers whether the direction
   worth having works at all.
 - **Metal's producer half**: [`foreign-texture.md`](foreign-texture.md) §8, unresolved since before

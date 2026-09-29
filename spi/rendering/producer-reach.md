@@ -126,7 +126,9 @@ renderer.
 The two are complementary rather than alternatives: (a) answers "I have a texture, lend me your
 device", which is a 3D engine or a map renderer; (b) answers "here is my device, decode on it",
 which is Media Foundation, because `IMFDXGIDeviceManager::ResetDevice` wants to be handed a device
-rather than to borrow one.
+rather than to borrow one. The fork in full — including a third anchor this section's shape
+suggests, because a `Window` already owns its platform window — is decision
+[0004](../../decisions/0004-producer-device-rendezvous.md), which is open.
 
 ## 6. The tier this leaves on Windows
 
@@ -155,8 +157,10 @@ This is the part worth writing down before anyone proposes a bridge:
 
 ## 7. Open
 
-- **Which direction the rendezvous takes** — lent, adopted, or both — and whether it is a trait
-  accessor (§5a) or a slot (§5b). This is the decision the next milestone needs first.
+- **Which direction the rendezvous takes** — lent, adopted, or both — and which of the shapes above
+  it takes, since the anchor rather than the direction is the fork. It is
+  [0004](../../decisions/0004-producer-device-rendezvous.md), open, and it is the next milestone's
+  first step.
 - **Whether the backend payload types become public API.** They have to be nameable for anyone
   outside a backend crate to construct a token or read a device, which makes them a published
   surface and therefore a commitment, not an implementation detail.
