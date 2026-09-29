@@ -8,7 +8,7 @@
   renderer has to draw — and [`renderer-seam.md`](renderer-seam.md) — the factory, the target, and
   the rule that post-construction queries belong on the renderer.
 - **Why it is a chapter:** §7 of `foreign-texture.md` asks what each *renderer* has to do, and every
-  row of it can be answered while nothing can make the texture the renderer then samples. The
+  row of it could be answered while nothing could make the texture the renderer then samples. The
   producer's side is a second obligation, and it was the one that decided whether Path A is a
   capability or a demonstration — every other step in §1's table was built before it. It stays a
   chapter now that it is built, because the shape was a decision and what is left is per platform.

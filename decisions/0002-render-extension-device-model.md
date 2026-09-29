@@ -26,7 +26,8 @@ GPU resources:
 2. **On Windows both paths require `gpui_wgpu::WgpuRenderer`**, installed through the
    renderer factory. The default `DirectXRenderer` supports neither, and it says so rather
    than succeeding silently: `draw_surfaces` returns an explicit unsupported error
-   (`crates/gpui_windows/src/directx_renderer.rs:833`).
+   (`crates/gpui_windows/src/directx_renderer.rs:833`). Corrected 2026-09-29 for a Direct3D 11
+   producer — see the second revision below.
 3. **Sharing a resource across devices is out of scope for this milestone.** No `IOSurface`
    variant, no DXGI shared-handle variant, no dma-buf; the erased texture payload keeps no
    Windows arm. It is deferred, not impossible — the revision below corrects the reason, and
