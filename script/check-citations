@@ -28,6 +28,11 @@ from pathlib import Path
 
 # The ref the documents are written against. Changing it invalidates every
 # citation in the repository and means a pass over all of them.
+#
+# Only the bare name is recorded, because a local branch called `bite_v1.22.0-pre`
+# does not always exist: in a fresh clone it is a remote-tracking branch under
+# `origin/`. `ref_candidates` is the order the bare name is tried against, so the
+# script works whether the branch was checked out locally or not.
 CANONICAL_REF = "bite_v1.22.0-pre"
 
 # A citation is a source path followed by a line, or a line range. Rust is the bulk of
@@ -46,7 +51,49 @@ REGISTRY = Path.home() / ".cargo/registry/src"
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parent.parent.parent
+    """The git repository that owns the documents.
+
+    The script is written to live at `<repo>/bite-gpui-project/script/check-citations`,
+    where `<repo>` is the checkout that owns the `bite_*` branches carrying the cited
+    source. In the nested layout the record (and its documents) is a child of the
+    clone; checked out standalone as `bite-gpui-project`, the repository root *is* the
+    documents' root. Ask git rather than guessing from the script's depth, and fall
+    back to walking up from the script when git is not available.
+    """
+    script = Path(__file__).resolve()
+    result = run(["git", "-C", str(script.parent), "rev-parse", "--show-toplevel"])
+    if result.returncode == 0 and result.stdout.strip():
+        return Path(result.stdout.strip())
+    # Not in a git checkout: the pre-git fallback, three levels up.
+    return script.parent.parent.parent
+
+
+def docs_root(root: Path) -> Path:
+    """The directory the documents live in.
+
+    Inside a checkout that nests the record as `.meta` it is `root/.meta`; in the
+    standalone checkout it is the repository root itself.
+    """
+    meta = root / ".meta"
+    return meta if meta.is_dir() else root
+
+
+def resolve_ref(root: Path, named: str) -> str:
+    """Return a git ref that resolves, given the documents' bare name.
+
+    A `bite_*` branch is a remote-tracking branch in a fresh clone, so the bare
+    name resolves only after someone checks it out locally. Try the bare name
+    first (that is the fast path once it is local), then the `origin/` spelling;
+    `git show <ref>:<path>` works for either. A name that resolves to nothing at
+    all is returned unchanged so the per-citation error still names what the
+    user wrote rather than what the script guessed.
+    """
+    if run(["git", "-C", str(root), "rev-parse", "--verify", "--quiet", named]).returncode == 0:
+        return named
+    remote = f"origin/{named}"
+    if run(["git", "-C", str(root), "rev-parse", "--verify", "--quiet", remote]).returncode == 0:
+        return remote
+    return named
 
 
 def run(args: list[str]) -> subprocess.CompletedProcess:
@@ -102,12 +149,13 @@ def main() -> int:
     args = parser.parse_args()
 
     root = repo_root()
-    ref = None if args.worktree else args.ref
-    where = "the working tree" if ref is None else f"ref {ref}"
+    docs_dir = docs_root(root)
+    ref = None if args.worktree else resolve_ref(root, args.ref)
+    where = "the working tree" if ref is None else f"ref {args.ref}"
 
     docs = [Path(d) for d in args.documents] or sorted(
         p
-        for p in (root / ".meta").glob("**/*.md")
+        for p in docs_dir.glob("**/*.md")
         # A symlinked document is a view of one that is checked where it lives, so
         # following it here would count its citations twice.
         # `spi/rendering-project/` is nothing but symlinks.
@@ -122,7 +170,10 @@ def main() -> int:
             failing = True
             continue
         lines = doc.read_text().splitlines()
-        relative = doc.relative_to(root)
+        try:
+            relative = doc.relative_to(root)
+        except ValueError:
+            relative = doc
         for number, text in enumerate(lines, start=1):
             for match in CITATION.finditer(text):
                 cited, first, last = match.group(1), int(match.group(2)), match.group(3)
