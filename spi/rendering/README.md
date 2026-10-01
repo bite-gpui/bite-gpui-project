@@ -38,6 +38,9 @@ its own folder, because it is a surface an application meets rather than part of
 | [`probe-p1-reverse-bridge.md`](probe-p1-reverse-bridge.md) | the specification of the probe that gates the interop crate's Windows module |
 | [`probe-p2-macos-adoption.md`](probe-p2-macos-adoption.md) | the probe that gates its macOS module — adopting an `IOSurface` into wgpu |
 | [`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md) | the probe that gates the Linux surface arm — importing a dma-buf |
+| [`probe-p5-fence-loop.md`](probe-p5-fence-loop.md) | the probe that gates W5's ordering — a shared fence across two devices |
+| [`probe-p6-adapter-luid.md`](probe-p6-adapter-luid.md) | the probe that gates W5's adapter selection — and, run first, the crate API |
+| [`probe-p9-device-loss.md`](probe-p9-device-loss.md) | the probe that gates W5's device-loss contract |
 | [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 

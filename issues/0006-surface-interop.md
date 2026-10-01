@@ -15,9 +15,13 @@ The decision is [`0005`](../decisions/0005-external-rendering-unifies-under-surf
 [`surface-plan.md`](../spi/rendering/surface-plan.md) §1 and §2. This issue is the coordination those
 three do not carry: what goes where, what has to be decided before what, and what "done" means. It does
 not restate them. The downstream crate it names is planned in
-[`../spi/rendering/interop-crate.md`](../spi/rendering/interop-crate.md). Its gating probes are specified in [`../spi/rendering/probe-p1-reverse-bridge.md`](../spi/rendering/probe-p1-reverse-bridge.md),
-[`../spi/rendering/probe-p2-macos-adoption.md`](../spi/rendering/probe-p2-macos-adoption.md) and
-[`../spi/rendering/probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md).
+[`../spi/rendering/interop-crate.md`](../spi/rendering/interop-crate.md). Its gating probes are specified in
+[`../spi/rendering/probe-p1-reverse-bridge.md`](../spi/rendering/probe-p1-reverse-bridge.md),
+[`probe-p2-macos-adoption.md`](../spi/rendering/probe-p2-macos-adoption.md),
+[`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md),
+[`probe-p5-fence-loop.md`](../spi/rendering/probe-p5-fence-loop.md),
+[`probe-p6-adapter-luid.md`](../spi/rendering/probe-p6-adapter-luid.md) and
+[`probe-p9-device-loss.md`](../spi/rendering/probe-p9-device-loss.md).
 
 ## What is already built
 

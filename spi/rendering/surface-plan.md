@@ -75,14 +75,16 @@ out of scope. *Consequence:* it adds a pass; it never blocks W2.
 **P5 — the fence bridge end to end (gates W5).** `ID3D12Fence` exported as a shared NT handle and
 opened as an `ID3D11Fence`: `shared-surface.md` clears, polls and reads across the two devices but
 carries **no fence between them**, and its fence probe orders two buffers on *one* device. *Harness:*
-two devices, a full produce→signal→wait→consume loop. *Pass:* no tearing, no keyed-mutex stall.
+two devices, a full produce→signal→wait→consume loop. *Pass:* no tearing, no keyed-mutex stall. The
+full specification is [`probe-p5-fence-loop.md`](probe-p5-fence-loop.md).
 
 **P6 — adapter LUID matching (gates W5's adapter selection).** `wgpu` must select the *physical*
 adapter GPUI's Direct3D 11 device is on. *Harness:* read both LUIDs and compare, per the hazard
 [`windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) §5 names. *Pass:* a rule that
 picks the same adapter, or a statement that it cannot be asserted and is therefore the application's.
 **Run this early:** its answer is the crate's API — whether `attach` can find the adapter or the caller
-must supply one ([`interop-crate.md`](interop-crate.md) §4) — so a late answer is a redesign.
+must supply one ([`interop-crate.md`](interop-crate.md) §4) — so a late answer is a redesign. The full specification is
+[`probe-p6-adapter-luid.md`](probe-p6-adapter-luid.md).
 
 **P7 — guest thread viability (gates W6).** The renderer factory is `!Send` by construction (an
 `Rc`), and the offscreen path must hand back a *shareable* surface, not only bytes. *Harness:* run
@@ -99,7 +101,8 @@ unplug, a DPI change or a GPU timeout (TDR); GPUI recreates its device, and ever
 fence and texture view the producer holds becomes invalid. *Harness:* drop GPUI's device
 (`PlatformRenderer::device_lost` → `recover`) while the producer holds a surface, then re-attach.
 *Pass:* the bridge tears down and re-negotiates without crashing the host process. *This is a W5
-acceptance case, not only a probe.*
+acceptance case, not only a probe.* The full specification is
+[`probe-p9-device-loss.md`](probe-p9-device-loss.md).
 
 ## 3. The order
 
