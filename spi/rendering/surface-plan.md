@@ -27,7 +27,8 @@ Each is independent of the ones below it unless the table says otherwise.
 | **W7** | **Path B — untouched.** | `crates/gpui_engine/src/custom_render.rs:41` (`Inline`) | no dependency on W2–W6; independent |
 
 **W1 and W2 are the upstream pair**, and the reason the unification is worth the retarget: they are
-PRs upstream will take, not a fork. W3–W6 are ours.
+PRs upstream will take, not a fork. W3–W6 are ours; W5 and W6 are one crate, planned in
+[`interop-crate.md`](interop-crate.md).
 
 ## 2. The probes, before the code they gate
 

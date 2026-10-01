@@ -14,7 +14,8 @@ The decision is [`0005`](../decisions/0005-external-rendering-unifies-under-surf
 [`surfaces.md`](../spi/rendering/surfaces.md), and the order and the probes are
 [`surface-plan.md`](../spi/rendering/surface-plan.md) §1 and §2. This issue is the coordination those
 three do not carry: what goes where, what has to be decided before what, and what "done" means. It does
-not restate them.
+not restate them. The downstream crate it names is planned in
+[`../spi/rendering/interop-crate.md`](../spi/rendering/interop-crate.md).
 
 ## What is already built
 
