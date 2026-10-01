@@ -16,7 +16,7 @@
   +9212/−1256), and `docs/retained-mode.md` in gpui-fast. A closed, unmerged branch's tip
   is still fetchable as `refs/pull/<n>/head`, which is what makes a closed PR checkable
   rather than only quotable. The code claims about *this* stack live in the issue, against
-  `bite_v1.22.0-pre`.
+  `bite_v1.23.1-pre`.
 
   **One terminology point the engine itself makes.** Zed's view tree is *memoisation*: the
   authoring model is unchanged, and "retained" is used only where Taffy subtrees are

@@ -6,7 +6,7 @@ live in the tools repository.
 
 Moved here on 2026-09-26 from `.tools/docs/architecture.md` §0, §1 and §3, which
 described GPUI rather than the tooling that applies it — see [`README.md`](README.md).
-Measurements below are as of `bite_v1.22.0-pre` (`0ff0532eb7`).
+Measurements below are as of `bite_v1.23.1-pre` (`8d6c02d171`).
 
 ## The aim, because it decides everything else
 
@@ -21,7 +21,7 @@ intact.
 
 ## The layers
 
-Measured at `bite_v1.22.0-pre` (`0ff0532eb7`), source files under `crates/*/src`:
+Measured at `bite_v1.23.1-pre` (`8d6c02d171`), source files under `crates/*/src`:
 
 | crate | files | bytes | role |
 | --- | --- | --- | --- |

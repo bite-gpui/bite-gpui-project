@@ -1,7 +1,7 @@
 # Milestones
 
 - **Status:** the handoff. What is built, where it is, what is next in what order, and the gates a
-  resumer runs. Written 2026-09-29, against `bite_v1.22.0-pre` at `fcde78d01a`; a citation's line
+  resumer runs. Written 2026-09-29, against `bite_v1.23.1-pre` at `8d6c02d171`; a citation's line
   numbers move whenever that ref does, and `script/check-citations` prints what each one now points
   at.
 - **Read with:** the chapter order in [`README.md`](README.md) for the design — this document is the
@@ -12,7 +12,7 @@
 
 | what | where |
 | --- | --- |
-| the canonical ref, and what every citation resolves against | `bite_v1.22.0-pre`, tip `fcde78d01a` (the merge of #6) |
+| the canonical ref, and what every citation resolves against | `bite_v1.23.1-pre`, tip `8d6c02d171` (the re-application of the stack onto the new renderer split) |
 | what the canonical ref already carries | the renderer seam (#4), the fork's CI file (#5), and Path A whole (#6) |
 | Path A, whole | on the canonical ref, sixteen commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
 | the checkout the work is in | `.tools/worktrees/wt-seam` in the zed clone |
@@ -56,7 +56,7 @@ Small and independent, and none of them blocks anything in §4.
   without one, which is a decision about what a GPU-less runner is for rather than a wiring change.
   Issue [`0003`](../../issues/0003-scheduled-builds.md) holds the wider version of the question.
 - **The canonical ref's citations move when it advances.** Anything that lands on
-  `bite_v1.22.0-pre` re-derives every citation in this repository.
+  `bite_v1.23.1-pre` re-derives every citation in this repository.
 
 ## 4. What is next, in order
 

@@ -6,7 +6,7 @@
   each attachment point.
 - **Sources.** The same two efforts, read at the same places: Zed `#63800` at
   `refs/pull/63800/head` (`3d0b7f0a`) and gpui-fast's `main` (`fast/`, `docs/`). Claims about this
-  stack are cited against `bite_v1.22.0-pre`. `bite-gp-morphorm` and `bite-gp-parley` are named but
+  stack are cited against `bite_v1.23.1-pre`. `bite-gp-morphorm` and `bite-gp-parley` are named but
   not cited by line: they are published from repositories of their own, not from this checkout.
 
 ## 1. The seams that exist

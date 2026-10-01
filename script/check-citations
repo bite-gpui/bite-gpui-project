@@ -29,11 +29,11 @@ from pathlib import Path
 # The ref the documents are written against. Changing it invalidates every
 # citation in the repository and means a pass over all of them.
 #
-# Only the bare name is recorded, because a local branch called `bite_v1.22.0-pre`
+# Only the bare name is recorded, because a local branch called `bite_v1.23.1-pre`
 # does not always exist: in a fresh clone it is a remote-tracking branch under
 # `origin/`. `ref_candidates` is the order the bare name is tried against, so the
 # script works whether the branch was checked out locally or not.
-CANONICAL_REF = "bite_v1.22.0-pre"
+CANONICAL_REF = "bite_v1.23.1-pre"
 
 # A citation is a source path followed by a line, or a line range. Rust is the bulk of
 # them; the shaders are why the extension list is not just `rs`.
