@@ -35,6 +35,7 @@ its own folder, because it is a surface an application meets rather than part of
 | [`surfaces.md`](surfaces.md) | **the design of record for external pixels** — the unification under `PaintSurface`/`surface()`, the IOSurface/DXGI/dma-buf trinity, host and guest modes, and the interop boundary |
 | [`surface-plan.md`](surface-plan.md) | the implementation plan for `surfaces.md`, and the probes each stage is gated on |
 | [`interop-crate.md`](interop-crate.md) | the plan for the downstream `gpui-interop` crate — its posture under the upstreaming, its modules, and its public surface |
+| [`probe-p1-reverse-bridge.md`](probe-p1-reverse-bridge.md) | the specification of the probe that gates the interop crate's Windows module |
 | [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 

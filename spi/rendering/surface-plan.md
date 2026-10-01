@@ -42,7 +42,8 @@ resource on the **D3D12** side and read it from D3D11. The direction a *D3D11* p
 `texture_from_d3d11_shared_handle`, gated `VULKAN_EXTERNAL_MEMORY_WIN32`
 ([`producer-reach.md`](producer-reach.md) §6). *Harness:* a machine with a Vulkan driver (probe 6 had
 none). *Pass:* the handle is accepted and sampled. *Closes:* whether W5 needs the Vulkan path at all,
-or only the DX12→D3D11 direction already measured.
+or only the DX12→D3D11 direction already measured. The full specification is
+[`probe-p1-reverse-bridge.md`](probe-p1-reverse-bridge.md).
 
 **P2 — macOS adoption of an `IOSurface` (gates the macOS half of W5).** The pool, the token and the
 fence are measured; **adoption is not** — nothing yet builds an `MTLTexture` over an `IOSurface` with
