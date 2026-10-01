@@ -20,8 +20,10 @@ not restate them. The downstream crate it names is planned in
 [`probe-p2-macos-adoption.md`](../spi/rendering/probe-p2-macos-adoption.md),
 [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md),
 [`probe-p5-fence-loop.md`](../spi/rendering/probe-p5-fence-loop.md),
-[`probe-p6-adapter-luid.md`](../spi/rendering/probe-p6-adapter-luid.md) and
-[`probe-p9-device-loss.md`](../spi/rendering/probe-p9-device-loss.md).
+[`probe-p6-adapter-luid.md`](../spi/rendering/probe-p6-adapter-luid.md),
+[`probe-p9-device-loss.md`](../spi/rendering/probe-p9-device-loss.md),
+[`probe-p4-video-formats.md`](../spi/rendering/probe-p4-video-formats.md) and
+[`probe-p7-guest-thread.md`](../spi/rendering/probe-p7-guest-thread.md).
 
 ## What is already built
 

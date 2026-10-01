@@ -41,6 +41,8 @@ its own folder, because it is a surface an application meets rather than part of
 | [`probe-p5-fence-loop.md`](probe-p5-fence-loop.md) | the probe that gates W5's ordering — a shared fence across two devices |
 | [`probe-p6-adapter-luid.md`](probe-p6-adapter-luid.md) | the probe that gates W5's adapter selection — and, run first, the crate API |
 | [`probe-p9-device-loss.md`](probe-p9-device-loss.md) | the probe that gates W5's device-loss contract |
+| [`probe-p4-video-formats.md`](probe-p4-video-formats.md) | the inventory behind the additive YCbCr pass — what decoders actually emit |
+| [`probe-p7-guest-thread.md`](probe-p7-guest-thread.md) | the probe that gates W6 — the offscreen contract across the worker-thread boundary |
 | [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 

@@ -70,7 +70,8 @@ full specification is [`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md).
 straight-through fragment assumes RGBA, and a VA-API/MF/NVDEC decoder emits NV12/YCbCr, often 10-bit —
 but that is a *second* fragment, not a prerequisite for the RGBA surface pass. *Harness:* capture the
 formats real decoders produce on each platform. *Pass:* a decision on whether YCbCr is a format arm or
-out of scope. *Consequence:* it adds a pass; it never blocks W2.
+out of scope. *Consequence:* it adds a pass; it never blocks W2. The full specification is
+[`probe-p4-video-formats.md`](probe-p4-video-formats.md).
 
 **P5 — the fence bridge end to end (gates W5).** `ID3D12Fence` exported as a shared NT handle and
 opened as an `ID3D11Fence`: `shared-surface.md` clears, polls and reads across the two devices but
@@ -89,7 +90,8 @@ must supply one ([`interop-crate.md`](interop-crate.md) §4) — so a late answe
 **P7 — guest thread viability (gates W6).** The renderer factory is `!Send` by construction (an
 `Rc`), and the offscreen path must hand back a *shareable* surface, not only bytes. *Harness:* run
 the offscreen contract on a worker thread and sample its surface from the host loop. *Pass:* the
-executors tick and the frame is read.
+executors tick and the frame is read. The full specification is
+[`probe-p7-guest-thread.md`](probe-p7-guest-thread.md).
 
 **P8 — the two-GPU Mac (a corner of the macOS producer route).** The producer probe established a
 wgpu adapter *is* the `MetalRenderer`'s `MTLDevice` under every power preference on a single-GPU Mac;
