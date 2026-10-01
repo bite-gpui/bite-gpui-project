@@ -20,6 +20,12 @@ beside the descriptive chapters because the thread is an engine-wide change the 
 have to decide, not a seam a crate can implement — see
 [`../issues/0005-view-retention.md`](../issues/0005-view-retention.md).
 
+The render extension's own architecture — the surface path, the OS buffer trinity, and the interop
+boundary — is not here: it is [`../spi/rendering/surfaces.md`](../spi/rendering/surfaces.md), because
+it is a seam and its surrounding chapters rather than the layer map. What this directory contributes
+to it is the ruling that separates what is core from what is downstream
+([`layer-stack.md`](layer-stack.md) and [`extension-tiers.md`](extension-tiers.md)).
+
 ## Belongs here
 
 - the layer map: which crate owns which concern, and the direction dependencies run

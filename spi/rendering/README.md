@@ -8,9 +8,11 @@ has — or fork the engine. The readback alone moves `W × H × 4 × fps × 2` b
 ≈1.0 GB/s at 1080p60 and ≈8.0 GB/s at 4K120, across the bus between GPU and CPU, which
 saturates the memory bus and costs one to two frames of latency.
 
-The extension answers with two mechanisms over one primitive: **Path A** imports a texture
-the application produced, and **Path B** draws the application's own commands into the
-window's pass. Where the four candidates land:
+The extension answers with two mechanisms: **a surface** — a buffer the application produced,
+composited into the window's scene through `surface()`, the route called **Path A** while it was
+built — and **inline commands** — the application's own commands drawn into the window's pass,**Path B**. [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) reunites the
+surface route with the primitive GPUI already had, so `surface()` is the entry point and no second
+scene type is added; [`surfaces.md`](surfaces.md) is that design. Where the four candidates land:
 
 | | primitive translation | offscreen blit | Path B inline | Path A texture |
 | --- | --- | --- | --- | --- |
@@ -30,24 +32,28 @@ its own folder, because it is a surface an application meets rather than part of
 | [`inline-commands.md`](inline-commands.md) | Path B: drawing into the window's own pass, the pipeline-state isolation matrix, and the coordinate bridge |
 | [`verification.md`](verification.md) | what a test can assert, and which platform each check needs |
 | [`producer-reach.md`](producer-reach.md) | the other half of Path A: how a producer gets the device it has to make its texture on, what each platform lends now, and what is left |
+| [`surfaces.md`](surfaces.md) | **the design of record for external pixels** — the unification under `PaintSurface`/`surface()`, the IOSurface/DXGI/dma-buf trinity, host and guest modes, and the interop boundary |
+| [`surface-plan.md`](surface-plan.md) | the implementation plan for `surfaces.md`, and the probes each stage is gated on |
 | [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 
-Seven documents outside this folder are part of the work rather than of the design:
+Eight documents outside this folder are part of the work rather than of the design:
 [`../../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)
-decides which devices a producer may use and
+decides which devices a producer may use,
 [`../../decisions/0004-producer-device-rendezvous.md`](../../decisions/0004-producer-device-rendezvous.md)
-decides how a producer reaches one,
-[`../../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) is the
-measurement that decision rests on,
-[`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md)
-is the measurement its Windows clause rests on,
-[`../../decisions/shared-surface.md`](../../decisions/shared-surface.md) is the shared-buffer
-measurement that reopens it, and
-[`../../decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md) is
-what §6's macOS commit and §10 rest on, and
-[`../../decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md) is
-the producer probe, which answers §2's macOS row.
+decides how a producer reaches one, and
+[`../../decisions/0005-external-rendering-unifies-under-surface.md`](../../decisions/0005-external-rendering-unifies-under-surface.md)
+decides that the two are one primitive, a `PaintSurface`. The measurements they rest on are
+[`../../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md), what 0002's
+Windows clause rests on,
+[`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md),
+its second rider,
+[`../../decisions/shared-surface.md`](../../decisions/shared-surface.md), the shared-buffer
+measurement that reopens it,
+[`../../decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md), what
+§6's macOS commit and §10 rest on, and
+[`../../decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md), the
+producer probe, which answers §2's macOS row.
 [`rendering-project/`](../rendering-project/README.md) gathers symlinks to all of them.
 
 ## Status
@@ -61,6 +67,12 @@ Path A is on the canonical ref, merged as PR #6 — its engine and authoring hal
 mode in the renderer contract the path is asserted through, all three arms (wgpu, Metal and
 Direct3D), and the producer's reach, so an application can obtain the device its texture is made on
 as well as paint one.
+
+The name of that path changed after it merged. [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md)
+unifies external pixels under the existing `PaintSurface` / `surface()` rather than a second
+primitive, so what PR #6 built is retargeted into `draw_surfaces`: the same arms, colour space and
+rendezvous, under the entry point upstream already has. The offscreen half — `PixelBuffer`, and
+`render_scene` split from `read_pixels` — is that record's upstream PR 1, already built.
 
 What that adds up to is that the three consumer arms and the three producers are level: each
 renderer samples an RGBA foreign texture, lends its device, has a token builder an application names
@@ -96,9 +108,10 @@ grown past what an index should carry, and two copies of a plan are two copies t
 
 In one line, the order is: **`GpuCanvas`**, the surface an application meets — the three arms, the
 three producers and the demo are level, so what is left beside them is the canvas itself; then Path
-B, which is independent of all of it; then a third-party renderer; then the deferred bridge, which
-needs a probe before it needs a decision. The producer's reach, the three arms and the macOS probe
-are done, and are no longer on the list.
+B, which is independent of all of it; then a third-party renderer; then the cross-API bridge — which
+[`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) schedules downstream
+rather than deferring, and puts the unified `surface()` arm ahead of it. The producer's reach, the
+three arms and the macOS probe are done, and are no longer on the list.
 
 The list this section used to hold is closed. The citations were re-pointed to the merged ref — the
 merge moved lines in every file the chapters cite, and §3's Windows rows and §5.2 took real
@@ -233,19 +246,22 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
 
 ### Open
 
-- **The handle's erasure vs a cfg-gated `wgpu` in `gpui_engine`.** The recommendation is
-  erasure, following the target's own argument. `PaintSurface` is the precedent for the
-  other way — a cfg'd field with a cfg'd dependency, as macOS's `CVPixelBuffer` has.
+- **The handle's erasure vs a cfg-gated `wgpu` in `gpui_engine` — closed by
+  [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md).** The unified
+  `SurfaceHandle` follows `PaintSurface`'s existing shape — a cfg'd variant with a cfg'd dependency,
+  as macOS's `CVPixelBuffer` already is — so the erasure this bullet recommended is withdrawn.
 - **The native hooks' shape.** Should hold: the extension-trait form in
   [`renderer-seam.md`](renderer-seam.md). What would reopen it is in that document.
 - **Whether `WgpuRenderer` should become the default on macOS and Windows**, retiring
   Metal and DirectX to optional. The seam makes the question askable and nothing decides it —
   though both halves are now measured rather than unknown, below.
-- **The shared-handle bridge, deferred.** A wgpu producer on a foreign device would reach
-  GPUI's renderer through a DXGI shared handle it allocates and wgpu adopts; measured to work
-  ([`../../decisions/shared-surface.md`](../../decisions/shared-surface.md)), costing a fence
-  and a same-adapter guarantee the same-device route does not need. Future work this milestone
-  unblocks.
+- **The shared-handle bridge — scheduled downstream by
+  [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md).** A producer on a
+  foreign device reaches GPUI's renderer through a DXGI shared handle it allocates and GPUI adopts;
+  measured to work ([`../../decisions/shared-surface.md`](../../decisions/shared-surface.md)), at the
+  cost of a fence and a same-adapter guarantee the same-device route does not need. It lives in a
+  downstream crate rather than core, and its reverse direction is still unmeasured
+  ([`surface-plan.md`](surface-plan.md) P1).
 - **Windows presentation for a non-D3D11 renderer.** Measured: `WgpuRenderer` can present
   on a Windows window, on Direct3D 12 — which `gpui_wgpu` does not enable today, so the Windows commit
   is a backend change as well as plumbing — and the DX12 surface offers only `Opaque` alpha,

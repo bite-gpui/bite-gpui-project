@@ -13,6 +13,12 @@
   hypothesis: `crates/gpui/examples/path_a.rs` on the canonical ref does by hand what §3
   describes — compose a `div()`, paint an imported texture, let an ordinary box over it — so what
   `GpuCanvas` adds is the spelling, not a capability.
+- **Amended by [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md):** the
+  Path A arm here retargets onto `surface()` — the canvas produces a `SurfaceSource` and pushes it
+  through the existing element, rather than a second primitive. `GpuCanvas` stays the authoring
+  surface and its Path B arm is unchanged, and it is the fallback home for the one case the unified
+  `SurfaceHandle` leaves open — a same-device texture on macOS and Linux (0005 §"What the design does
+  not settle").
 
 ## 1. The cost it absorbs
 

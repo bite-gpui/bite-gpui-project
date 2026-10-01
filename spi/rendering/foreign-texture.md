@@ -4,6 +4,12 @@
   `window.` call, the wgpu, Metal and Direct3D arms, the extractor, the readback, and the producer's
   reach — as PR #6, merged. The citations below are written against that ref, so they point at the
   code this chapter describes.
+- **Amended by [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md):** external
+  pixels now reach GPUI as a `PaintSurface` through the existing `surface()`, so the second primitive
+  this chapter specifies (`CustomRenderPrimitive::Texture`) is retargeted into the `draw_surfaces`
+  arm that already exists. The three arms, the colour-space invariant and the producer's reach below
+  are the code that survives the retarget; what changes is the entry point's name and the enum
+  behind it.
 - **The other half of it:** what is here is the *consumer* — a renderer that samples a texture.
   How a producer gets the device its texture has to be made on is
   [`producer-reach.md`](producer-reach.md), which is built beside it; what each platform still

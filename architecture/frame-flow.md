@@ -86,6 +86,22 @@ their frame loop here"*. It is for queries — the sprite atlas, a screen captur
 `draw_roots` is passes 2–4 as one defaulted method, and overriding one of the three is
 enough to intervene between them.
 
+## Where a surface enters
+
+An external buffer does not get a stage of its own; it enters where any other primitive does. A
+producer's pixels are pushed during **`paint_roots`** — the element calls `surface()`, which inserts a
+`PaintSurface` into the frame's scene (`crates/gpui_engine/src/scene.rs:784`) with the bounds and
+content mask the element resolved. The scene orders it against its siblings, and when the frame
+reaches the renderer, `SceneRenderer::draw` hands that scene to the renderer, whose `draw_surfaces`
+samples the buffer (`crates/gpui_windows/src/directx_renderer.rs:852`). Nothing above the renderer
+needs a new stage and nothing below the pipeline changes: a surface is a primitive, and the primitive
+machinery is already the frame's.
+
+The guest path is the same scene without a window — `render_scene` renders it to an offscreen target
+and `read_pixels` reads it back (`crates/gpui_engine/src/renderer.rs:102`, `:110`), which is how a
+foreign loop samples a GPUI frame. The design is
+[`../spi/rendering/surfaces.md`](../spi/rendering/surfaces.md).
+
 ## What a pipeline can and cannot reach
 
 - **It can defer work; it cannot pace presentation.** `should_render` is asked before

@@ -6,7 +6,7 @@ live in the tools repository.
 
 Moved here on 2026-09-26 from `.tools/docs/architecture.md` §0, §1 and §3, which
 described GPUI rather than the tooling that applies it — see [`README.md`](README.md).
-Measurements below are as of `bite_v1.23.1-pre` (`e867ece9f9`).
+Measurements below are as of `bite_v1.22.0-pre` (`0ff0532eb7`).
 
 ## The aim, because it decides everything else
 
@@ -21,7 +21,7 @@ intact.
 
 ## The layers
 
-Measured at `bite_v1.23.1-pre` (`e867ece9f9`), source files under `crates/*/src`:
+Measured at `bite_v1.22.0-pre` (`0ff0532eb7`), source files under `crates/*/src`:
 
 | crate | files | bytes | role |
 | --- | --- | --- | --- |
@@ -174,6 +174,16 @@ renderer, morphorm-for-taffy, a pipeline/runtime experiment, `gpui_mobile` — s
 need only published crates and an extension trait, not a change to the stack. If it
 needs a change to the stack, that is the signal to re-open the rulings rather than to
 special-case it.
+
+The surface work is the test applied where the answer is not obvious. The element and its payload —
+`SurfaceSource`, and the `surface()` an application calls — are **core**: they are the compositor
+interface the engine already had on macOS, and extending them to Windows is what upstream asked for,
+which is why that half is a PR and not a fork. The cross-API bridge — matching a `wgpu` adapter,
+opening a shared NT handle, bridging the fences — is **downstream**, because it would put `wgpu` and
+Direct3D 12 into a crate that must not name them
+([`../spi/rendering/surfaces.md`](../spi/rendering/surfaces.md) §5). The ruling that separates them is
+the one this section already states: does the change keep the upstream surface intact, and does core
+have to name the API?
 
 That test is what makes this document worth reading before adding anything: it is the
 criterion by which `FramePipeline` was left an open seam rather than shipped with a

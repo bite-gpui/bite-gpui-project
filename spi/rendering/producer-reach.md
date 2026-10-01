@@ -4,6 +4,11 @@
   producer reaches the device through is built on it; the decision behind that accessor is
   [`0004`](../../decisions/0004-producer-device-rendezvous.md), decided. What each platform's
   producer half still lacks is §7, and it is not the same gap anywhere.
+- **Amended by [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md):** the
+  rendezvous below — a window lends its renderer's device — stands. What changes is the *typed
+  spelling*: the design record calls it `DirectXWindowExt::d3d11_device()`, and it sits over the
+  erased `device_any` this chapter builds. The trait still lives in the facade, for 0004's reason —
+  `gpui_windows` cannot name `gpui::Window`.
 - **Assumes:** [`foreign-texture.md`](foreign-texture.md) — the primitive, the token, and what a
   renderer has to draw — and [`renderer-seam.md`](renderer-seam.md) — the factory, the target, and
   the rule that post-construction queries belong on the renderer.

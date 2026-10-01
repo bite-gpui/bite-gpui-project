@@ -14,6 +14,8 @@
 | --- | --- |
 | the canonical ref, and what every citation resolves against | `bite_v1.23.1-pre`, tip `e867ece9f9` (the gate-6 editor-crate fixes) |
 | what the canonical ref already carries | the renderer seam (#4), the fork's CI file (#5), and Path A whole (#6) |
+| the design of record for external pixels | [`surfaces.md`](surfaces.md) — the surface unification [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) decides — and its plan and probes in [`surface-plan.md`](surface-plan.md) |
+| the design of record for external pixels | [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) — the surface unification; its source, the *External Surfaces, Platform Interop, and Headless Rendering in GPUI* design record, is filed with the work |
 | Path A, whole | on the canonical ref, sixteen commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
 | the checkout the work is in | `.tools/worktrees/wt-seam` in the zed clone |
 | the other repositories, and what each is for | [`../../references.md`](../../references.md) |
@@ -60,6 +62,10 @@ Small and independent, and none of them blocks anything in §4.
 
 ## 4. What is next, in order
 
+Reshaped by [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md), which moves
+external pixels onto the existing `PaintSurface` / `surface()`. M1 and M2 stand; M3 is retargeted;
+the bridge is promoted out of "deferred", and the unified surface arm joins the list.
+
 **M1 — the producer's reach. Done.** [`producer-reach.md`](producer-reach.md) and
 [`0004`](../../decisions/0004-producer-device-rendezvous.md). `Window::device_any` is built on all
 three renderers, so the decision that was M1's first step is taken and the accessor exists; what
@@ -71,18 +77,29 @@ rows, the Direct3D renderer's offscreen shape, the wgpu token's reach through th
 macOS producer route — measured rather than handed over — all landed, and a runnable demo ties them
 together. What is left in §3 is the test filter and the citation churn, neither of which is Path A.
 
-**M3 — `GpuCanvas`.** [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md). The surface an
-application meets; with M1 built, the token its callback returns is one an application can
-construct, which is what makes the canvas a capability rather than a demonstration.
+**M3 — `GpuCanvas`, retargeted.** [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md). The
+surface an application meets; 0005 changes only its Path A arm — it produces a `SurfaceSource` and
+pushes it through `surface()` rather than a second primitive, and its Path B arm is unchanged. With
+M1 built, the payload its callback returns is one an application can construct, which is what makes
+the canvas a capability rather than a demonstration.
 
-**M4 — Path B.** [`inline-commands.md`](inline-commands.md). Unstarted. It shares the primitive with
-Path A and needs no device export by definition — the producer draws into the window's own pass —
-so it is the one remaining item that is not behind M1.
+**M4 — Path B.** [`inline-commands.md`](inline-commands.md). Unstarted. It draws into the window's
+own pass, not a buffer, so 0005 leaves it alone; it needs no device export and is not behind M1.
 
-**M5 — the cross-device bridge.** 0002's deferred tier, and it needs its own decision plus a probe
-before its own code: the direction a D3D11 producer feeding a wgpu consumer needs is the one neither
-existing probe measured ([`producer-reach.md`](producer-reach.md) §6). Not on the critical path for
-anything above.
+**M5 — the unified surface arm.** Extend `SurfaceSource` / `PaintSurface` to Windows and Linux and
+implement `draw_surfaces` by retargeting the Direct3D arm that exists
+(`crates/gpui_windows/src/directx_renderer.rs:862` → `:852`). The Windows half is upstream PR 2 of
+the design record; the Linux half adds the dma-buf variant. This is what makes `surface()` a
+capability on every desktop rather than macOS alone.
+
+**M6 — the cross-API bridge, `gpui-interop`.** 0002's Tier 2, scheduled rather than deferred by 0005:
+the measured direction (Direct3D 12 / `wgpu` → Direct3D 11 shared NT handle, with an `ID3D12Fence`
+↔ `ID3D11Fence` handshake) is the built scope. The reverse — a Direct3D 11 producer feeding a `wgpu`
+consumer — is still the one direction neither probe measured
+([`producer-reach.md`](producer-reach.md) §6), so it keeps a probe of its own.
+
+**M7 — guest / headless.** The offscreen contract is built (M2); what is left is the worker-thread
+runner that hosts GPUI inside a foreign loop, which belongs in `gpui-interop`.
 
 ## 5. The gates
 
@@ -139,5 +156,9 @@ evidence beside the decision it produced. A probe still running lives with the w
 - **The rendezvous decision** (M1): [`0004`](../../decisions/0004-producer-device-rendezvous.md),
   decided and built. It supplies the gpui→app half of 0002's "the rendezvous is one slot, and it
   works both ways", which the code did not have.
-- **The bridge decision** (M5): 0002 defers it, and the second probe answers whether the direction
+- **The surface decision** (M3/M5): [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md),
+  decided. It reunites the second primitive with `PaintSurface`, so the design is
+  [`surfaces.md`](surfaces.md) and the plan and probes are [`surface-plan.md`](surface-plan.md).
+- **The bridge decision** (M6): 0002 deferred it; 0005 schedules it in a downstream crate, and
+  [`surface-plan.md`](surface-plan.md) P1/P5/P6 are the probes that decide whether the direction
   worth having works at all.
