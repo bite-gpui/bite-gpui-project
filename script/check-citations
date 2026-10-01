@@ -1,156 +1,49 @@
 #!/usr/bin/env python3
 """Check the `path:line` citations in this repository's documents.
 
-Print, don't judge. Every citation is resolved against a ref and printed with the
-line it currently points at, so a wrong number is visible rather than hidden.
-Exits non-zero only when a cited file is missing, an unresolved citation is
-found, or a line number is out of range -- the cases that are unambiguously
-wrong rather than merely stale.
+Print, don't judge. Every citation is resolved against a ref and printed with the line
+it currently points at, so a wrong number is visible rather than hidden. When a citation
+lands on a blank line — the usual symptom of drift — the check hunts the symbols named in
+the surrounding prose and reports where each is now defined, so a stale number can be
+re-pointed without eyeballing the file.
+
+Exits non-zero only when a cited file is missing, an unresolved citation is found, or a
+line number is out of range — the cases that are unambiguously wrong rather than merely
+stale.
 
     script/check-citations                  # against the canonical ref
     script/check-citations --ref regenerated
     script/check-citations --worktree       # against this checkout
     script/check-citations --problems       # only the ones that need attention
-
-The ref is the whole point. Line numbers are per-branch, and there are twelve
-`bite_*` branches that differ, so a citation means nothing until one is chosen.
-See README.md, "Conventions".
+    script/check-citations --drift          # only the ones whose line is now blank
 """
 
 from __future__ import annotations
 
 import argparse
-import glob
-import re
-import subprocess
 import sys
 from pathlib import Path
 
-# The ref the documents are written against. Changing it invalidates every
-# citation in the repository and means a pass over all of them.
-#
-# Only the bare name is recorded, because a local branch called `bite_v1.23.1-pre`
-# does not always exist: in a fresh clone it is a remote-tracking branch under
-# `origin/`. `ref_candidates` is the order the bare name is tried against, so the
-# script works whether the branch was checked out locally or not.
-CANONICAL_REF = "bite_v1.23.1-pre"
-
-# A citation is a source path followed by a line, or a line range. Rust is the bulk of
-# them; the shaders are why the extension list is not just `rs`.
-CITATION = re.compile(r"([A-Za-z0-9_][A-Za-z0-9_/.-]*\.(?:rs|wgsl|metal|hlsl)):(\d+)(?:-(\d+))?")
-
-# Where a bare filename is looked up, in order. Every bare citation in the
-# documents today is `gpui_authoring`'s; anything from another crate has to say
-# so, because `window.rs` and `lib.rs` are not unique across the tree.
-BARE_BASES = ("crates/gpui_authoring/src", "crates/gpui_authoring/src/app")
-
-# A citation of the form `crate-1.2.3/src/file.rs` is a published dependency's
-# source, not this repository's. It is read from the cargo registry cache.
-VERSIONED = re.compile(r"^[A-Za-z0-9_.-]+-\d+\.\d+")
-REGISTRY = Path.home() / ".cargo/registry/src"
-
-
-def repo_root() -> Path:
-    """The git repository that owns the documents.
-
-    The script is written to live at `<repo>/bite-gpui-project/script/check-citations`,
-    where `<repo>` is the checkout that owns the `bite_*` branches carrying the cited
-    source. In the nested layout the record (and its documents) is a child of the
-    clone; checked out standalone as `bite-gpui-project`, the repository root *is* the
-    documents' root. Ask git rather than guessing from the script's depth, and fall
-    back to walking up from the script when git is not available.
-    """
-    script = Path(__file__).resolve()
-    result = run(["git", "-C", str(script.parent), "rev-parse", "--show-toplevel"])
-    if result.returncode == 0 and result.stdout.strip():
-        return Path(result.stdout.strip())
-    # Not in a git checkout: the pre-git fallback, three levels up.
-    return script.parent.parent.parent
-
-
-def docs_root(root: Path) -> Path:
-    """The directory the documents live in.
-
-    Inside a checkout that nests the record as `.meta` it is `root/.meta`; in the
-    standalone checkout it is the repository root itself.
-    """
-    meta = root / ".meta"
-    return meta if meta.is_dir() else root
-
-
-def resolve_ref(root: Path, named: str) -> str:
-    """Return a git ref that resolves, given the documents' bare name.
-
-    A `bite_*` branch is a remote-tracking branch in a fresh clone, so the bare
-    name resolves only after someone checks it out locally. Try the bare name
-    first (that is the fast path once it is local), then the `origin/` spelling;
-    `git show <ref>:<path>` works for either. A name that resolves to nothing at
-    all is returned unchanged so the per-citation error still names what the
-    user wrote rather than what the script guessed.
-    """
-    if run(["git", "-C", str(root), "rev-parse", "--verify", "--quiet", named]).returncode == 0:
-        return named
-    remote = f"origin/{named}"
-    if run(["git", "-C", str(root), "rev-parse", "--verify", "--quiet", remote]).returncode == 0:
-        return remote
-    return named
-
-
-def run(args: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(args, capture_output=True, text=True)
-
-
-def exists_at(root: Path, ref: str | None, path: str) -> bool:
-    if ref is None:
-        return (root / path).is_file()
-    result = run(["git", "-C", str(root), "cat-file", "-e", f"{ref}:{path}"])
-    return result.returncode == 0
-
-
-def read_at(root: Path, ref: str | None, path: str) -> list[str] | None:
-    if ref is None:
-        file = root / path
-        return file.read_text().splitlines() if file.is_file() else None
-    result = run(["git", "-C", str(root), "show", f"{ref}:{path}"])
-    return result.stdout.splitlines() if result.returncode == 0 else None
-
-
-def read_registry(path: str) -> list[str] | None:
-    matches = sorted(glob.glob(str(REGISTRY / "*" / path)))
-    if not matches:
-        return None
-    return Path(matches[-1]).read_text().splitlines()
-
-
-def resolve(root: Path, ref: str | None, cited: str) -> tuple[str, str]:
-    """Return (kind, path): 'repo', 'registry', or 'unresolved'."""
-    head = cited.split("/", 1)[0]
-    if "/" in cited:
-        if VERSIONED.match(head):
-            return "registry", cited
-        return ("repo", cited) if exists_at(root, ref, cited) else ("unresolved", cited)
-    for base in BARE_BASES:
-        candidate = f"{base}/{cited}"
-        if exists_at(root, ref, candidate):
-            return "repo", candidate
-    return "unresolved", cited
+import citations
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--ref", default=CANONICAL_REF,
-                        help=f"the ref to resolve against (default: {CANONICAL_REF})")
+    parser.add_argument("--ref", default=citations.CANONICAL_REF,
+                        help=f"the ref to resolve against (default: {citations.CANONICAL_REF})")
     parser.add_argument("--worktree", action="store_true",
                         help="resolve against this checkout instead of a ref")
     parser.add_argument("--problems", action="store_true",
                         help="print only the citations that need attention")
+    parser.add_argument("--drift", action="store_true",
+                        help="print only the citations whose line is now blank")
     parser.add_argument("documents", nargs="*",
                         help="documents to check (default: every .md here)")
     args = parser.parse_args()
 
-    root = repo_root()
-    docs_dir = docs_root(root)
-    ref = None if args.worktree else resolve_ref(root, args.ref)
+    docs_dir = citations.docs_root(citations.repo_root())
+    source = citations.source_root(docs_dir)
+    ref = None if args.worktree else citations.resolve_ref(source, args.ref)
     where = "the working tree" if ref is None else f"ref {args.ref}"
 
     docs = [Path(d) for d in args.documents] or sorted(
@@ -171,26 +64,26 @@ def main() -> int:
             continue
         lines = doc.read_text().splitlines()
         try:
-            relative = doc.relative_to(root)
+            relative = doc.relative_to(docs_dir)
         except ValueError:
             relative = doc
         for number, text in enumerate(lines, start=1):
-            for match in CITATION.finditer(text):
+            for match in citations.CITATION.finditer(text):
                 cited, first, last = match.group(1), int(match.group(2)), match.group(3)
                 last = int(last) if last else first
                 checked += 1
 
-                kind, path = resolve(root, ref, cited)
+                kind, path = citations.resolve(source, ref, cited)
                 if kind == "unresolved":
                     unresolved += 1
                     failing = True
                     print(f"{relative}:{number}  {cited}:{first}  UNRESOLVED")
-                    print(f"    not found under {', '.join(BARE_BASES)}"
+                    print(f"    not found under {', '.join(citations.BARE_BASES)}"
                           if "/" not in cited else "    no such file at this ref")
                     continue
 
-                content = (read_registry(path) if kind == "registry"
-                           else read_at(root, ref, path))
+                content = (citations.read_registry(path) if kind == "registry"
+                           else citations.read_at(source, ref, path))
                 if content is None:
                     missing += 1
                     failing = True
@@ -206,10 +99,17 @@ def main() -> int:
                 shown = content[first - 1].strip()
                 if not shown:
                     blanks += 1
-                if args.problems and shown:
+                if (args.problems or args.drift) and shown:
                     continue
                 print(f"{relative}:{number}  {path}:{first}"
                       f"{'-' + str(last) if last != first else ''}  {shown or '<blank>'}")
+
+                # Drift hint: when the cited line is blank, hunt the symbols named in the
+                # prose and report where each is now defined.
+                if not shown and kind == "repo":
+                    for symbol in citations.symbols_in_text(text):
+                        for line_no, sym_kind in citations.find_symbols(content, symbol):
+                            print(f"      ~ `{symbol}` is now defined at line {line_no} ({sym_kind})")
 
     resolved = checked - unresolved - missing - out_of_range
     print(f"\n{checked} citations against {where}: "

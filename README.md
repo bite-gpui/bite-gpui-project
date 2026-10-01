@@ -45,11 +45,13 @@ being committed to any of them.
   on: `bite_v1.23.1-pre`, which was `e867ece9f9` when this convention was written
   (its current tip is recorded alongside the work in
   [`spi/rendering/milestones.md`](spi/rendering/milestones.md) §1).
-  `script/check-citations` prints every citation with the line it currently points at.
+  `script/check-citations` prints every citation with the line it currently points at;
+  `--drift` narrows to the blank-line cases and reports where the named symbols moved.
   Changing the ref means re-deriving every citation in the repository. A bare filename
   (`app.rs:654`) resolves under `crates/gpui_authoring/src`; anything from another crate
   or a published dependency must be a full path, because `window.rs` and `lib.rs` are not
-  unique across the tree.
+  unique across the tree. A published dependency is read from the cargo registry, so set
+  `CARGO_HOME` when the toolchain is not at `~/.cargo`.
 - **Do not restate what is already specified once elsewhere.** Naming, versions and the
   crate table live in `bite-distribution` (`targets.toml`, `docs/contract.md`); link to
   them. A second copy of a fact is a second copy to keep in sync.

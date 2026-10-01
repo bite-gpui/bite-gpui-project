@@ -42,22 +42,31 @@ kind of error that is only caught much later.
 The one tool in this repository, and the thing an agent must run after any edit that
 touches or adds a `path:line` citation. It **prints, does not judge**: it resolves every
 citation against the canonical ref and shows the line each now points at. A blank line is
-usually drift; only "unresolved", "out of range" and "missing" fail.
+usually drift; only "unresolved", "out of range" and "missing" fail. `--drift` prints
+only the blank-line cases, and when a cited line has gone blank it hunts the backticked
+symbols in the surrounding prose and reports where each is now defined, so a stale number
+can be re-pointed without eyeballing the file.
 
-Two facts determine whether it works, and both are easy to get wrong:
+Three facts determine whether it works, and each is easy to get wrong:
 
-1. **It resolves the source against the zed clone, not against this repository.**
-   The cited files (`crates/gpui_authoring/…`, `crates/gpui_engine/…` and the rest) live
-   in the `bite_*` branches of the `bite-gpui` repository. The script derives the git
-   root from its own location, so it resolves the source only when it sits inside that
-   clone; checked out as its own repository it finds the documents but cannot resolve
-   the source, because the branches are not there. Run it from inside the `bite-gpui`
-   checkout for a real pass.
+1. **It resolves the source against the sibling `bite-gpui` clone, not against this
+   repository.** The cited files (`crates/gpui_authoring/…`, `crates/gpui_engine/…` and
+   the rest) live in the `bite_*` branches of the `bite-gpui` repository. The tooling
+   finds that clone by name — the sibling directory `bite-gpui` beside this one, told
+   apart by the `crates/` tree only the clone has — so the documents resolve whether
+   they are checked out standalone or nested inside the clone. Keep the two checked out
+   beside each other (`repositories.md` names them).
 
 2. **The canonical ref is a remote-tracking branch in a fresh clone.** The script now
    falls back from the bare name `bite_v1.23.1-pre` to `origin/bite_v1.23.1-pre`, so a
    fresh clone resolves without a local branch. Do not "fix" this by removing the
    fallback.
+
+3. **Published-dependency citations read from the cargo registry, not the clone.**
+   A citation whose path begins with a crate name and version (e.g. `tracy-client-0.18.3/…`)
+   names that crate's source, resolved from `CARGO_HOME/registry/src` (the registry honours
+   the environment variable; the toolchain here is not at `~/.cargo`). A crate that was
+   never fetched reads as "missing" — a cache gap, not a citation error.
 
 The current citation count and the ref's tip are `spi/rendering/milestones.md` §5, kept
 there rather than here so it is not a second copy.
