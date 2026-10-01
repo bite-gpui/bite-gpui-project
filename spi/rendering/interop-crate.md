@@ -132,7 +132,8 @@ rather than leave the application holding a surface the window can no longer sam
 - **Question 1** (issue `0006`): where the crate lives — a new repository, which then gains a line in
   [`../../repositories.md`](../../repositories.md) and [`../../online-resources.md`](../../online-resources.md),
   or a crate in an existing one.
-- **Question 2**: which crate publishes the payload types, and at which version.
+- **Question 2**: which crate publishes the payload types, and at which version. The concrete
+scaffold — layout, dependencies, and the two tests — is [`interop-scaffold.md`](interop-scaffold.md).
 
 ## 7. What would reopen it
 

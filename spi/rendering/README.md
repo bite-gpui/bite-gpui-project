@@ -46,6 +46,7 @@ its own folder, because it is a surface an application meets rather than part of
 | [`upstream-prs.md`](upstream-prs.md) | the PRs to open upstream, what each carries, and what stays downstream — read with the upstream Discussion |
 | [`pr-1-pixel-buffer.md`](pr-1-pixel-buffer.md) | the ready-to-open body for PR 1 — the render/readback split |
 | [`pr-2-windows-paint-surface.md`](pr-2-windows-paint-surface.md) | the ready-to-open body for PR 2 — `paint_surface` on Windows |
+| [`interop-scaffold.md`](interop-scaffold.md) | the `gpui-interop` crate's concrete scaffold — layout, API and tests — and the test that proves PR 2 is sufficient |
 | [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 

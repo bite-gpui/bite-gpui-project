@@ -24,7 +24,8 @@ not restate them. The downstream crate it names is planned in
 [`probe-p9-device-loss.md`](../spi/rendering/probe-p9-device-loss.md),
 [`probe-p4-video-formats.md`](../spi/rendering/probe-p4-video-formats.md) and
 [`probe-p7-guest-thread.md`](../spi/rendering/probe-p7-guest-thread.md). The pull requests the upstream
-half becomes are described in [`../spi/rendering/upstream-prs.md`](../spi/rendering/upstream-prs.md).
+half becomes are described in [`../spi/rendering/upstream-prs.md`](../spi/rendering/upstream-prs.md), and the
+downstream crate's scaffold in [`../spi/rendering/interop-scaffold.md`](../spi/rendering/interop-scaffold.md).
 
 ## What is already built
 
