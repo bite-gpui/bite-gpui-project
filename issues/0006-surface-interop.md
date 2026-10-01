@@ -39,12 +39,16 @@ upstream PRs are additive, and nothing here blocks a release of the current line
 3. **Upstream first, or branch first.** Whether W1's hygiene and W2's Windows arm are opened as upstream
    PRs before anything else, or carried on a branch until they land. W2 is what upstream asked for, so a
    first step is to open it.
-4. **Whether W5 waits on P1.** P1 — the reverse bridge direction — can collapse the bridge to the
-   already-measured DX12→D3D11 direction, or to "same-device only". The plan must not commit to the
-   Vulkan path before P1 reports.
-5. **The probe homes.** P1–P8 each run where their hardware is, and each becomes a `decisions/` evidence
+4. **What P1 gates.** P1 — the reverse bridge direction (D3D11 → `wgpu`) — is scoped to the guest
+   runner (W6), not the crate (W5): Host Mode's direction is already measured, and a Direct3D 11
+   producer uses the default `DirectXRenderer` (same device). A P1 failure costs Guest Mode, not the
+   crate.
+5. **The probe homes.** P1–P9 each run where their hardware is, and each becomes a `decisions/` evidence
    record beside `0005`/`0002`; the ones that can be asserted become tests
    ([`../spi/rendering/verification.md`](../spi/rendering/verification.md) §4).
+6. **The device-loss contract.** When GPUI's device is recreated after a driver reset (P9), the pool
+   must re-negotiate rather than hold a stale handle; deciding that up front keeps it out of the API's
+   assumptions.
 
 ## What would close it
 

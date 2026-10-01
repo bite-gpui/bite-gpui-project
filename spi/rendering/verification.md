@@ -29,6 +29,7 @@ Each row is an assertion a test can make, not a thing to look at:
 | Path B state isolation | UI corruption *after* an injected draw | a quad drawn after an injected command matches the same quad with no injection |
 | Path B scissor | drawing outside the element | an injected command cannot paint outside its device scissor rect |
 | device loss | a `SurfaceLost` panic | `device_lost()` → `recover()` → a frame draws |
+| the bridge after device loss | a dangling shared handle after a driver reset | after `device_lost` → `recover`, the interop pool re-negotiates and a frame composites, rather than panicking ([`surface-plan.md`](surface-plan.md) §2 P9) |
 | thread affinity | a GPU context crossing threads | the factory is `!Send` by construction (`Rc`), so the type system is the guard |
 | the native hooks | a backend that has not compiled since it was written | each backend compiles on its own platform (§3) |
 

@@ -27,14 +27,19 @@ and the NT handle. **Nothing has been measured on Linux at all**, so this probe 
 - **A dma-buf is an fd plus layout** — a DRM fourcc, a modifier, a stride and an offset — not a
   pointer, which is why it is a surface and not a texture
   ([`surfaces.md`](surfaces.md) §2).
+- **A flat RGBA buffer is not representative.** Real producers emit `NV12` (multi-planar) with a
+  vendor memory *modifier* (tiling), not a linear `ARGB8888`; a probe that only ever imports the flat
+  linear case passes while the real path is broken. That is the false positive §4 probe 4 exists to
+  close.
 - **The Linux rows skip without an adapter**, and so will this: it is a gate only where a GPU or a
   software rasteriser that supports the import exists.
 
 ## 3. What it must measure, and where
 
 **Hardware.** A Linux host with a GPU adapter and a DRM node; record whether the adapter is hardware
-or software (`llvmpipe`), because a software adapter is not a hardware verdict. **Harness.** A scratch
-crate; the printout is the durable record.
+or software (`llvmpipe`), because a software adapter is not a hardware verdict. For probe 4, a
+producer that can emit a tiled buffer or `NV12` — or a synthetic one carrying a vendor modifier.
+**Harness.** A scratch crate; the printout is the durable record.
 
 ## 4. The probes
 
@@ -47,16 +52,19 @@ crate; the printout is the durable record.
 3. **Import and sample.** Create a `VkImage` from the fd (`VK_KHR_external_memory_fd`), adopt it into
    wgpu with `texture_from_raw` + `create_texture_from_hal`, sample it, read back. *Pass: the known
    bytes.*
-4. **The format map.** Repeat for the formats a real producer emits: `XRGB8888`/`ARGB8888`, and
-   `NV12` as the multi-planar case (two planes, two fds or one plus an offset). *Pass: each maps to a
-   sampling `VkFormat`.*
+4. **The format map, and a real layout.** Repeat for the formats a real producer emits:
+   `XRGB8888`/`ARGB8888`, **at least one tiled modifier** (a vendor modifier, not only
+   `DRM_FORMAT_MOD_LINEAR`), and `NV12` as the multi-planar case (two planes, two fds or one plus an
+   offset). *Pass: each maps to a sampling `VkFormat` and samples correctly.* A run that imports only
+   a flat, linear RGBA buffer does **not** mark the Linux path ready.
 5. **Synchronisation.** Order the producer against the renderer with a dma-fence (`sync_file`), the
    Linux counterpart of P1's keyed mutex and P2's `MTLSharedEvent`. *Pass: no tear, no stall.*
 
 ## 5. What each outcome closes
 
-- **Import works** → W3's Linux arm is real work, and the correction to `0002` is measured rather than
-  argued.
+- **Import works** *including the tiled and `NV12` cases of probe 4* → W3's Linux arm is real work,
+  and the correction to `0002` is measured rather than argued. A pass on the flat linear case alone is
+  not this outcome.
 - **Import is refused, or no adapter has the extensions** → the Linux surface arm is deferred; Linux
   stays same-device (wgpu) only, and [`surfaces.md`](surfaces.md) §2's Linux row is a correction in
   principle but not yet a capability.

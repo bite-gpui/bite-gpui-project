@@ -60,8 +60,9 @@ interchange in a platform's clothes: match the adapter, move a handle, order the
 | `linux` | dma-buf alloc/import (fd + fourcc + modifier) via `VK_KHR_external_memory_fd` or `EGL_LINUX_DMA_BUF_EXT`, ordered by a dma-fence | linux |
 | `guest` | headless GPUI on a worker thread, handing a frame to a foreign loop | all |
 
-Each platform module is written only if its probe passes: `windows` on P1/P5/P6, `macos` on P2,
-`linux` on P3.
+Each platform module is written only if its probe passes: `windows` on **P5/P6/P9** for the Host Mode
+direction (D3D12/`wgpu` → D3D11) and on **P1** for its reverse half (D3D11 → `wgpu`, which gates W6 and
+not W5); `macos` on **P2**; `linux` on **P3**.
 
 ## 4. Public surface (a sketch)
 
@@ -104,6 +105,16 @@ Three shapes are the point, and each follows from a decision already taken:
 - **Acquire/submit is a ring, not a fence per frame.** Ordering rides on a signal the producer
   submits and GPUI waits on, or on one queue when the device is shared — the synchronisation
   [`surfaces.md`](surfaces.md) §2 says the same-device route does not need and this one does.
+- **`attach` should be able to take a device the caller already has.** P6 decides whether a matching
+  adapter can be found at all; on a two-GPU laptop, or a driver that hides the LUID, it may not be, and
+  the API's escape is the application handing over the device or adapter it owns. That is why P6 runs
+  *before* this shape is frozen ([`surface-plan.md`](surface-plan.md) §2).
+
+**Device loss is part of the contract, not an edge.** A Windows driver resets on sleep, a monitor
+unplug, a DPI change or a GPU timeout (TDR), and GPUI recreates its device; every handle, fence and
+view the pool holds is then a dangling reference. The pool must observe the renderer's `device_lost` →
+`recover` and re-negotiate — the acceptance case [`surface-plan.md`](surface-plan.md) §2 P9 names —
+rather than leave the application holding a surface the window can no longer sample.
 
 ## 5. What it does not do
 

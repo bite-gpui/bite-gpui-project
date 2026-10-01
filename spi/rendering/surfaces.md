@@ -148,8 +148,11 @@ bridging an `ID3D12Fence` to an `ID3D11Fence` — lives in a **downstream compan
 `crates/gpui_platform/src/platform_window.rs:159` and `:97`) and the surface element. This is
 [`0002`](../../decisions/0002-render-extension-device-model.md)'s deferred Tier 2, now *scheduled*
 rather than deferred — but the same-device route is the milestone, and the bridge is a second step
-whose reverse direction is still unmeasured ([`producer-reach.md`](producer-reach.md) §6). The crate
-itself is planned in [`interop-crate.md`](interop-crate.md).
+whose reverse direction is still unmeasured ([`producer-reach.md`](producer-reach.md) §6). The bridge
+the crate ships is the **Host Mode** direction — a `wgpu`/Direct3D 12 producer into GPUI's Direct3D 11
+renderer, already measured; the *reverse* (a Direct3D 11 producer into a `wgpu` host) is a Guest Mode
+concern scoped to W6, so a P1 failure costs the guest path and not the crate. The crate itself is
+planned in [`interop-crate.md`](interop-crate.md).
 
 ## 6. What this changes here, and what it keeps
 
