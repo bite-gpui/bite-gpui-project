@@ -43,6 +43,7 @@ its own folder, because it is a surface an application meets rather than part of
 | [`probe-p9-device-loss.md`](probe-p9-device-loss.md) | the probe that gates W5's device-loss contract |
 | [`probe-p4-video-formats.md`](probe-p4-video-formats.md) | the inventory behind the additive YCbCr pass — what decoders actually emit |
 | [`probe-p7-guest-thread.md`](probe-p7-guest-thread.md) | the probe that gates W6 — the offscreen contract across the worker-thread boundary |
+| [`upstream-prs.md`](upstream-prs.md) | the PRs to open upstream, what each carries, and what stays downstream — read with the upstream Discussion |
 | [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 

@@ -168,7 +168,9 @@ planned in [`interop-crate.md`](interop-crate.md).
   only its `Inline` (Path B) arm, which is untouched — it draws into GPUI's own pass, not a buffer.
 - **Unchanged:** Path B ([`inline-commands.md`](inline-commands.md)), and the seam
   ([`renderer-seam.md`](renderer-seam.md)) — this chapter adds no method to `SceneRenderer` beyond
-  the `draw_surfaces` that already exists.
+  the `draw_surfaces` that already exists. Path B is **fork-carried**: upstream has said the callback
+primitive is not one it wants ([zed #64849](https://github.com/zed-industries/zed/discussions/64849)),
+so it is W7 and never a PR ([`upstream-prs.md`](upstream-prs.md) §5).
 
 ## 7. Open, and what would reopen this
 

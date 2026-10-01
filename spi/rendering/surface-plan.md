@@ -24,7 +24,7 @@ Each is independent of the ones below it unless the table says otherwise.
 | **W4** | **`GpuCanvas`.** The authoring surface; Path A arm retargets onto `surface()` | `crates/gpui_authoring` beside `canvas` | the [hand-rolled demo](../authoring/gpu-canvas.md) becomes the element |
 | **W5** | **`gpui-interop` — Host Mode.** Adapter matching, NT-handle export/import (D3D12/`wgpu` → D3D11), the fence bridge, and device-loss teardown | new downstream crate | the bridge composites with a producer on a second device, and survives the renderer losing its device — gated on **P2, P5, P6, P9** |
 | **W6** | **Guest runner.** Headless GPUI on a worker thread | the offscreen contract + a runner | a foreign loop drives GPUI and samples the frame — gated on **P1, P7** |
-| **W7** | **Path B — untouched.** | `crates/gpui_engine/src/custom_render.rs:41` (`Inline`) | no dependency on W2–W6; independent |
+| **W7** | **Path B — fork-carried, not an upstream PR.** | `crates/gpui_engine/src/custom_render.rs:41` (`Inline`) | no dependency on W2–W6; independent; upstream declined the callback primitive ([`upstream-prs.md`](upstream-prs.md) §5) |
 
 **W1 and W2 are the upstream pair**, and the reason the unification is worth the retarget: they are
 PRs upstream will take, not a fork. W3–W6 are ours; W5 and W6 are one crate, planned in

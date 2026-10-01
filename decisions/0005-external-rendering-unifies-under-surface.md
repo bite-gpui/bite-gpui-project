@@ -11,7 +11,9 @@
   record (October 2026), filed with the work; the code on the canonical ref, cited below; and the
   probes it rests on — [`shared-surface.md`](shared-surface.md),
   [`windows-path-a-probe.md`](windows-path-a-probe.md),
-  [`macos-wgpu-producer-probe.md`](macos-wgpu-producer-probe.md)
+  [`macos-wgpu-producer-probe.md`](macos-wgpu-producer-probe.md); and the upstream Discussion
+  [zed-industries/zed#64849](https://github.com/zed-industries/zed/discussions/64849), which agrees
+  the model and says the Windows arm is welcome
 
 ## Decision
 
