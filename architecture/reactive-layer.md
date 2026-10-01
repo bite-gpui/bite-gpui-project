@@ -45,7 +45,7 @@ flowchart TD
 | `tracked_entities: FxHashMap<WindowId, FxHashSet<EntityId>>` | `app.rs:699` | the entities a window *actually renders right now*, rebuilt per frame by `record_entities_accessed` (`app.rs:1113`) |
 | `window_invalidators_by_entity` | `app.rs:697` | an entity's invalidator per window. **Monotonic** — an entry alone does not mean the window still displays the entity, which is why the lookup is filtered |
 | `WindowInvalidator` | `window.rs:175` | per window: `dirty`, `dirty_views`, `update_count`, the platform waker |
-| `update_count` | `window.rs:273` | how many invalidations this window has seen. Read by `Window::dispatch_event` to ask whether an input event *caused* one (`window.rs:6169`), which is what feeds the input-rate tracker |
+| `update_count` | `window.rs:273` | how many invalidations this window has seen. Read by `Window::dispatch_event` to ask whether an input event *caused* one (`window.rs:6174`), which is what feeds the input-rate tracker |
 | `dirty_views` | `window.rs:155` | the views invalidated since the last draw. `finish_frame` clears it (`window.rs:3663`) |
 
 ## The chain, step by step
@@ -70,7 +70,7 @@ flowchart TD
    progress absorbs it — `mark_view_dirty` (`window.rs:2385`) puts the view and its
    ancestors into the frame's `dirty_views`, which is what keeps a cached view from
    being reused after something under it changed (`view.rs:442`).
-7. **`flush_effects`** (`app.rs:1698`) drains the queue one effect at a time. A `Notify`
+7. **`flush_effects`** (`app.rs:1725`) drains the queue one effect at a time. A `Notify`
    runs the emitter's observers (`app.rs:1817`); an observer that notifies queues another
    effect, which is why the loop exists and why it terminates only at quiescence.
    `RefreshWindows` marks every window dirty (`app.rs:1837`).
@@ -147,7 +147,7 @@ both APIs and is the trap in the mechanism.
 ### `refresh` is the coarse escape hatch
 
 `refreshing` is part of the cache-hit test, so a window refresh rebuilds everything.
-`App::refresh_windows` queues it (`app.rs:1056`), `apply_refresh_effect` marks every
+`App::refresh_windows` queues it (`app.rs:1083`), `apply_refresh_effect` marks every
 window dirty and sets the flag (`app.rs:1837`), and `ViewElement::cached`'s own doc says
 `Window::refresh` *"ignores caching"*. When the cache is wrong, that is the way out —
 and it is why the cache-hit condition has to name the flag.

@@ -181,7 +181,7 @@ RFC's "≈16.0 GB/s at 4K120" is its own formula miscounted — `W × H × 4 × 
    revision. The same-device payload stays the wgpu `TextureView` on every platform wgpu
    renders, and the raw Metal handle on macOS.
 7. **`SharedGraphicsContext`, from the uncommitted draft.** **Rejected.** It duplicates
-   `WgpuContext` field for field (`crates/gpui_wgpu/src/wgpu_context.rs:9`) and
+   `WgpuContext` field for field (`crates/gpui_wgpu/src/wgpu_context.rs:14`) and
    `WgpuRenderer::new` takes the *existing* `GpuContext`, so a parallel type cannot be
    injected. It also creates a device, which is the thing the draft's own §1 warns
    against.

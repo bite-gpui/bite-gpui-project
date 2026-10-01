@@ -34,7 +34,7 @@ six implementations:
 | implementation | crate | `impl` at | window field |
 | --- | --- | --- | --- |
 | `MetalRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1719` | `crates/gpui_macos/src/window.rs:667` |
-| `MetalHeadlessRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1805` | `crates/gpui_apple/src/metal_renderer.rs:1788` |
+| `MetalHeadlessRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1805` | `crates/gpui_apple/src/metal_renderer.rs:1790` |
 | `WgpuRenderer` | `gpui_wgpu` | `crates/gpui_wgpu/src/wgpu_renderer.rs:3071` | `crates/gpui_linux/src/linux/x11/window.rs:272` |
 | `DirectXRenderer` | `gpui_windows` | `crates/gpui_windows/src/directx_renderer.rs:2206` | `crates/gpui_windows/src/window.rs:67` |
 | `HeadlessRenderer` | `gpui_linux` | `crates/gpui_linux/src/linux/headless/window.rs:258` | `crates/gpui_linux/src/linux/headless/window.rs:57` |
@@ -72,7 +72,7 @@ window wants from a renderer is a property any *onscreen* renderer has.
 | `destroy` | x11 `crates/gpui_linux/src/linux/x11/window.rs:903`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:789`, macos `crates/gpui_macos/src/window.rs:1405` |
 | `device_lost` / `recover` / `needs_redraw` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1785`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:1974`, windows `crates/gpui_windows/src/events.rs:1324` |
 | `gpu_specs` | x11 `crates/gpui_linux/src/linux/x11/window.rs:2009`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:2177`, web `crates/gpui_web/src/window.rs:1007`, windows `crates/gpui_windows/src/window.rs:1080` |
-| `layer`, `layer_ptr`, `set_presents_with_transaction` | macos `crates/gpui_macos/src/window.rs:3113` (defined `crates/gpui_apple/src/metal_renderer.rs:377`) |
+| `layer`, `layer_ptr`, `set_presents_with_transaction` | macos `crates/gpui_macos/src/window.rs:3113` (defined `crates/gpui_apple/src/metal_renderer.rs:378`) |
 | `set_background_appearance` | windows `crates/gpui_windows/src/window.rs:1071` |
 
 Everything above the macOS and Windows rows generalises *to an onscreen renderer*. Those
@@ -345,7 +345,7 @@ resize or a device loss. Two consequences:
   (`GpuContext = Rc<RefCell<Option<WgpuContext>>>`,
   `crates/gpui_wgpu/src/wgpu_renderer.rs:173`): the first window to notice rebuilds it
   with `WgpuContext::new_rejecting_software`
-  (`crates/gpui_wgpu/src/wgpu_context.rs:76`) and the rest adopt what it left. The same
+  (`crates/gpui_wgpu/src/wgpu_context.rs:140`) and the rest adopt what it left. The same
   protocol is needed on all four platforms — macOS and Windows lose devices too — and it
   is one protocol implemented three times, not a Linux-only concern.
 

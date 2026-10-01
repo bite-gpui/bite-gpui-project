@@ -23,7 +23,7 @@ application writes is a trait in the facade, because that is the lowest crate th
 | --- | --- |
 | `WgpuRenderer` | the shared `GpuContext` slot — the same `Rc` every window in the process draws through, so a producer reads `device` and `queue` from the rendezvous 0002 already describes instead of a second one |
 | `DirectXRenderer` | its `ID3D11Device`, which the platform built (`WindowsPlatformState.directx_devices`, `crates/gpui_windows/src/platform.rs:84`) and the renderer was constructed from (`crates/gpui_windows/src/window.rs:165`) |
-| `MetalRenderer` | its `MTLDevice`, which it created (`crates/gpui_apple/src/metal_renderer.rs:197`) and is therefore the only holder of |
+| `MetalRenderer` | its `MTLDevice`, which it created (`crates/gpui_apple/src/metal_renderer.rs:198`) and is therefore the only holder of |
 
 `None` is an answer rather than a failure: a renderer that draws offscreen, or one a factory
 installed that is not the backend's own, has nothing to lend.

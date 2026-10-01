@@ -278,13 +278,13 @@ device check. The device to render on is the one the window's renderer was built
 which the factory has: `GpuContext = Rc<RefCell<Option<WgpuContext>>>`
 (`crates/gpui_wgpu/src/wgpu_renderer.rs:173`), whose `WgpuContext` exposes
 `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
-(`crates/gpui_wgpu/src/wgpu_context.rs:9`). Two notes for whoever writes the guide: the
+(`crates/gpui_wgpu/src/wgpu_context.rs:14`). Two notes for whoever writes the guide: the
 slot is `None` until the first renderer initialises it, and `Rc<RefCell<…>>` is `!Send`,
 so this is a same-thread affordance and not something a worker thread can use.
 
 ## 6. The queue, and why there is no fence
 
-One device has one `queue` (`crates/gpui_wgpu/src/wgpu_context.rs:9`), and that is what
+One device has one `queue` (`crates/gpui_wgpu/src/wgpu_context.rs:14`), and that is what
 orders the producer against the frame. The application submits the pass that fills its
 texture; the renderer's frame is submitted after it; so the GPU executes them in that
 order and the texture is complete by the time the composite samples it. No semaphore, no

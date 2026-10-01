@@ -6,7 +6,7 @@
   was the one producer route with no measurement behind it.
 - **The question:** can a wgpu producer serve GPUI's `MetalRenderer` on macOS, where the renderer
   owns the `MTLDevice` it created
-  (`crates/gpui_apple/src/metal_renderer.rs:197`) and `wgpu-hal`'s Metal backend offers no public
+  (`crates/gpui_apple/src/metal_renderer.rs:198`) and `wgpu-hal`'s Metal backend offers no public
   constructor that takes one? **Answered: yes — and there is nothing to hand over, because wgpu's
   adapter *is* the renderer's device.**
 - **The probe** is the crate at `probes/macos-wgpu-producer`, on the canonical ref. Its job

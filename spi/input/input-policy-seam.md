@@ -127,7 +127,7 @@ pub enum InputDecision {
 
 Facade hook, mirroring `with_frame_pipeline` (`crates/gpui_runtime/src/application.rs:105-109`)
 and its `App::set_frame_pipeline_factory` counterpart
-(`crates/gpui_authoring/src/app.rs:2937`):
+(`crates/gpui_authoring/src/app.rs:3003`):
 
 ```rust
 impl Application {

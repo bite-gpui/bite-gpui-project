@@ -48,7 +48,7 @@ rule, and they serve different producers:
 `GpuContext` is a shared `Rc` rather than a field for the second reason:
 `GpuContext = Rc<RefCell<Option<WgpuContext>>>` (`crates/gpui_wgpu/src/wgpu_renderer.rs:173`),
 whose `WgpuContext` exposes `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
-(`crates/gpui_wgpu/src/wgpu_context.rs:9`). An application that owns the slot and returns
+(`crates/gpui_wgpu/src/wgpu_context.rs:14`). An application that owns the slot and returns
 `WgpuRenderer::new(context, …)` from its own factory ends up holding the device the renderer
 adopts — so on wgpu there *is* an export, it is just one the application performs on itself. It
 requires installing a factory, which is the boundary

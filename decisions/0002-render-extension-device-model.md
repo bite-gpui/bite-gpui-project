@@ -36,7 +36,7 @@ GPU resources:
    `GpuContext = Rc<RefCell<Option<WgpuContext>>>`
    (`crates/gpui_wgpu/src/wgpu_renderer.rs:173`) with
    `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
-   (`crates/gpui_wgpu/src/wgpu_context.rs:9`).
+   (`crates/gpui_wgpu/src/wgpu_context.rs:14`).
 
 ## What the constraint implies for a producer
 
