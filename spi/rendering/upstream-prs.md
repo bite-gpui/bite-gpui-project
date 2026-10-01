@@ -59,7 +59,7 @@ shape is simpler and already tested (`crates/gpui_engine/src/renderer.rs:19`), a
 propose — widen it only if upstream asks, because a format enum is a boundary this PR does not need.
 
 **Tests and risk.** Low. The engine's rows already exercise it ([`verification.md`](verification.md)
-§2). Independent of PR 2 — submit it first.
+§2). Independent of PR 2 — submit it first. The body is [`pr-1-pixel-buffer.md`](pr-1-pixel-buffer.md).
 
 ## 3. PR 2 — `paint_surface` on Windows via Direct3D 11 surface sharing
 
@@ -96,6 +96,7 @@ declines it in core. **No YCbCr**: ship RGBA/BGRA, and a format arm is a later, 
 SRV composites through `surface()`, and the straight-through round trip is bit-exact.
 
 **Risk.** Low, and the Discussion says so: it alters no existing pass and satisfies an open request.
+The body is [`pr-2-windows-paint-surface.md`](pr-2-windows-paint-surface.md).
 
 ## 4. PR 3 (proposed) — headless window support, for Guest Mode
 
