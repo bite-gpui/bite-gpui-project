@@ -1,7 +1,7 @@
 # Milestones
 
 - **Status:** the handoff. What is built, where it is, what is next in what order, and the gates a
-  resumer runs. Written 2026-09-29, against `bite_v1.23.1-pre` at `8d6c02d171`; a citation's line
+  resumer runs. Written 2026-09-29, against `bite_v1.23.1-pre` at `e867ece9f9`; a citation's line
   numbers move whenever that ref does, and `script/check-citations` prints what each one now points
   at.
 - **Read with:** the chapter order in [`README.md`](README.md) for the design — this document is the
@@ -12,7 +12,7 @@
 
 | what | where |
 | --- | --- |
-| the canonical ref, and what every citation resolves against | `bite_v1.23.1-pre`, tip `8d6c02d171` (the re-application of the stack onto the new renderer split) |
+| the canonical ref, and what every citation resolves against | `bite_v1.23.1-pre`, tip `e867ece9f9` (the gate-6 editor-crate fixes) |
 | what the canonical ref already carries | the renderer seam (#4), the fork's CI file (#5), and Path A whole (#6) |
 | Path A, whole | on the canonical ref, sixteen commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
 | the checkout the work is in | `.tools/worktrees/wt-seam` in the zed clone |

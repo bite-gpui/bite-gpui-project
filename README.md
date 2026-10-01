@@ -42,7 +42,7 @@ being committed to any of them.
   record, not decisions themselves.
 - **Every claim about the code cites it** — `crate/file.rs:line`. Line numbers go stale,
   so they are resolved against **one ref**, not against whatever a checkout happens to be
-  on: `bite_v1.23.1-pre`, which was `8d6c02d171` when this convention was written
+  on: `bite_v1.23.1-pre`, which was `e867ece9f9` when this convention was written
   (its current tip is recorded alongside the work in
   [`spi/rendering/milestones.md`](spi/rendering/milestones.md) §1).
   `script/check-citations` prints every citation with the line it currently points at.
