@@ -49,12 +49,14 @@ or only the DX12→D3D11 direction already measured. The full specification is
 fence are measured; **adoption is not** — nothing yet builds an `MTLTexture` over an `IOSurface` with
 `objc2-metal` and adopts it into `wgpu`
 ([`../../decisions/shared-surface.md`](../../decisions/shared-surface.md) §4). *Harness:* a Mac,
-`texture_from_raw` over the hand-built `MTLTexture`. *Pass:* a wgpu render reads the surface bytes.
+`texture_from_raw` over the hand-built `MTLTexture`. *Pass:* a wgpu render reads the surface bytes. The full specification is
+[`probe-p2-macos-adoption.md`](probe-p2-macos-adoption.md).
 
 **P3 — dma-buf import on Linux (gates W3).** Unmeasured on every axis: no Linux surface import has
 been run at all. *Harness:* allocate a dma-buf, import it as a `VkImage`/`EGLImage` (external memory
 fd / `EGL_LINUX_DMA_BUF_EXT`), sample it in the wgpu renderer. *Pass:* the imported buffer samples.
-*Also answers:* whether `gpui_wgpu`'s instance enables the device extensions the import needs.
+*Also answers:* whether `gpui_wgpu`'s instance enables the device extensions the import needs. The
+full specification is [`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md).
 
 **P4 — what a video surface actually is (gates the format decision in [`surfaces.md`](surfaces.md)
 §7).** The straight-through fragment assumes RGBA. A VA-API/MF/NVDEC decoder emits NV12/YCbCr, often

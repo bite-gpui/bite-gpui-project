@@ -36,6 +36,8 @@ its own folder, because it is a surface an application meets rather than part of
 | [`surface-plan.md`](surface-plan.md) | the implementation plan for `surfaces.md`, and the probes each stage is gated on |
 | [`interop-crate.md`](interop-crate.md) | the plan for the downstream `gpui-interop` crate — its posture under the upstreaming, its modules, and its public surface |
 | [`probe-p1-reverse-bridge.md`](probe-p1-reverse-bridge.md) | the specification of the probe that gates the interop crate's Windows module |
+| [`probe-p2-macos-adoption.md`](probe-p2-macos-adoption.md) | the probe that gates its macOS module — adopting an `IOSurface` into wgpu |
+| [`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md) | the probe that gates the Linux surface arm — importing a dma-buf |
 | [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 
