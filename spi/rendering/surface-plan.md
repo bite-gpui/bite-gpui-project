@@ -52,6 +52,11 @@ Each is independent of the ones below it unless the table says otherwise.
 > counterpart: it keys on the handle's descriptors by `Arc` identity — never the descriptor numbers,
 > so a recycled number cannot alias — and evicts least-recently-used at a small capacity. It is why
 > `draw_surfaces` now takes `&mut self`.
+>
+> **Linear-only, accepted.** A vendor-tiled dma-buf is refused: importing one needs
+> `VK_EXT_image_drm_format_modifier` on the renderer's device, and `wgpu` does not enable it. Accepted
+> rather than forked around — the limitation and the `wgpu-hal` change that would lift it are in
+> [`../../issues/0008-dmabuf-tiled-modifiers-wgpu.md`](../../issues/0008-dmabuf-tiled-modifiers-wgpu.md).
 
 **W1 and W2 are the upstream pair**, and the reason the unification is worth the retarget: they are
 PRs upstream will take, not a fork. W3–W6 are ours; W5 and W6 are one crate, planned in
