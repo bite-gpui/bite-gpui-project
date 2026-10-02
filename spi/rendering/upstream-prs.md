@@ -125,7 +125,7 @@ not because it is cleared.
 | --- | --- | --- |
 | the cross-device bridge, per OS transport: Windows NT-handle export/import (D3D12/`wgpu` → D3D11) and `ID3D12Fence`↔`ID3D11Fence`; macOS `IOSurface` adoption and `MTLSharedEvent`; Linux dma-buf and a dma-fence | `gpui-interop` | it would put `wgpu`, Direct3D 12 and an OS transport in core, which the Discussion declines |
 | adapter matching — a LUID match on Windows, a caller-supplied device elsewhere | `gpui-interop` | a producer-side concern; Windows-only in mechanism, and P6 decides whether it is even reliable |
-| macOS/Linux surface arms (W3) | the fork | not asked for; P3 gates Linux |
+| the Linux `DmaBuf` surface arm (W3) | the fork | the macOS arm is upstream's and PR 2 covers Windows; P3 cleared it |
 | **Path B — the inline callback primitive** | the fork (W7) | the Discussion: *"i don't think we'd want this upstream either"* |
 | 11on12 backbuffer injection | the fork | *"trivial to add that in your fork"* |
 | the guest runner and host input adapters | `gpui-interop` | a foreign loop's job |
