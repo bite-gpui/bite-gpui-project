@@ -20,7 +20,7 @@ Each is independent of the ones below it unless the table says otherwise.
 | --- | --- | --- | --- |
 | **W1** | **Core hygiene — done.** `PixelBuffer`, and `render_scene` split from `read_pixels` | `crates/gpui_engine/src/renderer.rs:19`, `:102`, `:110` | upstream PR 1 lands; the rows in [`verification.md`](verification.md) §2 pass |
 | **W2** | **Windows surface arm — done.** RGBA/BGRA only. Extend `SurfaceSource` with the DirectX variant and implement `draw_surfaces` | `crates/gpui_authoring/src/elements/surface.rs:13`; `crates/gpui_windows/src/directx_renderer.rs:852` (retarget `:862`) | an **RGBA/BGRA** SRV composites through `surface()` on `windows-latest`; upstream PR 2. YCbCr is deliberately out (P4) |
-| **W3** | **Linux surface arm.** The `DmaBuf` variant and its import — *demo added, verified* | `crates/gpui_engine/src/dmabuf.rs`; `crates/gpui_wgpu/src/dmabuf.rs` (the import); `crates/gpui_wgpu/src/wgpu_renderer.rs` (`draw_surfaces`); `crates/gpui_wgpu/examples/surface_dmabuf.rs` (the demo); `gpui_linux` | a dma-buf composites on a Linux host with an adapter — **verified end to end through `surface()` in a mounted view: RGBA byte-exact, `NV12` converted by the shader**; the buffer must be uncompressed and self-describing under its modifier, and `NV12` is sampled as two plane textures — **P3 cleared** |
+| **W3** | **Linux surface arm.** The `DmaBuf` variant and its import — *demo and tests* | `crates/gpui_engine/src/dmabuf.rs`; `crates/gpui_wgpu/src/dmabuf.rs` (the import); `crates/gpui_wgpu/src/wgpu_renderer.rs` (`draw_surfaces`); `crates/gpui_wgpu/examples/surface_dmabuf.rs` (the demo); `crates/gpui_wgpu/tests/surface_dmabuf.rs` (the tests); `gpui_linux` | a dma-buf composites on a Linux host with an adapter — **verified end to end through `surface()` in a mounted view: RGBA byte-exact, `NV12` converted by the shader**; the buffer must be uncompressed and self-describing under its modifier, and `NV12` is sampled as two plane textures — **P3 cleared** |
 | **W4** | **`GpuCanvas` — done.** The authoring surface; Path A arm retargets onto `surface()`, the same-device arm onto `paint_imported_texture` | `crates/gpui_authoring` beside `canvas` | the hand-rolled demo becomes the element on all three platforms — Windows through `surface()`, Linux/macOS through `paint_imported_texture` |
 | **W5** | **`gpui-interop` — Host Mode.** Adapter matching, NT-handle export/import (D3D12/`wgpu` → D3D11), the fence bridge, and device-loss teardown | new downstream crate | the bridge composites with a producer on a second device, and survives the renderer losing its device — gated on **P2, P5, P6, P9** |
 | **W6** | **Guest runner.** Headless GPUI on a worker thread | the offscreen contract + a runner | a foreign loop drives GPUI and samples the frame — gated on **P1, P7** |
@@ -38,6 +38,12 @@ Each is independent of the ones below it unless the table says otherwise.
 > `gpui::current_headless_renderer` returned `None` off macOS, so a headless context on Linux got no
 > renderer and `capture_screenshot` bailed; it now returns the wgpu renderer, through a `headless`
 > feature on `gpui_wgpu` that avoids the `gpui/test-support` cycle.
+>
+> **Tests.** Three layers: the descriptor's contract and the element→scene step run in the
+> `gpui_engine` and `gpui_authoring` suites (no GPU), and the end-to-end capture is
+> `crates/gpui_wgpu/tests/surface_dmabuf.rs`, run opt-in as
+> `ZED_DEVICE_ID=1916 cargo test -p gpui_wgpu --features test-support --test surface_dmabuf`
+> (it needs a GPU and the crate's unit-test target does not build).
 
 **W1 and W2 are the upstream pair**, and the reason the unification is worth the retarget: they are
 PRs upstream will take, not a fork. W3–W6 are ours; W5 and W6 are one crate, planned in
