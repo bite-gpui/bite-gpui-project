@@ -12,8 +12,8 @@
 
 | what | where |
 | --- | --- |
-| the canonical ref, and what every citation resolves against | `bite_v1.23.1-pre`, tip `e867ece9f9` (the gate-6 editor-crate fixes) |
-| what the canonical ref already carries | the renderer seam (#4), the fork's CI file (#5), and Path A whole (#6) |
+| the canonical ref, and what every citation resolves against | `bite_v1.23.1-pre`, tip `69835be34b` (the merged surface arm, PR #9) |
+| what the canonical ref already carries | the renderer seam (#4), the fork's CI file (#5), Path A whole (#6), and the Windows surface arm plus `GpuCanvas` (#9) |
 | the design of record for external pixels | [`surfaces.md`](surfaces.md) — the surface unification [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) decides — and its plan and probes in [`surface-plan.md`](surface-plan.md) |
 | the design of record for external pixels | [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) — the surface unification; its source, the *External Surfaces, Platform Interop, and Headless Rendering in GPUI* design record, is filed with the work |
 | Path A, whole | on the canonical ref, sixteen commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
@@ -77,19 +77,20 @@ rows, the Direct3D renderer's offscreen shape, the wgpu token's reach through th
 macOS producer route — measured rather than handed over — all landed, and a runnable demo ties them
 together. What is left in §3 is the test filter and the citation churn, neither of which is Path A.
 
-**M3 — `GpuCanvas`, retargeted.** [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md). The
+**M3 — `GpuCanvas`, retargeted. Done.** [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md). The
 surface an application meets; 0005 changes only its Path A arm — it produces a `SurfaceSource` and
 pushes it through `surface()` rather than a second primitive, and its Path B arm is unchanged. With
 M1 built, the payload its callback returns is one an application can construct, which is what makes
-the canvas a capability rather than a demonstration.
+the canvas a capability rather than a demonstration. Built in #9 (macOS/Windows), with the same-device
+arm (`on_render_texture` → `paint_imported_texture`) added for Linux/macOS after it.
 
 **M4 — Path B.** [`inline-commands.md`](inline-commands.md). Unstarted. It draws into the window's
 own pass, not a buffer, so 0005 leaves it alone; it needs no device export and is not behind M1.
 
-**M5 — the unified surface arm.** Extend `SurfaceSource` / `PaintSurface` to Windows and Linux and
+**M5 — the unified surface arm. Windows half done.** Extend `SurfaceSource` / `PaintSurface` to Windows and Linux and
 implement `draw_surfaces` by retargeting the Direct3D arm that exists
 (`crates/gpui_windows/src/directx_renderer.rs:862` → `:852`). The Windows half is upstream PR 2 of
-the design record; the Linux half adds the dma-buf variant. This is what makes `surface()` a
+the design record and is built (#9); the Linux half adds the dma-buf variant and is gated on P3. This is what makes `surface()` a
 capability on every desktop rather than macOS alone.
 
 **M6 — the cross-API bridge, `gpui-interop`.** 0002's Tier 2, scheduled rather than deferred by 0005:

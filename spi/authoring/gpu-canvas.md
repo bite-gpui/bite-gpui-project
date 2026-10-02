@@ -1,6 +1,10 @@
 # `GpuCanvas`: the authoring surface
 
-- **Status:** proposed. Nothing of it is implemented.
+- **Status:** built. `GpuCanvas` is implemented and the demo composites through it on all three
+  platforms: `on_render_surface` carries a `SurfaceSource` on macOS/Windows, and `on_render_texture`
+  carries a same-device `ImportedTextureHandle` on Linux/macOS. Path B (`Inline`) is still unbuilt
+  (M4). The split into two callbacks — rather than the §3 `GpuRenderMode` enum — is the actual shape;
+  `Inline` stays deferred.
 - **Assumes:** [`foreign-texture.md`](../rendering/foreign-texture.md) and
   [`inline-commands.md`](../rendering/inline-commands.md) — the primitive and the two `Window` hooks
   it is pushed through — and, under them, [`renderer-seam.md`](../rendering/renderer-seam.md).
