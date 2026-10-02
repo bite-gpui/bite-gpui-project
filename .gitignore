@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# Build output of script/windows-iso (the UUP tree and the multi-GB ISO).
+/windows-iso/
