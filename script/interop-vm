@@ -1,0 +1,278 @@
+#!/usr/bin/env bash
+#
+# The Windows guest for the interop probes, with the discrete GPU passed through.
+#
+# W5's probes (P5, P6, P9) and the PR-2 sufficiency test need a **real** Direct3D device: a
+# software/WARP adapter is explicitly not representative (`probe-p6-adapter-luid.md` §5), and the
+# fork's `windows-latest` CI has no GPU. This passes the machine's discrete GPU into a QEMU guest
+# instead.
+#
+# The GPU is `0000:01:00.0`, a **MUX-less 3D controller** (no display output) alone in IOMMU
+# group 10, which the host desktop does not use — it is on the Intel iGPU. The guest still gets a
+# `-vga std` console, so it has *two* adapters, which is closer to the hybrid shape P6 warns about
+# than a single-adapter host is. NVIDIA's consumer driver refuses to run in a VM (Code 43) unless
+# the hypervisor hides itself, hence `kvm=off`.
+#
+# Build the ISO with `script/windows-iso` (a **client** Windows — Server cannot take a GeForce
+# driver), then:
+#
+#     sudo script/interop-vm bind
+#     script/interop-vm create
+#     script/interop-vm install --iso ../windows-iso/uup/....iso
+#     script/interop-vm run
+#     sudo script/interop-vm unbind      # return the GPU to the host when done
+#
+# Usage:
+#     script/interop-vm check                    # report the prerequisites (read-only)
+#     sudo script/interop-vm bind                # bind the GPU to vfio-pci
+#     sudo script/interop-vm unbind              # return it to the nvidia driver
+#     script/interop-vm create                   # create the qcow2 disk
+#     script/interop-vm install --iso ISO        # boot the installer, GPU passed through
+#     script/interop-vm run                      # boot the installed disk
+#
+# Options:
+#     --iso PATH       the installer ISO (required by `install`)
+#     --dir DIR        VM directory (default $HOME/interop-vm)
+#     --disk SIZE      disk size for `create` (default 64G)
+#     --ram SIZE       guest RAM (default 4G)
+#     --cpus N         guest CPUs (default 2)
+#     --uefi           boot OVMF instead of SeaBIOS (only if the GPU has a UEFI GOP)
+#     --vnc            no local window; serve VNC on :0
+#     --cpu MODEL      override `-cpu` (default host,kvm=off)
+#     --dry-run        print the commands, change nothing
+#
+# `check` is read-only and safe. `bind`/`unbind` need root and touch the PCI device.
+
+set -euo pipefail
+
+GPU=0000:01:00.0
+GPU_SHORT="${GPU#0000:}"
+VM_DIR="${INTEROP_VM_DIR:-$HOME/interop-vm}"
+DISK_SIZE=64G
+RAM=4G
+CPUS=2
+CPU_MODEL=host,kvm=off
+UEFI=0
+VNC=0
+DRY_RUN=0
+ISO=""
+CMD=""
+
+say()  { printf '%s\n' "$*"; }
+note() { printf '  %s\n' "$*"; }
+die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+run() {
+    if [ "$DRY_RUN" -eq 1 ]; then
+        note "would run: $*"
+    else
+        "$@"
+    fi
+}
+
+# Write a value to a sysfs node (no trailing newline, which unbind/bind reject).
+write_sysfs() {
+    if [ "$DRY_RUN" -eq 1 ]; then
+        note "would write '$2' to $1"
+    else
+        printf '%s' "$2" > "$1"
+    fi
+}
+
+need_root() { [ "$(id -u)" -eq 0 ] || { [ "$DRY_RUN" -eq 1 ] || die "needs root: sudo $0 $CMD"; }; }
+
+usage() { awk 'NR >= 3 && /^#/ { sub(/^# ?/, ""); print; next } NR >= 3 { exit }' "${BASH_SOURCE[0]}"; }
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        check|bind|unbind|create|install|run) CMD="$1" ;;
+        --iso)   shift; ISO="${1:?--iso needs a path}" ;;
+        --dir)   shift; VM_DIR="${1:?--dir needs a path}" ;;
+        --disk)  shift; DISK_SIZE="${1:?}" ;;
+        --ram)   shift; RAM="${1:?}" ;;
+        --cpus)  shift; CPUS="${1:?}" ;;
+        --cpu)   shift; CPU_MODEL="${1:?}" ;;
+        --uefi)  UEFI=1 ;;
+        --vnc)   VNC=1 ;;
+        --dry-run) DRY_RUN=1 ;;
+        -h|--help|help) usage; exit 0 ;;
+        *) die "unknown argument: $1 (try --help)" ;;
+    esac
+    shift
+done
+
+[ -n "$CMD" ] || { usage; exit 1; }
+
+iommu_group() { readlink -f "/sys/bus/pci/devices/$GPU/iommu_group" 2>/dev/null | xargs -r basename; }
+current_driver() {
+    local link="/sys/bus/pci/devices/$GPU/driver"
+    if [ -e "$link" ]; then readlink -f "$link" | xargs -r basename; fi
+}
+
+# ---------------------------------------------------------------------------------------
+# check
+# ---------------------------------------------------------------------------------------
+
+cmd_check() {
+    say "interop VM"
+    say
+    say "host"
+    note "gpu:    $(lspci -nn -s "$GPU_SHORT" 2>/dev/null | cut -d' ' -f2- || echo 'not found')"
+    note "group:  $(iommu_group)"
+    note "driver: $(current_driver || echo none)"
+    note "kvm:    $([ -w /dev/kvm ] && echo writable || echo 'NOT writable')"
+    local iommu
+    iommu="$(journalctl -k -b 0 --no-pager 2>/dev/null | grep -m1 'Default domain type' | sed 's/.*kernel: //' || true)"
+    note "iommu:  ${iommu:-unknown}"
+    say
+    say "tooling"
+    note "qemu-system-x86_64: $(command -v qemu-system-x86_64 || echo missing)"
+    note "qemu-img:           $(command -v qemu-img || echo missing)"
+    [ "$UEFI" -eq 1 ] && note "OVMF:               $(ovmf_code || echo 'missing — apt install ovmf')"
+    say
+    say "vm"
+    note "dir:  $VM_DIR"
+    note "disk: $([ -f "$VM_DIR/windows.qcow2" ] && qemu-img info "$VM_DIR/windows.qcow2" | grep -m1 virtual || echo 'not created (run: create)')"
+    note "free: $(df -h "$(dirname "$VM_DIR")" 2>/dev/null | awk 'NR==2{print $4}')"
+    say
+    say "next:"
+    if [ "$(current_driver)" != "vfio-pci" ]; then
+        note "sudo $0 bind"
+    fi
+    [ -f "$VM_DIR/windows.qcow2" ] || note "$0 create"
+    note "$0 install --iso <path-to-windows.iso>"
+    note "$0 run"
+}
+
+# ---------------------------------------------------------------------------------------
+# bind / unbind
+# ---------------------------------------------------------------------------------------
+
+cmd_bind() {
+    need_root
+    local driver; driver="$(current_driver)"
+    if [ "$driver" = "vfio-pci" ]; then
+        say "$GPU is already bound to vfio-pci"
+        return 0
+    fi
+    say "loading vfio-pci"
+    run modprobe vfio-pci
+    say "setting $GPU driver_override to vfio-pci"
+    write_sysfs "/sys/bus/pci/devices/$GPU/driver_override" vfio-pci
+    if [ -n "$driver" ]; then
+        say "unbinding $GPU from $driver"
+        write_sysfs "/sys/bus/pci/drivers/$driver/unbind" "$GPU"
+    fi
+    say "binding $GPU to vfio-pci"
+    write_sysfs /sys/bus/pci/drivers/vfio-pci/bind "$GPU"
+    [ "$DRY_RUN" -eq 1 ] || lspci -nnk -s "$GPU_SHORT"
+}
+
+cmd_unbind() {
+    need_root
+    if [ "$(current_driver)" = "vfio-pci" ]; then
+        say "unbinding $GPU from vfio-pci"
+        write_sysfs /sys/bus/pci/drivers/vfio-pci/unbind "$GPU"
+    fi
+    say "clearing driver_override"
+    write_sysfs "/sys/bus/pci/devices/$GPU/driver_override" ""
+    say "probing $GPU back to its default driver"
+    write_sysfs /sys/bus/pci/drivers_probe "$GPU"
+    [ "$DRY_RUN" -eq 1 ] || lspci -nnk -s "$GPU_SHORT"
+}
+
+# ---------------------------------------------------------------------------------------
+# create / install / run
+# ---------------------------------------------------------------------------------------
+
+cmd_create() {
+    have qemu-img || die "qemu-img is not installed"
+    run mkdir -p "$VM_DIR"
+    [ -f "$VM_DIR/windows.qcow2" ] && [ "$DRY_RUN" -eq 0 ] && die "$VM_DIR/windows.qcow2 already exists"
+    run qemu-img create -f qcow2 "$VM_DIR/windows.qcow2" "$DISK_SIZE"
+}
+
+ovmf_code() {
+    local p
+    for p in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd \
+             /usr/share/edk2/ovmf/OVMF_CODE.fd; do
+        [ -f "$p" ] && { printf '%s\n' "$p"; return 0; }
+    done
+    return 1
+}
+
+ovmf_vars_src() {
+    local p
+    for p in /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd \
+             /usr/share/edk2/ovmf/OVMF_VARS.fd; do
+        [ -f "$p" ] && { printf '%s\n' "$p"; return 0; }
+    done
+    return 1
+}
+
+qemu_argv() { # boot-order  [cdrom]
+    local boot="$1" cdrom="${2:-}"
+    local args=(
+        -name interop-windows
+        -enable-kvm
+        -machine q35
+        -cpu "$CPU_MODEL"
+        -smp "$CPUS"
+        -m "$RAM"
+        -drive "file=$VM_DIR/windows.qcow2,if=none,id=disk0,format=qcow2"
+        -device "nvme,drive=disk0,serial=interop"
+        -vga std
+        -device "vfio-pci,host=$GPU_SHORT"
+        -device qemu-xhci
+        -device usb-tablet
+        -netdev "user,id=net0"
+        -device "e1000,netdev=net0"
+        -boot "order=$boot"
+    )
+    if [ "$UEFI" -eq 1 ]; then
+        local code; code="$(ovmf_code)" || die "no OVMF firmware found — apt install ovmf"
+        local vars_src; vars_src="$(ovmf_vars_src)" || die "no OVMF vars template found"
+        [ -f "$VM_DIR/OVMF_VARS.fd" ] || run cp "$vars_src" "$VM_DIR/OVMF_VARS.fd"
+        args+=(
+            -drive "if=pflash,format=raw,readonly=on,file=$code"
+            -drive "if=pflash,format=raw,file=$VM_DIR/OVMF_VARS.fd"
+        )
+    fi
+    [ -n "$cdrom" ] && args+=( -cdrom "$cdrom" )
+    if [ "$VNC" -eq 1 ]; then
+        args+=( -display none -vnc :0 )
+    elif [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+        args+=( -display gtk )
+    else
+        args+=( -display none -vnc :0 )
+    fi
+    printf '%s\n' "${args[@]}"
+}
+
+cmd_install() {
+    [ -n "$ISO" ] || die "install needs --iso <path>"
+    [ -f "$ISO" ] || die "no such ISO: $ISO"
+    [ -f "$VM_DIR/windows.qcow2" ] || die "no disk — run: $0 create"
+    have qemu-system-x86_64 || die "qemu-system-x86_64 is not installed"
+    say "booting the installer with $GPU passed through (boot order: cdrom)"
+    # shellcheck disable=SC2046
+    run qemu-system-x86_64 $(qemu_argv d "$ISO")
+}
+
+cmd_run() {
+    [ -f "$VM_DIR/windows.qcow2" ] || die "no disk — run: $0 create (and install)"
+    have qemu-system-x86_64 || die "qemu-system-x86_64 is not installed"
+    say "booting $VM_DIR/windows.qcow2 with $GPU passed through"
+    # shellcheck disable=SC2046
+    run qemu-system-x86_64 $(qemu_argv c)
+}
+
+case "$CMD" in
+    check)   cmd_check ;;
+    bind)    cmd_bind ;;
+    unbind)  cmd_unbind ;;
+    create)  cmd_create ;;
+    install) cmd_install ;;
+    run)     cmd_run ;;
+esac

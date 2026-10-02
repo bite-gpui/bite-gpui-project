@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+#
+# Build a Windows install ISO from UUP dump, for the interop VM (`script/interop-vm`).
+#
+# UUP dump serves Windows from Microsoft's own update servers. The site hands out a package: a ZIP
+# with a download script and a file list. That script pulls the files and assembles an ISO with
+# wimlib and an ISO tool. This drives it, non-interactively.
+#
+# You want **client** Windows (10/11), not Server: the interop VM passes a GeForce through, and
+# NVIDIA's GeForce drivers do not install on Windows Server — a Server guest would fall back to the
+# Microsoft Basic Display Adapter, which is the WARP-level result this VM exists to avoid.
+#
+# Usage:
+#     script/windows-iso --list 11                 # recent x64 client builds, with ids
+#     script/windows-iso <update-id>               # a build picked from that list
+#     script/windows-iso <get.php-url>             # the package link uupdump.net gives you
+#
+# Options:
+#     --list 10|11     print recent matching x64 client builds and exit
+#     --lang LANG      default en-us
+#     --edition NAME   default professional
+#     --out DIR        default ./windows-iso
+#     --dry-run        resolve and print; download nothing
+#
+# Requires: curl, python3, aria2c, cabextract, wimlib-imagex, and genisoimage or xorriso.
+#     sudo apt install -y aria2 cabextract wimtools genisoimage xorriso
+#
+# The build writes <out>/uup/ (the package) and <out>/uup/*.iso, and needs ~12 GB free.
+
+set -euo pipefail
+
+API=https://api.uupdump.net
+SITE=https://uupdump.net
+LANG_CODE=en-us
+EDITION=professional
+OUT=windows-iso
+DRY_RUN=0
+LIST=""
+TARGET=""
+
+say()  { printf '%s\n' "$*"; }
+die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+usage() { awk 'NR >= 3 && /^#/ { sub(/^# ?/, ""); print; next } NR >= 3 { exit }' "${BASH_SOURCE[0]}"; }
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --list)    shift; LIST="${1:-11}" ;;
+        --lang)    shift; LANG_CODE="${1:?--lang needs a value}" ;;
+        --edition) shift; EDITION="${1:?--edition needs a value}" ;;
+        --out)     shift; OUT="${1:?--out needs a value}" ;;
+        --dry-run) DRY_RUN=1 ;;
+        -h|--help|help) usage; exit 0 ;;
+        -*) die "unknown option: $1 (try --help)" ;;
+        *)  TARGET="$1" ;;
+    esac
+    shift
+done
+
+if [ -n "$LIST" ]; then
+    have curl || die "curl is required"
+    have python3 || die "python3 is required"
+    say "recent Windows $LIST x64 client builds (newest first):"
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' EXIT
+    curl -sS --max-time 60 "$API/listid.php?search=Windows%20$LIST&sortByDate=1" -o "$tmp"
+    python3 - "$tmp" "$LIST" <<'PY'
+import datetime, json, sys
+
+path, release = sys.argv[1], sys.argv[2]
+builds = json.load(open(path)).get("response", {}).get("builds", {})
+rows = [
+    b
+    for b in builds.values()
+    if b.get("arch") == "amd64" and f"Windows {release}" in b.get("title", "")
+]
+rows.sort(key=lambda b: b.get("created", 0), reverse=True)
+for b in rows[:15]:
+    when = datetime.datetime.fromtimestamp(
+        b.get("created", 0), datetime.timezone.utc
+    ).strftime("%Y-%m-%d")
+    print(f"  {b['uuid']}  {when}  {b['build']:<14} {b['title']}")
+PY
+    exit 0
+fi
+
+[ -n "$TARGET" ] || { usage; exit 1; }
+
+case "$TARGET" in
+    http*) PACKAGE_URL="$TARGET" ;;
+    *)     PACKAGE_URL="$SITE/get.php?id=$TARGET&lang=$LANG_CODE&edition=$EDITION&pack=1" ;;
+esac
+
+have curl || die "curl is required"
+have python3 || die "python3 is required"
+say "package: $PACKAGE_URL"
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    say "dry run — resolving only, nothing downloaded"
+    exit 0
+fi
+
+have aria2c || die "missing aria2c — sudo apt install -y aria2 cabextract wimtools genisoimage xorriso"
+have cabextract || die "missing cabextract — see the apt line in --help"
+have wimlib-imagex || die "missing wimlib-imagex (wimtools) — see the apt line in --help"
+have genisoimage || have xorriso || die "missing an ISO tool (genisoimage or xorriso) — see the apt line in --help"
+
+mkdir -p "$OUT"
+say "downloading the UUP package…"
+curl -sSL --max-time 600 -o "$OUT/uup-package.zip" "$PACKAGE_URL"
+python3 -m zipfile -e "$OUT/uup-package.zip" "$OUT/uup"
+rm -f "$OUT/uup-package.zip"
+
+[ -f "$OUT/uup/uup_download_linux.sh" ] \
+    || die "the package has no uup_download_linux.sh — check the id or URL"
+chmod +x "$OUT/uup/uup_download_linux.sh"
+
+say "assembling the ISO — this pulls several GB from Microsoft and takes a while…"
+( cd "$OUT/uup" && ./uup_download_linux.sh )
+
+iso="$(find "$OUT/uup" -maxdepth 1 -iname '*.iso' | head -n1 || true)"
+[ -n "$iso" ] || die "no ISO was produced"
+say "ISO: $iso"
