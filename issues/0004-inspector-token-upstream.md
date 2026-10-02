@@ -43,7 +43,7 @@ both dated 2026-09-14:
 | `1b356da9ae` | hid the token from the docs and **kept the parameter** — "churning every in-tree `Element` implementation to remove it would cost more than it is worth while the crate boundaries are still moving" |
 | `a4af8bcd47` | removed it as the follow-up, accepting that "sixty-one implementations outside the runtime" lose a parameter per method |
 
-It has now been ported to upstream's tree and pushed as a branch:
+It has now been ported to upstream's tree, pushed as a branch, and opened as a pull request:
 
 | | |
 | --- | --- |
@@ -51,7 +51,7 @@ It has now been ported to upstream's tree and pushed as a branch:
 | base | upstream `main` at `1a28cff4b4` |
 | commit | `79f8cb99d0` — `gpui: Publish the element's inspector identity instead of threading a token` |
 | size | 31 files, `+210 −192` — gpui 19, ui 6, editor 2, and one each in markdown, terminal_view, workspace, image_viewer; the additions over the original `+70` are the public helper and the test |
-| pull request | **not opened** — `https://github.com/Vanuan/zed/pull/new/gpui-drop-inspector-token` |
+| pull request | **opened** — `https://github.com/zed-industries/zed/pull/64854` |
 
 A cherry-pick was impossible: the patchset's commit sits on the extracted layout
 (`crates/gpui_runtime/src/element.rs`) and upstream is a monolith, so the port is the same
@@ -89,7 +89,7 @@ state through `with_current_inspector_state`). The full `cargo check --workspace
   aligns for free, and the exception in `architecture/layer-stack.md` becomes history
   rather than a standing trade — the aim is restored exactly. Close this issue, and keep
   the branch until the release containing it is a base we target.
-- **Upstream declines, or the pull request is never opened.** Then the layer-stack
+- **Upstream declines, or the pull request is closed without merging.** Then the layer-stack
   ruling's own axis decides: keep carrying it and keep paying, or revert to the parameter
   and delete the exception. The revert is bounded and mechanical — `Element`'s three
   signatures, `Drawable`'s three forwarding sites, and the 21 implementations in
