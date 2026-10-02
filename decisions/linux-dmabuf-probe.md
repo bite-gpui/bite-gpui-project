@@ -10,11 +10,11 @@
 - **The probe** is a scratch crate, `bite-gpui`/`probes/linux-dmabuf`, kept beside the other probes.
   Run with `cargo run --manifest-path probes/linux-dmabuf/Cargo.toml` on a Linux host.
 - **Status:** the environment, the flat-linear `VkImage` import, the wgpu adoption plus shader sample,
-  and the `B8G8R8A8` (`ARGB8888`) format map are measured on real hardware and pass. The driver
-  enumerates Intel tiled modifiers (`X_TILED`, `Y_TILED`, `Y_TILED_CCS`), and a `Y_TILED` producer
-  exports its image; the consumer's import still mismatches on the explicit plane layout. The `NV12`
-  and fence cases of [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md)
-  §4.4–§4.5 are still open, so the Linux arm is *mechanically possible* rather than *ready*.
+  the `B8G8R8A8` (`ARGB8888`) format map, and the `sync_file` fence are measured on real hardware and
+  pass. The driver enumerates Intel tiled modifiers (`X_TILED`, `Y_TILED`, `Y_TILED_CCS`), and a
+  `Y_TILED` producer exports its image; the consumer's import still mismatches on the explicit plane
+  layout. `NV12` remains ([`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md)
+  §4.4), so the Linux arm is *mechanically possible* rather than *ready*.
 
 ## 1. What the source settles
 
@@ -30,7 +30,7 @@
 
 ## 2. The run measured
 
-The harness prints rather than asserts, in four stages:
+The harness prints rather than asserts, in stages:
 
 1. the adapters wgpu sees, and the raw Vulkan devices behind them, with the four external-memory
    extensions the import needs;
@@ -38,7 +38,10 @@ The harness prints rather than asserts, in four stages:
    over it, writing a known colour, and exporting the fd;
 3. the raw consumer importing that fd as a second `VkImage` and reading the bytes back;
 4. the wgpu consumer importing the fd on its own device, adopting the image
-   (`texture_from_raw` + `create_texture_from_hal`), and sampling it through a compute shader.
+   (`texture_from_raw` + `create_texture_from_hal`), and sampling it through a compute shader;
+5. the driver's DRM format modifiers, and a tiled `Y_TILED` round trip;
+6. the `sync_file` fence: the producer signals a `SYNC_FD` semaphore, the consumer imports the fd and
+   waits on it before copying.
 
 ## 3. The printout
 
@@ -75,6 +78,27 @@ consumer: imported fd 43 as a 16x16 linear R8G8B8A8_UNORM image
 round trip: 1024 bytes match through a VkImage, no CPU copy
 consumer: adopted fd 43 into a wgpu texture on "Intel(R) HD Graphics 520 (SKL GT2)"
 sample: [0.1254902, 0.7529412, 0.2509804, 1.0] — expected [0.1254902, 0.7529412, 0.2509804, 1.0] — MATCH
+
+=== dma-buf round trip on Intel(R) HD Graphics 520 (SKL GT2) ===
+producer: exported fd 43, 1024 bytes, fourcc=ARGB8888 (B8G8R8A8_UNORM), modifier=linear
+consumer: imported fd 43 as a 16x16 linear B8G8R8A8_UNORM image
+round trip: 1024 bytes match through a VkImage, no CPU copy
+consumer: adopted fd 43 into a wgpu texture on "Intel(R) HD Graphics 520 (SKL GT2)"
+sample: [0.1254902, 0.7529412, 0.2509804, 1.0] — expected [0.1254902, 0.7529412, 0.2509804, 1.0] — MATCH
+
+modifiers for R8G8B8A8_UNORM:
+  DRM_FORMAT_MOD_LINEAR (0x0000000000000000), planes 1, sampled true
+  I915_FORMAT_MOD_X_TILED (0x0100000000000001), planes 1, sampled true
+  I915_FORMAT_MOD_Y_TILED (0x0100000000000002), planes 1, sampled true
+  I915_FORMAT_MOD_Y_TILED_CCS (0x0100000000000004), planes 2, sampled true
+
+=== tiled round trip, I915_FORMAT_MOD_Y_TILED (0x0100000000000002) ===
+producer: exported fd 43, 16x16 tiled, modifier I915_FORMAT_MOD_Y_TILED (0x0100000000000002)
+round trip: 1024 bytes MISMATCH through a tiled VkImage
+
+=== sync_file fence probe ===
+producer: cleared, signaled, exported sync_file fd 43
+fence: producer's clear read back after a sync_file wait — MATCH, no tear
 ```
 
 ## 4. The outcome
@@ -85,9 +109,10 @@ four external-memory extensions, so the import is refused nowhere. On the Intel 
 producer allocated a dma-buf, bound a linear `VkImage` over it, exported its fd; a consumer imported
 it byte-for-byte (no CPU copy); and wgpu adopted that imported image and sampled it through a shader,
 reading the known colour back exactly. The same round trip holds for both `R8G8B8A8` and `B8G8R8A8`
-(the `ABGR8888` and `ARGB8888` fourccs), so the fourcc→`VkFormat` map is right. This corrects 0002's
-one-line dismissal: the dma-buf transport is mechanically available *and* the renderer's adoption seam
-works on Linux, not just on Windows.
+(the `ABGR8888` and `ARGB8888` fourccs), so the fourcc→`VkFormat` map is right, and a `sync_file`
+fence orders the producer against the consumer with no CPU stall. This corrects 0002's one-line
+dismissal: the dma-buf transport is mechanically available *and* the renderer's adoption seam works on
+Linux, not just on Windows.
 
 **It is not "ready".** The pass is the flat, `DRM_FORMAT_MOD_LINEAR` case in `R8G8B8A8` and
 `B8G8R8A8`. A real producer emits `NV12` with a vendor tiling modifier. The tiled `Y_TILED` import
@@ -102,9 +127,8 @@ before the Linux arm is built.
   import mismatches on the explicit plane layout. `NV12` two-plane remains. These are the cases
   [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md) §4.4 requires before the
   path counts.
-- **Synchronisation.** No dma-fence (`sync_file`) orders the producer against the consumer — the
-  Linux counterpart of the keyed mutex and the `MTLSharedEvent` (§4.5).
-- **Cross-device.** Export and import run on one device (the integrated GPU). Intel producer →
-  NVIDIA consumer is the hybrid case dma-buf exists for, and is not yet run.
+- **Cross-device.** Export, import and the `sync_file` fence all run on one device (the integrated
+  GPU). Intel producer → NVIDIA consumer is the hybrid case dma-buf exists for, and is not yet run, so
+  cross-*device* ordering is unmeasured too.
 - **Hardware.** One machine; the NVIDIA and llvmpipe rows are enumerated but not round-tripped, so a
   pass is *works on this adapter* rather than *works everywhere*.
