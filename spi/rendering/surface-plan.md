@@ -33,6 +33,11 @@ Each is independent of the ones below it unless the table says otherwise.
 > and hung the machine until reboot. Pin the adapter with `ZED_DEVICE_ID` — a **four-digit hex** PCI
 > id, `1916` for the Intel HD 520 — when running `surface_dmabuf`; a decimal id matches nothing and
 > silently falls back to the default adapter (the discrete one).
+>
+> **Headless capture works on Linux now, which is what lets the demo capture at all.**
+> `gpui::current_headless_renderer` returned `None` off macOS, so a headless context on Linux got no
+> renderer and `capture_screenshot` bailed; it now returns the wgpu renderer, through a `headless`
+> feature on `gpui_wgpu` that avoids the `gpui/test-support` cycle.
 
 **W1 and W2 are the upstream pair**, and the reason the unification is worth the retarget: they are
 PRs upstream will take, not a fork. W3–W6 are ours; W5 and W6 are one crate, planned in
