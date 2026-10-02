@@ -1,5 +1,5 @@
 - **Opened:** 2026-10-02
-- **Status:** open — **the ISO is built** (below); blocked on root for the `vfio-pci` bind and the guest install
+- **Status:** open — the host is set up and the Windows installer is running under VNC; the guest install and the probes remain
 - **Touches:** this machine (`user-Vostro-14-5459`), [`../script/interop-vm`](../script/interop-vm), [`../script/windows-iso`](../script/windows-iso), [`../spi/rendering/probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md), the `gpui_interop` crate in `bite-gpui`
 
 # The Windows guest that runs the interop probes
@@ -54,14 +54,40 @@ fixed to get there:
 
 The ISO is build output and is ignored (`/windows-iso/`).
 
+## Host-side passthrough — what it took (2026-10-02)
+
+Binding the GPU **at boot, not live** turned out to be the only workable shape. Four separate
+obstacles, all now handled by `script/interop-vm prepare` (`prepare --revert` undoes it):
+
+1. **The nvidia services load the module explicitly.** A `/etc/modprobe.d` blacklist stops only
+   udev's *alias* auto-loading; `nvidia-powerd.service` (`WantedBy=multi-user.target`) runs its own
+   `modprobe nvidia`, which the blacklist cannot stop — the boot log shows it load 5 s after the
+   service starts, and a live unbind then sits on
+   `NVRM: Attempting to remove device … with non-zero usage count!`. `prepare` masks `nvidia-powerd`,
+   `nvidia-persistenced` and the suspend/hibernate/resume units.
+2. **A live unbind hangs.** GNOME Shell, the terminal and the editor each hold `/dev/nvidia0` open
+   (EGL/Vulkan enumeration), so a live `bind` never returns. Instead `prepare` loads `vfio-pci` from
+   `/etc/modules-load.d` at boot, where it claims the GPU before anything else can.
+3. **`/dev/vfio/<group>` is root-only** (`crw------- root root`). `prepare` writes a udev rule
+   (`SUBSYSTEM=="vfio", TAG+="uaccess"`) so the seated user gets an ACL — the same mechanism that
+   already grants `/dev/kvm` (the user is *not* in the `kvm` group).
+4. **`RLIMIT_MEMLOCK` is 8 MB, soft *and* hard.** VFIO pins the whole guest RAM, so
+   `vfio_container_dma_map` returns `-12 (ENOMEM)` until the limit is raised; `prepare` writes
+   `/etc/security/limits.d/99-vfio-memlock.conf` (`… - memlock unlimited`), applied at next login.
+
+The GPU has **no readable VBIOS** (MUX-less), so QEMU warns `Cannot read device rom at
+0000:01:00.0` and carries on — non-fatal for the install. If the guest driver wants it,
+`install --rom <vbios>` passes a dump (`romfile=`) and `--no-rom` sets `rombar=0` to silence the
+probe. VNC now binds `127.0.0.1:0` (localhost only).
+
 ## What is blocked
 
-- **root.** Installing the UUP tooling (`aria2`, `cabextract`, `wimtools`, `chntpw`,
-  `genisoimage`/`xorriso`) and running the `vfio-pci` bind both need `sudo`; `sudo` here is *not*
-  passwordless, so they must be run by a person.
-- **the guest install.** The ISO is built ([above](#the-iso-built-2026-10-02)); installing it into
-  the qcow2 needs the same root and a real KVM device.
-- **RAM.** 4.9 GB free; a 4 GB guest is tight — close the editor while it runs.
+- **root, once.** `sudo script/interop-vm prepare` and the login/reboot that applies the memlock
+  limit need `sudo`, which is *not* passwordless here, so they are human steps.
+- **the guest install.** Running now (the section above records the host setup); driving Windows
+  Setup over VNC is still manual work.
+- **RAM.** The 4 GB guest pins ~4 GB; free memory fell to ~1.6 GB during the install — close the
+  editor.
 - **building inside the guest is heavy.** Better to build the probe on `windows-latest` (where `fxc`
   works anyway) and copy the artifact in via the guest's shared folder.
 
