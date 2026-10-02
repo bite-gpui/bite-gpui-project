@@ -20,7 +20,7 @@ Each is independent of the ones below it unless the table says otherwise.
 | --- | --- | --- | --- |
 | **W1** | **Core hygiene — done.** `PixelBuffer`, and `render_scene` split from `read_pixels` | `crates/gpui_engine/src/renderer.rs:19`, `:102`, `:110` | upstream PR 1 lands; the rows in [`verification.md`](verification.md) §2 pass |
 | **W2** | **Windows surface arm — done.** RGBA/BGRA only. Extend `SurfaceSource` with the DirectX variant and implement `draw_surfaces` | `crates/gpui_authoring/src/elements/surface.rs:13`; `crates/gpui_windows/src/directx_renderer.rs:852` (retarget `:862`) | an **RGBA/BGRA** SRV composites through `surface()` on `windows-latest`; upstream PR 2. YCbCr is deliberately out (P4) |
-| **W3** | **Linux surface arm.** The `DmaBuf` variant and its import — *demo and tests* | `crates/gpui_engine/src/dmabuf.rs`; `crates/gpui_wgpu/src/dmabuf.rs` (the import); `crates/gpui_wgpu/src/wgpu_renderer.rs` (`draw_surfaces`); `crates/gpui_wgpu/examples/surface_dmabuf.rs` (the demo); `crates/gpui_wgpu/tests/surface_dmabuf.rs` (the tests); `gpui_linux` | a dma-buf composites on a Linux host with an adapter — **verified end to end through `surface()` in a mounted view: RGBA byte-exact, `NV12` converted by the shader**; the buffer must be uncompressed and self-describing under its modifier, and `NV12` is sampled as two plane textures — **P3 cleared** |
+| **W3** | **Linux surface arm — done.** The `DmaBuf` variant, its import, the per-frame import cache, the demo and the tests | `crates/gpui_engine/src/dmabuf.rs`; `crates/gpui_wgpu/src/dmabuf.rs` (the import and the `DmaBufTextureCache`); `crates/gpui_wgpu/src/wgpu_renderer.rs` (`draw_surfaces`); `crates/gpui_wgpu/examples/surface_dmabuf.rs` (the demo); `crates/gpui_wgpu/tests/surface_dmabuf.rs` (the tests); `gpui_linux` | a dma-buf composites on a Linux host with an adapter — **verified end to end through `surface()` in a mounted view: RGBA byte-exact, `NV12` converted by the shader** — and the imported textures are cached across frames, the dma-buf counterpart of the Metal arm's `CVMetalTextureCache`; the buffer must be uncompressed and self-describing under its modifier, and `NV12` is sampled as two plane textures — **P3 cleared** |
 | **W4** | **`GpuCanvas` — done.** The authoring surface; Path A arm retargets onto `surface()`, the same-device arm onto `paint_imported_texture` | `crates/gpui_authoring` beside `canvas` | the hand-rolled demo becomes the element on all three platforms — Windows through `surface()`, Linux/macOS through `paint_imported_texture` |
 | **W5** | **`gpui-interop` — Host Mode.** Adapter matching, NT-handle export/import (D3D12/`wgpu` → D3D11), the fence bridge, and device-loss teardown | new downstream crate | the bridge composites with a producer on a second device, and survives the renderer losing its device — gated on **P2, P5, P6, P9** |
 | **W6** | **Guest runner.** Headless GPUI on a worker thread | the offscreen contract + a runner | a foreign loop drives GPUI and samples the frame — gated on **P1, P7** |
@@ -45,6 +45,13 @@ Each is independent of the ones below it unless the table says otherwise.
 > `ZED_DEVICE_ID=1916 cargo test -p gpui_wgpu --features test-support --test surface_dmabuf`
 > (opt-in because it needs a GPU; the crate's unit-test target, since repaired, runs without the
 > feature).
+>
+> **The import cache.** The Metal arm holds a `CVMetalTextureCache` on the renderer, so painting a
+> live `CVPixelBuffer` reuses its `MTLTexture`; the Linux arm had no counterpart and rebuilt a
+> `VkImage`, a dedicated allocation and a `wgpu::Texture` every frame. `DmaBufTextureCache` is that
+> counterpart: it keys on the handle's descriptors by `Arc` identity — never the descriptor numbers,
+> so a recycled number cannot alias — and evicts least-recently-used at a small capacity. It is why
+> `draw_surfaces` now takes `&mut self`.
 
 **W1 and W2 are the upstream pair**, and the reason the unification is worth the retarget: they are
 PRs upstream will take, not a fork. W3–W6 are ours; W5 and W6 are one crate, planned in
