@@ -60,11 +60,11 @@ fence are measured; **adoption is not** — nothing yet builds an `MTLTexture` o
 `texture_from_raw` over the hand-built `MTLTexture`. *Pass:* a wgpu render reads the surface bytes. The full specification is
 [`probe-p2-macos-adoption.md`](probe-p2-macos-adoption.md).
 
-**P3 — dma-buf import on Linux (gates W3).** Run: the environment (three devices, all extensions) and
-the flat-linear `VkImage` import pass byte-for-byte on real hardware
+**P3 — dma-buf import on Linux (gates W3).** Run: the environment (three devices, all extensions), the
+flat-linear `VkImage` import, and the wgpu adoption plus shader sample all pass on real hardware
 ([`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md)); the tiled/`NV12`
-cases, the shader sample and the dma-fence are the unmeasured remainder, so W3 is still gated. The
-full specification is [`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md).
+cases and the dma-fence are the unmeasured remainder, so W3 is still gated. The full specification is
+[`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md).
 
 **P4 — what a video surface actually is (shapes an additive pass; does *not* gate W2).** The
 straight-through fragment assumes RGBA, and a VA-API/MF/NVDEC decoder emits NV12/YCbCr, often 10-bit —

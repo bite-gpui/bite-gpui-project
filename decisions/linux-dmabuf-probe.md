@@ -9,22 +9,36 @@
   (wgpu/Vulkan) renderer a fd it imports and samples?
 - **The probe** is a scratch crate, `bite-gpui`/`probes/linux-dmabuf`, kept beside the other probes.
   Run with `cargo run --manifest-path probes/linux-dmabuf/Cargo.toml` on a Linux host.
-- **Status:** the environment and the flat-linear `VkImage` import are measured on real hardware and
-  pass. The tiled-modifier, `NV12` and fence cases of
+- **Status:** the environment, the flat-linear `VkImage` import, and the wgpu adoption plus shader
+  sample are measured on real hardware and pass. The tiled-modifier, `NV12` and fence cases of
   [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md) §4.4–§4.5 are not yet
   measured, so the Linux arm is *mechanically possible* rather than *ready*.
 
-## 1. What the run measured
+## 1. What the source settles
 
-The harness prints rather than asserts, in three stages:
+- **wgpu's Vulkan device enables the import extensions.** wgpu-hal pushes `VK_KHR_external_memory_fd`
+  and `VK_EXT_external_memory_dma_buf` onto the device extension list when the physical device offers
+  them (`wgpu-hal-29.0.4/src/vulkan/adapter.rs:1296`), so the import the renderer needs is not refused
+  at wgpu's own boundary. (`VK_KHR_bind_memory2` and `VK_KHR_image_format_list` are core in Vulkan
+  1.1/1.2, so they need no name on a 1.4 device.)
+- **Adoption is a public seam.** `Device::as_hal`, `vulkan::Device::raw_device`/`shared_instance`,
+  `texture_from_raw` and `Device::create_texture_from_hal` are all public, the same adoption path
+  [`shared-surface.md`](shared-surface.md) §1 reads on every backend; this probe is the first to run
+  it on Linux for a dma-buf.
+
+## 2. The run measured
+
+The harness prints rather than asserts, in four stages:
 
 1. the adapters wgpu sees, and the raw Vulkan devices behind them, with the four external-memory
    extensions the import needs;
 2. the producer — a raw Vulkan device, not wgpu — allocating a dma-buf, binding a linear `VkImage`
-   over it, writing known bytes, and exporting the fd;
-3. the consumer importing that fd as a second `VkImage` and reading the bytes back.
+   over it, writing a known colour, and exporting the fd;
+3. the raw consumer importing that fd as a second `VkImage` and reading the bytes back;
+4. the wgpu consumer importing the fd on its own device, adopting the image
+   (`texture_from_raw` + `create_texture_from_hal`), and sampling it through a compute shader.
 
-## 2. The printout
+## 3. The printout
 
 Run 2026-10-02, on a hybrid laptop (Intel HD 520 integrated + NVIDIA 930M discrete), Mesa 26.0.8,
 proprietary NVIDIA 580.178.04, Vulkan 1.4:
@@ -57,27 +71,26 @@ proprietary NVIDIA 580.178.04, Vulkan 1.4:
 producer: exported fd 43, 1024 bytes, fourcc=ABGR8888 (R8G8B8A8_UNORM), modifier=linear
 consumer: imported fd 43 as a 16x16 linear R8G8B8A8_UNORM image
 round trip: 1024 bytes match through a VkImage, no CPU copy
+consumer: adopted fd 43 into a wgpu texture on "Intel(R) HD Graphics 520 (SKL GT2)"
+sample: [0.1254902, 0.7529412, 0.2509804, 1.0] — expected [0.1254902, 0.7529412, 0.2509804, 1.0] — MATCH
 ```
 
-## 3. The outcome
+## 4. The outcome
 
-**The gate is cleared.** All three Vulkan devices — the Intel integrated GPU, the NVIDIA discrete GPU
-on the proprietary driver, and the llvmpipe software rasteriser — expose all four external-memory
-extensions, so the import is refused nowhere. On the Intel device, a raw-Vulkan producer allocated a
-dma-buf, bound a linear `VkImage` over it, exported its fd, and a consumer imported that fd as a
-second `VkImage`; the 1024 known bytes round-tripped byte-for-byte with no CPU copy. This corrects
-0002's one-line dismissal: the dma-buf transport is mechanically available, not unnecessary.
+**The gate is cleared, and the adoption runs.** All three Vulkan devices — the Intel integrated GPU,
+the NVIDIA discrete GPU on the proprietary driver, and the llvmpipe software rasteriser — expose all
+four external-memory extensions, so the import is refused nowhere. On the Intel device, a raw-Vulkan
+producer allocated a dma-buf, bound a linear `VkImage` over it, exported its fd; a consumer imported
+it byte-for-byte (no CPU copy); and wgpu adopted that imported image and sampled it through a shader,
+reading the known colour back exactly. This corrects 0002's one-line dismissal: the dma-buf transport
+is mechanically available *and* the renderer's adoption seam works on Linux, not just on Windows.
 
 **It is not "ready".** The pass is the flat, `DRM_FORMAT_MOD_LINEAR` `R8G8B8A8_UNORM` case. A real
-producer emits `NV12` with a vendor tiling modifier and a real renderer samples through a shader —
-neither of which this run measures (§4) — so W3 stays gated on those before the Linux arm is built.
+producer emits `NV12` with a vendor tiling modifier — neither of which this run measures (§5) — so W3
+stays gated on those before the Linux arm is built.
 
-## 4. What is not measured
+## 5. What is not measured
 
-- **The shader sample.** The consumer maps the imported memory and reads it back; nothing samples the
-  `VkImage` through a pipeline. That step exercises the sampler and tiling, and the
-  `texture_from_raw` → `create_texture_from_hal` adoption into wgpu
-  ([`shared-surface.md`](shared-surface.md) §1) is the same gap one layer up.
 - **The format map and a real layout.** Only `R8G8B8A8_UNORM` linear is measured. `XRGB8888`, a
   tiled (vendor) modifier, and `NV12` two-plane are the cases
   [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md) §4.4 requires before the

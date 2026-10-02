@@ -1,7 +1,7 @@
 # P3: dma-buf import on Linux
 
-- **Status:** run — the environment and the flat-linear `VkImage` import pass; the tiled/`NV12`/fence
-  cases and the shader sample remain. The printout and outcome are
+- **Status:** run — the environment, the flat-linear `VkImage` import, and the wgpu adoption plus
+  shader sample all pass; the tiled/`NV12`/fence cases remain. The printout and outcome are
   [`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md). It gates the Linux
   surface arm ([`surface-plan.md`](surface-plan.md) W3, [`interop-crate.md`](interop-crate.md) §3).
 - **Question:** on Linux, can a producer that is *not* wgpu — a hardware decoder, a Wayland client —
