@@ -99,7 +99,10 @@ plane textures** (`R8` + `R8G8`) with the colour matrix in the shader, because t
 `VK_KHR_sampler_ycbcr_conversion` needs an immutable sampler `wgpu` cannot bind. Third, a buffer that
 crosses devices must be a **dedicated allocation** (`VkMemoryDedicatedAllocateInfo`) — the importing
 GPU refuses it otherwise on every memory type, even while advertising the format as importable.
-`DmaBufHandle` is the consumer of that contract, not a place to negotiate it.
+`DmaBufHandle` is the consumer of that contract, not a place to negotiate it. A **vendor-tiled**
+modifier is refused for now: importing one needs `VK_EXT_image_drm_format_modifier` on the renderer's
+device, and `wgpu` does not enable it
+([`../../issues/0008-dmabuf-tiled-modifiers-wgpu.md`](../../issues/0008-dmabuf-tiled-modifiers-wgpu.md)).
 
 ## 3. Host mode: composing external frames in
 
