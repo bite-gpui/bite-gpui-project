@@ -1,5 +1,5 @@
 - **Opened:** 2026-10-02
-- **Status:** open — blocked on root (package install + the vfio bind) and a Windows image
+- **Status:** open — **the ISO is built** (below); blocked on root for the `vfio-pci` bind and the guest install
 - **Touches:** this machine (`user-Vostro-14-5459`), [`../script/interop-vm`](../script/interop-vm), [`../script/windows-iso`](../script/windows-iso), [`../spi/rendering/probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md), the `gpui_interop` crate in `bite-gpui`
 
 # The Windows guest that runs the interop probes
@@ -38,12 +38,29 @@ to run, and this box is Linux. A QEMU guest with the discrete GPU passed through
 
 `check` reports the prerequisites read-only and is the entry point.
 
+## The ISO (built 2026-10-02)
+
+`script/windows-iso 94b8c5e5-d0ea-41c1-937c-c5ce99ad518b` (24H2, 26100.6508) produced
+`windows-iso/uup/26100.1_PROFESSIONAL_X64_EN-US.ISO` — 4.1 GB, UDF + El Torito, carrying
+`install.wim`, `boot.wim`, `setup.exe` and the EFI boot files. Two bugs in the script had to be
+fixed to get there:
+
+- it fetched the package with a `GET get.php?…&lang=…&pack=1`, but the site wants a **`POST`** to
+  `get.php?id=…&pack=<lang>&edition=<edition>` with `autodl=2` — `pack` is the language, so `pack=1`
+  read as one and the run died on a `Specified language is not supported` page;
+- its prerequisites omitted `chntpw`, the converter's own registry dependency (`boot.wim`), so the
+  build stopped mid-conversion. The apt line is `aria2 cabextract wimtools chntpw genisoimage
+  xorriso`.
+
+The ISO is build output and is ignored (`/windows-iso/`).
+
 ## What is blocked
 
-- **root.** Installing the UUP tooling (`aria2`, `cabextract`, `wimtools`, `genisoimage`/`xorriso`)
-  and running the `vfio-pci` bind both need `sudo`; `sudo` here is *not* passwordless, so they must be
-  run by a person.
-- **the image.** A 5–8 GB ISO download, then a Windows install.
+- **root.** Installing the UUP tooling (`aria2`, `cabextract`, `wimtools`, `chntpw`,
+  `genisoimage`/`xorriso`) and running the `vfio-pci` bind both need `sudo`; `sudo` here is *not*
+  passwordless, so they must be run by a person.
+- **the guest install.** The ISO is built ([above](#the-iso-built-2026-10-02)); installing it into
+  the qcow2 needs the same root and a real KVM device.
 - **RAM.** 4.9 GB free; a 4 GB guest is tight — close the editor while it runs.
 - **building inside the guest is heavy.** Better to build the probe on `windows-latest` (where `fxc`
   works anyway) and copy the artifact in via the guest's shared folder.

@@ -22,8 +22,11 @@
 #     --out DIR        default ./windows-iso
 #     --dry-run        resolve and print; download nothing
 #
-# Requires: curl, python3, aria2c, cabextract, wimlib-imagex, and genisoimage or xorriso.
-#     sudo apt install -y aria2 cabextract wimtools genisoimage xorriso
+# Requires: curl, python3, aria2c, cabextract, wimlib-imagex, chntpw, and genisoimage or xorriso.
+#     sudo apt install -y aria2 cabextract wimtools chntpw genisoimage xorriso
+#
+# `chntpw` is the converter's own dependency (it edits the registry inside
+# boot.wim); the readme the UUP package carries lists it too.
 #
 # The build writes <out>/uup/ (the package) and <out>/uup/*.iso, and needs ~12 GB free.
 
@@ -89,7 +92,7 @@ fi
 
 case "$TARGET" in
     http*) PACKAGE_URL="$TARGET" ;;
-    *)     PACKAGE_URL="$SITE/get.php?id=$TARGET&lang=$LANG_CODE&edition=$EDITION&pack=1" ;;
+    *)     PACKAGE_URL="$SITE/get.php?id=$TARGET&pack=$LANG_CODE&edition=$EDITION" ;;
 esac
 
 have curl || die "curl is required"
@@ -101,15 +104,25 @@ if [ "$DRY_RUN" -eq 1 ]; then
     exit 0
 fi
 
-have aria2c || die "missing aria2c — sudo apt install -y aria2 cabextract wimtools genisoimage xorriso"
+have aria2c || die "missing aria2c — sudo apt install -y aria2 cabextract wimtools chntpw genisoimage xorriso"
 have cabextract || die "missing cabextract — see the apt line in --help"
+have chntpw || die "missing chntpw — see the apt line in --help"
 have wimlib-imagex || die "missing wimlib-imagex (wimtools) — see the apt line in --help"
 have genisoimage || have xorriso || die "missing an ISO tool (genisoimage or xorriso) — see the apt line in --help"
 
 mkdir -p "$OUT"
 say "downloading the UUP package…"
-curl -sSL --max-time 600 -o "$OUT/uup-package.zip" "$PACKAGE_URL"
-python3 -m zipfile -e "$OUT/uup-package.zip" "$OUT/uup"
+# The package comes from a POST: the query string carries the language (`pack`)
+# and the edition, and the body carries the download options. A plain GET
+# returns the file-list page, not the zip. `autodl=2` is "download and convert
+# to ISO" — the option the site itself checks by default.
+curl -sSL --max-time 600 -X POST --data 'autodl=2' -o "$OUT/uup-package.zip" "$PACKAGE_URL"
+if ! python3 -m zipfile -e "$OUT/uup-package.zip" "$OUT/uup"; then
+    say "the download was not a zip — the server said:"
+    sed 's/<[^>]*>//g' "$OUT/uup-package.zip" | grep -v '^[[:space:]]*$' | head -20
+    rm -f "$OUT/uup-package.zip"
+    die "no UUP package (see the server message above)"
+fi
 rm -f "$OUT/uup-package.zip"
 
 [ -f "$OUT/uup/uup_download_linux.sh" ] \
