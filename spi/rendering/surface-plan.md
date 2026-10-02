@@ -43,7 +43,8 @@ Each is independent of the ones below it unless the table says otherwise.
 > `gpui_engine` and `gpui_authoring` suites (no GPU), and the end-to-end capture is
 > `crates/gpui_wgpu/tests/surface_dmabuf.rs`, run opt-in as
 > `ZED_DEVICE_ID=1916 cargo test -p gpui_wgpu --features test-support --test surface_dmabuf`
-> (it needs a GPU and the crate's unit-test target does not build).
+> (opt-in because it needs a GPU; the crate's unit-test target, since repaired, runs without the
+> feature).
 
 **W1 and W2 are the upstream pair**, and the reason the unification is worth the retarget: they are
 PRs upstream will take, not a fork. W3–W6 are ours; W5 and W6 are one crate, planned in
