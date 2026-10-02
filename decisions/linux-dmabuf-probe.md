@@ -16,8 +16,10 @@
   tiled buffer must be *self-describing and uncompressed* under its declared modifier (ANV's implicit
   CCS state is not carried by a single-plane dma-buf), and a two-plane `NV12` buffer is sampled as two
   `R8`/`R8G8` textures with the colour matrix done in the shader, because the native ycbcr conversion
-  needs an immutable sampler `wgpu` cannot bind. Cross-*device* (Intel producer → NVIDIA consumer) is
-  the only case left unmeasured ([`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md)).
+  needs an immutable sampler `wgpu` cannot bind. Cross-device import (Intel ↔ NVIDIA, both
+  directions) and the cross-device `sync_file` are measured too, and need a dedicated allocation. Every
+  case the probe set out to measure now passes; only other *hardware* is untested
+  ([`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md)).
 
 ## 1. What the source settles
 
@@ -48,7 +50,9 @@ The harness prints rather than asserts, in stages:
    wgpu consumer adopts the two planes as `R8`/`R8G8` textures and converts them with a shader-side
    BT.709 matrix;
 7. the `sync_file` fence: the producer signals a `SYNC_FD` semaphore, the consumer imports the fd and
-   waits on it before copying.
+   waits on it before copying;
+8. the cross-device round trip: a dma-buf allocated on one GPU, exported, imported and read on the
+   *other*, ordered by a `sync_file` across the device boundary — run in both directions.
 
 ## 3. The printout
 
@@ -119,6 +123,20 @@ sample: NV12 -> RGB, 1024 pixels, 1024/1024 match the BT.709 matrix
 === sync_file fence probe ===
 producer: cleared, signaled, exported sync_file fd 43
 fence: producer's clear read back after a sync_file wait — MATCH, no tear
+
+=== cross-device dma-buf: Intel(R) HD Graphics 520 (SKL GT2) -> NVIDIA GeForce 930M ===
+  producer: linear dma-buf EXPORTABLE | IMPORTABLE, SYNC_FD semaphore EXPORTABLE | IMPORTABLE
+  consumer: linear dma-buf EXPORTABLE | IMPORTABLE, SYNC_FD semaphore EXPORTABLE | IMPORTABLE
+producer: cleared on Intel(R) HD Graphics 520 (SKL GT2), exported image fd 44 and sync fd 45, 4096 bytes linear
+  consumer: imported the image into memory type 0
+cross-device: NVIDIA GeForce 930M read the Intel(R) HD Graphics 520 (SKL GT2) dma-buf after the sync_file — 1024/1024 bytes match
+
+=== cross-device dma-buf: NVIDIA GeForce 930M -> Intel(R) HD Graphics 520 (SKL GT2) ===
+  producer: linear dma-buf EXPORTABLE | IMPORTABLE, SYNC_FD semaphore EXPORTABLE | IMPORTABLE
+  consumer: linear dma-buf EXPORTABLE | IMPORTABLE, SYNC_FD semaphore EXPORTABLE | IMPORTABLE
+producer: cleared on NVIDIA GeForce 930M, exported image fd 46 and sync fd 47, 4096 bytes linear
+  consumer: imported the image into memory type 0
+cross-device: Intel(R) HD Graphics 520 (SKL GT2) read the NVIDIA GeForce 930M dma-buf after the sync_file — 1024/1024 bytes match
 ```
 
 ## 4. The outcome
@@ -158,17 +176,25 @@ native conversion requires an immutable sampler baked into the descriptor-set an
 which `wgpu` has no abstraction for, so a consumer built on `wgpu` cannot bind it. Two plane textures
 and a matrix is the shape Chromium Ozone, mpv and WebCodecs use, and the one that fits.
 
+**Cross-device is measured too, in both directions.** A dma-buf allocated on the Intel GPU was
+imported and read on the NVIDIA GPU, and the reverse, each read byte-for-byte (1024/1024) and each
+ordered by a `sync_file` the producer exported and the consumer imported and waited on — not a
+`queue_wait_idle`, which would have hidden the cross-device order the probe exists to test. Two things
+the measurement added: the import needs a **dedicated allocation** (`VkMemoryDedicatedAllocateInfo`),
+without which the discrete GPU refuses it on *every* memory type while still advertising the format as
+`IMPORTABLE`; and the two directions are not symmetric in general, so both are run rather than assumed.
+
 **The gate is cleared.** Every case probe 4 requires — the fourcc→`VkFormat` map, a vendor-tiled
-modifier, and `NV12` — now passes on real hardware with no CPU copy. W3 is no longer blocked on the
-probe, and it carries two producer-side invariants the probe established: a tiled buffer must be
-uncompressed and self-describing under its declared modifier, and an `NV12` buffer is consumed as two
-plane textures with the colour conversion in the shader.
+modifier, and `NV12` — now passes on real hardware with no CPU copy, and the cross-device and fence
+cases beside them. W3 is no longer blocked on the probe, and it carries the producer-side invariants
+the probe established: a tiled buffer must be uncompressed and self-describing under its declared
+modifier; an `NV12` buffer is consumed as two plane textures with the colour conversion in the shader;
+and a dma-buf crossing devices must be a dedicated allocation.
 
 ## 5. What is not measured
 
-- **Cross-device.** Export, import and the `sync_file` fence all run on one device (the integrated
-  GPU). Intel producer → NVIDIA consumer is the hybrid case dma-buf exists for, and is not yet run, so
-  cross-*device* ordering is unmeasured too.
-- **Hardware.** One machine; the NVIDIA and llvmpipe rows are enumerated but not round-tripped, so a
-  pass is *works on this adapter* rather than *works everywhere*. The tiled import is also measured
-  only on ANV, where the compression behaviour above is specific to the Intel driver.
+- **Hardware.** One machine; a pass is *works on this adapter pair* rather than *works everywhere*.
+  The tiled import is measured only on ANV, where the compression behaviour above is specific to the
+  Intel driver, and the cross-device pair is Intel ↔ NVIDIA, both directions.
+- **Other vendors.** The cross-vendor import is measured only between Intel and NVIDIA. AMD, and the
+  `llvmpipe` adapter (enumerated but not round-tripped), are untested as either end of a dma-buf.

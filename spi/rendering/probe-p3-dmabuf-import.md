@@ -7,9 +7,10 @@
   and self-describing under its declared modifier (ANV's implicit CCS state is not carried by a
   single-plane dma-buf), and `NV12` is consumed as two `R8`/`R8G8` textures with the colour matrix in
   the shader, because the native ycbcr conversion needs an immutable sampler `wgpu` cannot bind. The
-  printout and outcome are
-  [`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md). It gates the Linux
-  surface arm ([`surface-plan.md`](surface-plan.md) W3, [`interop-crate.md`](interop-crate.md) §3).
+  cross-device case — a dma-buf crossing between the two GPUs, both directions, ordered by a
+  cross-device `sync_file` — also passes, and needs a dedicated allocation. The printout and outcome
+  are [`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md). It gates the
+  Linux surface arm ([`surface-plan.md`](surface-plan.md) W3, [`interop-crate.md`](interop-crate.md) §3).
 - **Question:** on Linux, can a producer that is *not* wgpu — a hardware decoder, a Wayland client —
   hand GPUI a **dma-buf** its renderer imports and samples, with no CPU copy?
 - **Gates:** W3. **Companion:** [`probe-p2-macos-adoption.md`](probe-p2-macos-adoption.md), the same

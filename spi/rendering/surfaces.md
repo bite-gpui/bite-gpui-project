@@ -96,8 +96,10 @@ must be **self-contained and uncompressed under its declared modifier**: ANV ena
 compression for a sampled tiled image, and that state is not carried by a single-plane dma-buf, so a
 compressed producer imports as raw compressed bytes. Second, an `NV12` buffer is consumed as **two
 plane textures** (`R8` + `R8G8`) with the colour matrix in the shader, because the native
-`VK_KHR_sampler_ycbcr_conversion` needs an immutable sampler `wgpu` cannot bind. `DmaBufHandle` is the
-consumer of that contract, not a place to negotiate it.
+`VK_KHR_sampler_ycbcr_conversion` needs an immutable sampler `wgpu` cannot bind. Third, a buffer that
+crosses devices must be a **dedicated allocation** (`VkMemoryDedicatedAllocateInfo`) — the importing
+GPU refuses it otherwise on every memory type, even while advertising the format as importable.
+`DmaBufHandle` is the consumer of that contract, not a place to negotiate it.
 
 ## 3. Host mode: composing external frames in
 

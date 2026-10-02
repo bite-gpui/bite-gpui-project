@@ -66,8 +66,9 @@ plus shader sample, the `ARGB8888` format map, the tiled `Y_TILED` import, the `
 with its shader-side colour conversion, and the `sync_file` fence
 ([`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md)). W3 inherits two
 producer-side invariants: a tiled buffer must be uncompressed and self-describing under its modifier,
-and `NV12` is consumed as two plane textures with the matrix in the shader. Cross-device
-(Intel producer → NVIDIA consumer) is the unmeasured remainder. The full specification is
+and `NV12` is consumed as two plane textures with the matrix in the shader. The cross-device case (a
+dma-buf crossing between the two GPUs, both directions, with a cross-device `sync_file`) is measured
+too, and needs a dedicated allocation. The full specification is
 [`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md).
 
 **P4 — what a video surface actually is (shapes an additive pass; does *not* gate W2).** The
