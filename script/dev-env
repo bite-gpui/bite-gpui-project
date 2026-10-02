@@ -1,0 +1,374 @@
+#!/usr/bin/env bash
+#
+# The recommended setup for running this project's GPU surface work on this machine.
+#
+# `bite-gpui`'s surface suite is cheap to *run* and expensive to *build*: a feature change
+# recompiles `gpui` and its neighbours, and those link steps are what push this 7.2 GiB
+# machine over `systemd-oomd`'s memory-pressure limit. On 2026-10-02 that killed the editor
+# in the middle of a test build — 18 processes, 5.8 G peak — and the screen went dark. Free
+# swap did not save it: oomd kills on *stall* (PSI), not on capacity, and the swap file here
+# lives on a 5400 rpm HDD, so refaults are slow enough to spike PSI.
+#
+# So the recommended setup is three things:
+#
+#   1. Bound the build's peak memory — fewer concurrent `rustc` processes.
+#   2. Give the kernel a *fast* swap (zram, in RAM) so reclaim churn stops stalling on the
+#      disk, and let it take priority over `/swap.img`.
+#   3. Optionally raise the memory-pressure limit at which oomd may kill the session, since
+#      with (1) and (2) in place the pressure is survivable.
+#
+# It also pins the toolchain and the GPU. GPU work must run on the integrated adapter: the
+# headless renderer otherwise picks the discrete NVIDIA GPU, where a userspace fault with
+# work in flight has produced `Xid 13`/`Xid 158` and wedged the machine until reboot.
+#
+# Usage:
+#     script/dev-env [status]                    # what is set up now (read-only; the default)
+#     script/dev-env env [--write]               # print the shell env, or write it to
+#                                                #   ~/.config/bite-gpui/dev-env.sh
+#     sudo script/dev-env system                 # zram, swappiness, and the oomd limit
+#     script/dev-env system --dry-run            # show the system changes, make none
+#     sudo script/dev-env system --oomd-limit 0  # disable oomd killing for the session
+#
+#     --dry-run        make no changes (the system action; the env file is not written)
+#     --oomd-limit N   pressure % at which oomd may kill the session (default 80; 0 = off)
+#
+# Nothing here is destructive: it never turns off an existing swap device, and it is
+# idempotent — running it twice is running it once.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECTS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+CARGO_HOME_DIR="$PROJECTS_ROOT/.cargo-home"
+RUSTUP_HOME_DIR="$PROJECTS_ROOT/.rustup-home"
+BITE_GPUI_DIR="$PROJECTS_ROOT/bite-gpui"
+ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/bite-gpui/dev-env.sh"
+
+# zram is sized at half of RAM; zstd compresses it a further 2-3x, so the effective swap
+# is comfortably larger than the disk file it shadows.
+ZRAM_HELPER=/usr/local/libexec/bite-gpui-zram
+ZRAM_UNIT=/etc/systemd/system/bite-gpui-zram.service
+ZRAM_MODULES=/etc/modules-load.d/bite-gpui-zram.conf
+SYSCTL_FILE=/etc/sysctl.d/90-bite-gpui.conf
+OOMD_DROPIN_DIR=/etc/systemd/system/user@.service.d
+OOMD_DROPIN="$OOMD_DROPIN_DIR/20-bite-gpui-oomd.conf"
+
+OOMD_LIMIT=80
+DRY_RUN=0
+WRITE_ENV=0
+
+say()  { printf '%s\n' "$*"; }
+note() { printf '  %s\n' "$*"; }
+warn() { printf 'warning: %s\n' "$*" >&2; }
+die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+# The integrated Intel display adapter's PCI device id, in the four-digit hex form
+# `ZED_DEVICE_ID` expects (0x1916 -> 1916). Falls through to the first display controller
+# whose vendor is Intel; a discrete GPU is deliberately never chosen.
+detect_device_id() {
+    local dev vendor class
+    for dev in /sys/bus/pci/devices/*; do
+        [ -r "$dev/vendor" ] || continue
+        vendor="$(cat "$dev/vendor")"
+        [ "$vendor" = "0x8086" ] || continue
+        class="$(cat "$dev/class")"
+        case "$class" in 0x03*) ;; *) continue ;; esac
+        local id
+        id="$(cat "$dev/device")"
+        printf '%s\n' "${id#0x}"
+        return 0
+    done
+    return 1
+}
+
+# The session's user — the one `sudo` was invoked from — so the oomd drop-in and the live
+# property land on the right `user@.service`, not on root.
+session_user() {
+    printf '%s\n' "${SUDO_USER:-$(id -un)}"
+}
+
+# ---------------------------------------------------------------------------------------
+# status
+# ---------------------------------------------------------------------------------------
+
+cmd_status() {
+    say "bite-gpui dev environment"
+    say
+
+    say "toolchain"
+    if [ -x "$CARGO_HOME_DIR/bin/cargo" ]; then
+        note "cargo: $(CARGO_HOME="$CARGO_HOME_DIR" RUSTUP_HOME="$RUSTUP_HOME_DIR" "$CARGO_HOME_DIR/bin/cargo" --version 2>/dev/null || echo 'present (toolchain not selected)')"
+    else
+        warn "no cargo at $CARGO_HOME_DIR/bin/cargo"
+    fi
+    if [ -n "${CARGO_BUILD_JOBS:-}" ]; then
+        note "CARGO_BUILD_JOBS: $CARGO_BUILD_JOBS"
+    else
+        warn "CARGO_BUILD_JOBS unset — a feature-change rebuild runs one rustc per CPU"
+    fi
+    say
+
+    say "gpu"
+    local dev_id=""
+    dev_id="$(detect_device_id)" || true
+    if [ -n "$dev_id" ]; then
+        note "integrated adapter device id: $dev_id"
+        if [ -n "${ZED_DEVICE_ID:-}" ]; then
+            note "ZED_DEVICE_ID (set): $ZED_DEVICE_ID"
+        else
+            warn "ZED_DEVICE_ID unset — source the env so GPU runs pin the integrated adapter"
+        fi
+    else
+        warn "no integrated display adapter found"
+    fi
+    say
+
+    say "memory"
+    awk '/^(MemTotal|MemAvailable|SwapTotal|SwapFree):/ { printf "  %-14s %s %s\n", $1, $2, $3 }' /proc/meminfo
+    note "vm.swappiness: $(cat /proc/sys/vm/swappiness)"
+    say "swap devices:"
+    swapon --show || true
+    say
+
+    say "systemd-oomd"
+    note "service: $(systemctl is-active systemd-oomd 2>/dev/null || echo unknown)"
+    if [ -r "/sys/fs/cgroup/$(systemctl show -p ControlGroup --value "user@$(id -u "$(session_user)").service" 2>/dev/null)/memory.pressure" ]; then
+        note "session pressure: $(head -n1 "/sys/fs/cgroup/$(systemctl show -p ControlGroup --value "user@$(id -u "$(session_user)").service" 2>/dev/null)/memory.pressure")"
+    fi
+    if [ -r "$OOMD_DROPIN" ]; then
+        note "drop-in: $(tr '\n' ' ' < "$OOMD_DROPIN")"
+    else
+        note "drop-in: none (Ubuntu default is 50% for 20s)"
+    fi
+}
+
+# ---------------------------------------------------------------------------------------
+# env
+# ---------------------------------------------------------------------------------------
+
+env_snippet() {
+    sed -e "s|@CARGO_HOME@|$CARGO_HOME_DIR|g" \
+        -e "s|@RUSTUP_HOME@|$RUSTUP_HOME_DIR|g" \
+        -e "s|@BITE_GPUI@|$BITE_GPUI_DIR|g" \
+        -e "s|@ENV_FILE@|$ENV_FILE|g" <<'SNIPPET'
+# bite-gpui dev environment. Generated by script/dev-env — edit that, not this file.
+# Source it:  . "@ENV_FILE@"
+
+export CARGO_HOME="@CARGO_HOME@"
+export RUSTUP_HOME="@RUSTUP_HOME@"
+export PATH="$CARGO_HOME/bin:$PATH"
+
+# Bound the build's peak memory. A feature change recompiles gpui and its neighbours, and
+# those link steps are what push this machine over systemd-oomd's pressure limit.
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
+
+# Keep GPU work on the integrated adapter; the discrete GPU has been wedged by a fault with
+# work in flight. The id is a four-digit hex PCI device id.
+gpui_device_id() {
+    local dev
+    for dev in /sys/bus/pci/devices/*; do
+        [ -r "$dev/vendor" ] || continue
+        [ "$(cat "$dev/vendor")" = "0x8086" ] || continue
+        case "$(cat "$dev/class")" in 0x03*) ;; *) continue ;; esac
+        printf '%s\n' "$(cat "$dev/device")" | sed 's/^0x//'
+        return 0
+    done
+}
+if [ -z "${ZED_DEVICE_ID:-}" ]; then
+    ZED_DEVICE_ID="$(gpui_device_id)" && export ZED_DEVICE_ID
+fi
+
+# The surface suite, with a stable feature set and the device pinned. The unit target needs
+# no GPU; the end-to-end capture does, hence the explicit ZED_DEVICE_ID.
+gpui-surface-test() (
+    set -e
+    cd "${BITE_GPUI:-@BITE_GPUI@}"
+    cargo test -p gpui_wgpu --lib
+    ZED_DEVICE_ID="${ZED_DEVICE_ID:?source the dev-env first}" \
+        cargo test -p gpui_wgpu --features test-support --test surface_dmabuf
+)
+SNIPPET
+}
+
+cmd_env() {
+    if [ "$WRITE_ENV" -eq 1 ]; then
+        if [ "$DRY_RUN" -eq 1 ]; then
+            say "would write $ENV_FILE"
+            return
+        fi
+        install -d -m 0755 "$(dirname "$ENV_FILE")"
+        env_snippet > "$ENV_FILE"
+        say "wrote $ENV_FILE"
+        say "add this to your shell rc:"
+        note ". \"$ENV_FILE\""
+    else
+        env_snippet
+    fi
+}
+
+# ---------------------------------------------------------------------------------------
+# system
+# ---------------------------------------------------------------------------------------
+
+cmd_system() {
+    if [ "$DRY_RUN" -eq 0 ] && [ "$(id -u)" -ne 0 ]; then
+        die "system changes need root; re-run:  sudo $0 system"
+    fi
+    [ "$DRY_RUN" -eq 1 ] && say "(dry run — nothing will change)"
+    apply_swappiness
+    install_zram
+    relax_oomd
+    say
+    say "done. Start a new login shell (or source the env) to pick up the toolchain pins."
+}
+
+# Prefer the fast zram swap (priority 100) over the disk file. With zram in front, a high
+# swappiness sends reclaim to RAM rather than to the HDD's seek latency.
+apply_swappiness() {
+    say "swap tuning"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        note "would write $SYSCTL_FILE with vm.swappiness=100"
+        return
+    fi
+    cat > "$SYSCTL_FILE" <<'EOF'
+# Prefer the fast zram swap (priority 100) over the disk swap file. See script/dev-env.
+vm.swappiness=100
+EOF
+    sysctl -q -p "$SYSCTL_FILE"
+    note "vm.swappiness=$(cat /proc/sys/vm/swappiness)"
+}
+
+# A compressed swap device in RAM, with higher priority than /swap.img so it is used first.
+# Installed as a small helper plus a oneshot unit, so it survives reboots without pulling in
+# a distro package (and without touching the existing swap).
+install_zram() {
+    say "zram compressed swap"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        note "would install $ZRAM_HELPER, $ZRAM_MODULES, $ZRAM_UNIT and enable the unit"
+        return
+    fi
+
+    install -d -m 0755 "$(dirname "$ZRAM_HELPER")"
+    cat > "$ZRAM_HELPER" <<'ZRAM'
+#!/bin/sh
+# Configure a zram compressed swap device, idempotently. Generated by script/dev-env.
+set -eu
+modprobe zram
+# /dev/zram0 appears once udev has settled.
+i=0
+while [ "$i" -lt 20 ] && [ ! -b /dev/zram0 ]; do sleep 0.1; i=$((i + 1)); done
+[ -b /dev/zram0 ] || { echo "zram0 did not appear" >&2; exit 1; }
+# Already enabled (by us or otherwise): leave it alone.
+if swapon --show=NAME --noheadings 2>/dev/null | grep -q zram; then
+    exit 0
+fi
+: "${ZRAM_SIZE_MB:=$(awk '/MemTotal/ { printf "%d", $2 / 1024 / 2 }' /proc/meminfo)}"
+echo zstd > /sys/block/zram0/comp_algorithm 2>/dev/null || true
+echo "${ZRAM_SIZE_MB}M" > /sys/block/zram0/disksize
+mkswap /dev/zram0 >/dev/null
+swapon --priority 100 /dev/zram0
+ZRAM
+    chmod 0755 "$ZRAM_HELPER"
+
+    echo zram > "$ZRAM_MODULES"
+    cat > "$ZRAM_UNIT" <<UNIT
+[Unit]
+Description=zram compressed swap (bite-gpui dev env)
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=$ZRAM_HELPER
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+    systemctl daemon-reload
+    systemctl enable --now bite-gpui-zram.service
+    swapon --show | grep -q zram && note "zram is active" || warn "zram did not come up"
+}
+
+# Raise (or disable) the pressure at which systemd-oomd may kill the session. This is the
+# trade-off knob: with zram and bounded builds the pressure is survivable, so tolerating
+# more of it beats losing the editor mid-build.
+relax_oomd() {
+    say "systemd-oomd memory-pressure limit"
+    local user uid
+    user="$(session_user)"
+    uid="$(id -u "$user" 2>/dev/null || echo 1000)"
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        if [ "$OOMD_LIMIT" -eq 0 ]; then
+            note "would disable oomd killing for user@$uid"
+        else
+            note "would raise the limit to ${OOMD_LIMIT}% for user@$uid"
+        fi
+        return
+    fi
+
+    install -d -m 0755 "$OOMD_DROPIN_DIR"
+    if [ "$OOMD_LIMIT" -eq 0 ]; then
+        cat > "$OOMD_DROPIN" <<'EOF'
+# Tolerate memory pressure instead of killing the session. See script/dev-env.
+[Service]
+ManagedOOMMemoryPressure=auto
+EOF
+    else
+        cat > "$OOMD_DROPIN" <<EOF
+# Tolerate memory pressure instead of killing the session. See script/dev-env.
+[Service]
+ManagedOOMMemoryPressureLimit=${OOMD_LIMIT}%
+EOF
+    fi
+
+    systemctl daemon-reload
+    # Apply live. Never restart user@.service: that ends the session.
+    if [ "$OOMD_LIMIT" -eq 0 ]; then
+        systemctl set-property --runtime "user@$uid.service" ManagedOOMMemoryPressure=auto \
+            || warn "could not set the property live; it applies at next login"
+    else
+        systemctl set-property --runtime "user@$uid.service" ManagedOOMMemoryPressureLimit="${OOMD_LIMIT}%" \
+            || warn "could not set the property live; it applies at next login"
+    fi
+    note "drop-in written: $OOMD_DROPIN"
+}
+
+# ---------------------------------------------------------------------------------------
+# driver
+# ---------------------------------------------------------------------------------------
+
+cmd_help() {
+    awk 'NR >= 3 && /^#/ { sub(/^# ?/, ""); print; next } NR >= 3 { exit }' "${BASH_SOURCE[0]}"
+}
+
+main() {
+    local command="status"
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            status|env|system) command="$1" ;;
+            --dry-run)        DRY_RUN=1 ;;
+            --write)          WRITE_ENV=1 ;;
+            --oomd-limit)     shift; OOMD_LIMIT="${1:-}" ;;
+            -h|--help|help)   command="help" ;;
+            *) die "unknown argument: $1 (try: $0 help)" ;;
+        esac
+        shift
+    done
+
+    case "$OOMD_LIMIT" in
+        ''|*[!0-9]*) die "--oomd-limit must be a number 0-100" ;;
+    esac
+    [ "$OOMD_LIMIT" -le 100 ] || die "--oomd-limit must be 0-100"
+
+    case "$command" in
+        status) cmd_status ;;
+        env)    cmd_env ;;
+        system) cmd_system ;;
+        help)   cmd_help ;;
+    esac
+}
+
+main "$@"
