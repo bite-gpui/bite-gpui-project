@@ -10,10 +10,11 @@
 - **The probe** is a scratch crate, `bite-gpui`/`probes/linux-dmabuf`, kept beside the other probes.
   Run with `cargo run --manifest-path probes/linux-dmabuf/Cargo.toml` on a Linux host.
 - **Status:** the environment, the flat-linear `VkImage` import, the wgpu adoption plus shader sample,
-  and the `B8G8R8A8` (`ARGB8888`) format map are measured on real hardware and pass. The
-  tiled-modifier query, `NV12` and fence cases of
-  [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md) §4.4–§4.5 are still open,
-  so the Linux arm is *mechanically possible* rather than *ready*.
+  and the `B8G8R8A8` (`ARGB8888`) format map are measured on real hardware and pass. The driver
+  enumerates Intel tiled modifiers (`X_TILED`, `Y_TILED`, `Y_TILED_CCS`), and a `Y_TILED` producer
+  exports its image; the consumer's import still mismatches on the explicit plane layout. The `NV12`
+  and fence cases of [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md)
+  §4.4–§4.5 are still open, so the Linux arm is *mechanically possible* rather than *ready*.
 
 ## 1. What the source settles
 
@@ -89,17 +90,18 @@ one-line dismissal: the dma-buf transport is mechanically available *and* the re
 works on Linux, not just on Windows.
 
 **It is not "ready".** The pass is the flat, `DRM_FORMAT_MOD_LINEAR` case in `R8G8B8A8` and
-`B8G8R8A8`. A real producer emits `NV12` with a vendor tiling modifier. The tiled-modifier query
-returns `ERROR_FORMAT_NOT_SUPPORTED` on this driver, and `NV12` is not yet run (§5), so W3 stays gated
-on those before the Linux arm is built.
+`B8G8R8A8`. A real producer emits `NV12` with a vendor tiling modifier. The tiled `Y_TILED` import
+mismatches on the explicit plane layout, and `NV12` is not yet run (§5), so W3 stays gated on those
+before the Linux arm is built.
 
 ## 5. What is not measured
 
 - **The format map and a real layout.** `R8G8B8A8` and `B8G8R8A8` (the `ABGR8888` and `ARGB8888`
-  fourccs) are measured linear. A tiled (vendor) modifier and `NV12` two-plane are the cases
+  fourccs) are measured linear. The driver enumerates Intel tiled modifiers (`X_TILED`, `Y_TILED`,
+  `Y_TILED_CCS`); a `Y_TILED` producer creates, clears and exports its image, but the consumer's
+  import mismatches on the explicit plane layout. `NV12` two-plane remains. These are the cases
   [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md) §4.4 requires before the
-  path counts; the tiled-modifier query returns `ERROR_FORMAT_NOT_SUPPORTED` on this driver, so that
-  case still needs the right query pattern.
+  path counts.
 - **Synchronisation.** No dma-fence (`sync_file`) orders the producer against the consumer — the
   Linux counterpart of the keyed mutex and the `MTLSharedEvent` (§4.5).
 - **Cross-device.** Export and import run on one device (the integrated GPU). Intel producer →

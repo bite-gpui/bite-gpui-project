@@ -63,9 +63,9 @@ fence are measured; **adoption is not** — nothing yet builds an `MTLTexture` o
 **P3 — dma-buf import on Linux (gates W3).** Run: the environment (three devices, all extensions), the
 flat-linear `VkImage` import, the wgpu adoption plus shader sample, and the `ARGB8888` format map all
 pass on real hardware ([`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md));
-the tiled-modifier query (`ERROR_FORMAT_NOT_SUPPORTED`), `NV12` and the dma-fence are the unmeasured
-remainder, so W3 is still gated. The full specification is
-[`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md).
+the driver enumerates Intel tiled modifiers and a `Y_TILED` producer exports one, but the consumer's
+import mismatches on the explicit plane layout. `NV12` and the dma-fence are the unmeasured remainder,
+so W3 is still gated. The full specification is [`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md).
 
 **P4 — what a video surface actually is (shapes an additive pass; does *not* gate W2).** The
 straight-through fragment assumes RGBA, and a VA-API/MF/NVDEC decoder emits NV12/YCbCr, often 10-bit —

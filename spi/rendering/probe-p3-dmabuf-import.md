@@ -1,8 +1,9 @@
 # P3: dma-buf import on Linux
 
 - **Status:** run — the environment, the flat-linear `VkImage` import, the wgpu adoption plus shader
-  sample, and the `B8G8R8A8` (`ARGB8888`) format map all pass; the tiled-modifier query, `NV12` and
-  fence cases remain. The printout and outcome are
+  sample, and the `B8G8R8A8` (`ARGB8888`) format map all pass; the driver enumerates Intel tiled
+  modifiers, and a `Y_TILED` producer exports its image, but the consumer's import mismatches on the
+  explicit plane layout. `NV12` and fence cases remain. The printout and outcome are
   [`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md). It gates the Linux
   surface arm ([`surface-plan.md`](surface-plan.md) W3, [`interop-crate.md`](interop-crate.md) §3).
 - **Question:** on Linux, can a producer that is *not* wgpu — a hardware decoder, a Wayland client —
