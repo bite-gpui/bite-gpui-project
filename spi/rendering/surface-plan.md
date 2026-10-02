@@ -20,11 +20,18 @@ Each is independent of the ones below it unless the table says otherwise.
 | --- | --- | --- | --- |
 | **W1** | **Core hygiene — done.** `PixelBuffer`, and `render_scene` split from `read_pixels` | `crates/gpui_engine/src/renderer.rs:19`, `:102`, `:110` | upstream PR 1 lands; the rows in [`verification.md`](verification.md) §2 pass |
 | **W2** | **Windows surface arm — done.** RGBA/BGRA only. Extend `SurfaceSource` with the DirectX variant and implement `draw_surfaces` | `crates/gpui_authoring/src/elements/surface.rs:13`; `crates/gpui_windows/src/directx_renderer.rs:852` (retarget `:862`) | an **RGBA/BGRA** SRV composites through `surface()` on `windows-latest`; upstream PR 2. YCbCr is deliberately out (P4) |
-| **W3** | **Linux surface arm.** The `DmaBuf` variant and its import — *phase 2 landed* (the descriptor, the `SurfaceSource` arm, the element, the wgpu import and composite) | `crates/gpui_engine/src/dmabuf.rs`; `crates/gpui_wgpu/src/dmabuf.rs` (the import); `crates/gpui_wgpu/src/wgpu_renderer.rs` (`draw_surfaces`); `gpui_linux` | a dma-buf composites on a Linux host with an adapter; the buffer must be uncompressed and self-describing under its modifier, and `NV12` is sampled as two plane textures — **P3 cleared** |
+| **W3** | **Linux surface arm.** The `DmaBuf` variant and its import — *demo added* | `crates/gpui_engine/src/dmabuf.rs`; `crates/gpui_wgpu/src/dmabuf.rs` (the import); `crates/gpui_wgpu/src/wgpu_renderer.rs` (`draw_surfaces`); `crates/gpui_wgpu/examples/surface_dmabuf.rs` (the demo); `gpui_linux` | a dma-buf composites on a Linux host with an adapter — **RGBA verified byte-exact through the demo**, `NV12` written but not yet run; the buffer must be uncompressed and self-describing under its modifier, and `NV12` is sampled as two plane textures — **P3 cleared** |
 | **W4** | **`GpuCanvas` — done.** The authoring surface; Path A arm retargets onto `surface()`, the same-device arm onto `paint_imported_texture` | `crates/gpui_authoring` beside `canvas` | the hand-rolled demo becomes the element on all three platforms — Windows through `surface()`, Linux/macOS through `paint_imported_texture` |
 | **W5** | **`gpui-interop` — Host Mode.** Adapter matching, NT-handle export/import (D3D12/`wgpu` → D3D11), the fence bridge, and device-loss teardown | new downstream crate | the bridge composites with a producer on a second device, and survives the renderer losing its device — gated on **P2, P5, P6, P9** |
 | **W6** | **Guest runner.** Headless GPUI on a worker thread | the offscreen contract + a runner | a foreign loop drives GPUI and samples the frame — gated on **P1, P7** |
 | **W7** | **Path B — fork-carried, not an upstream PR.** | `crates/gpui_engine/src/custom_render.rs:41` (`Inline`) | no dependency on W2–W6; independent; upstream declined the callback primitive ([`upstream-prs.md`](upstream-prs.md) §5) |
+
+> **Hazard when running the Linux demo on a two-GPU machine.** The headless renderer chooses its
+> own adapter, and a userspace fault while GPU work is in flight can wedge a discrete GPU: an
+> earlier revision of the demo dropped the Vulkan loader before the device it made, and its crash
+> produced `NVRM: Xid 13` then repeated `Xid 158` (`NV_UFLUSH_FB_FLUSH` timeout) on an NVIDIA 930M
+> and hung the machine until reboot. Pin the adapter with `ZED_DEVICE_ID` to the integrated GPU
+> when running `surface_dmabuf`.
 
 **W1 and W2 are the upstream pair**, and the reason the unification is worth the retarget: they are
 PRs upstream will take, not a fork. W3–W6 are ours; W5 and W6 are one crate, planned in
