@@ -10,11 +10,13 @@
 - **The probe** is a scratch crate, `bite-gpui`/`probes/linux-dmabuf`, kept beside the other probes.
   Run with `cargo run --manifest-path probes/linux-dmabuf/Cargo.toml` on a Linux host.
 - **Status:** the environment, the flat-linear `VkImage` import, the wgpu adoption plus shader sample,
-  the `B8G8R8A8` (`ARGB8888`) format map, and the `sync_file` fence are measured on real hardware and
-  pass. The driver enumerates Intel tiled modifiers (`X_TILED`, `Y_TILED`, `Y_TILED_CCS`), and a
-  `Y_TILED` producer exports its image; the consumer's import still mismatches on the explicit plane
-  layout. `NV12` remains ([`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md)
-  §4.4), so the Linux arm is *mechanically possible* rather than *ready*.
+  the `B8G8R8A8` (`ARGB8888`) format map, the tiled `Y_TILED` import, and the `sync_file` fence are
+  measured on real hardware and pass. The tiled case surfaced one caveat: a producer must not let the
+  driver compress the surface — ANV enables implicit (CCS) compression for a sampled `Y_TILED`
+  `R8G8B8A8` image by default, and that state is not carried by the exported single-plane dma-buf, so
+  a consumer importing it reads the compressed payload as raw bytes. `NV12` remains
+  ([`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md) §4.4), so the Linux arm is
+  *mechanically possible* rather than *ready*.
 
 ## 1. What the source settles
 
@@ -93,8 +95,14 @@ modifiers for R8G8B8A8_UNORM:
   I915_FORMAT_MOD_Y_TILED_CCS (0x0100000000000004), planes 2, sampled true
 
 === tiled round trip, I915_FORMAT_MOD_Y_TILED (0x0100000000000002) ===
-producer: exported fd 43, 16x16 tiled, modifier I915_FORMAT_MOD_Y_TILED (0x0100000000000002)
-round trip: 1024 bytes MISMATCH through a tiled VkImage
+  VK_EXT_image_compression_control: false
+  VK_EXT_image_drm_format_modifier: true
+  external dma-buf features: EXPORTABLE | IMPORTABLE, compatible handle types: OPAQUE_FD | DMA_BUF_EXT
+producer: modifier 0x100000000000002, plane layout offset=0 size=4096 row_pitch=128
+producer: exported fd 43, 16x16 tiled
+consumer: imported fd, modifier 0x100000000000002, plane layout offset=0 size=4096 row_pitch=128
+  producer self-readback: 1024/1024 bytes match
+round trip: tiled VkImage 1024/1024 bytes match the producer's gradient — MATCH
 
 === sync_file fence probe ===
 producer: cleared, signaled, exported sync_file fd 43
@@ -114,17 +122,31 @@ fence orders the producer against the consumer with no CPU stall. This corrects 
 dismissal: the dma-buf transport is mechanically available *and* the renderer's adoption seam works on
 Linux, not just on Windows.
 
-**It is not "ready".** The pass is the flat, `DRM_FORMAT_MOD_LINEAR` case in `R8G8B8A8` and
-`B8G8R8A8`. A real producer emits `NV12` with a vendor tiling modifier. The tiled `Y_TILED` import
-mismatches on the explicit plane layout, and `NV12` is not yet run (§5), so W3 stays gated on those
-before the Linux arm is built.
+**The tiled case passes too, with one producer-side caveat.** With the producer's surface left
+uncompressed, a `Y_TILED` dma-buf round-trips byte-for-byte through a *second* `VkImage` created with
+`VkImageDrmFormatModifierExplicitCreateInfoEXT` on the producer's own plane layout (offset 0, size
+4096, row pitch 128) — the same contract a foreign producer imposes. The caveat is what the first
+attempt hit: ANV enables lossless (CCS) compression by default for a sampled `Y_TILED` `R8G8B8A8`
+image, and that compression state is **not** carried by the exported single-plane dma-buf, so a
+consumer reading the plane sees the compressed payload as raw bytes. The probe isolates this rather
+than guessing: after a CPU write of a uniform sentinel into the shared memory, the producer's own
+image reads back *non-uniform* (`cc 66 66 72 …`) while the importer reads it uniform — a transform no
+tiling permutation could produce, i.e. decompression state the plane does not describe. Requesting
+`VK_IMAGE_USAGE_STORAGE_BIT` on the producer image makes ANV allocate it uncompressed, and the round
+trip is then byte-exact. `VK_EXT_image_compression_control`, which would disable the compression
+directly, is not advertised by this driver.
+
+**It is not "ready".** The pass is `R8G8B8A8`/`B8G8R8A8`, linear and `Y_TILED`. A real producer emits
+`NV12` with a vendor tiling modifier; `NV12` is not yet run (§5), so W3 stays gated on it before the
+Linux arm is built.
 
 ## 5. What is not measured
 
-- **The format map and a real layout.** `R8G8B8A8` and `B8G8R8A8` (the `ABGR8888` and `ARGB8888`
-  fourccs) are measured linear. The driver enumerates Intel tiled modifiers (`X_TILED`, `Y_TILED`,
-  `Y_TILED_CCS`); a `Y_TILED` producer creates, clears and exports its image, but the consumer's
-  import mismatches on the explicit plane layout. `NV12` two-plane remains. These are the cases
+- **`NV12` two-plane.** `R8G8B8A8` and `B8G8R8A8` (the `ABGR8888` and `ARGB8888` fourccs) are
+  measured linear and `Y_TILED`. The driver enumerates Intel tiled modifiers (`X_TILED`, `Y_TILED`,
+  `Y_TILED_CCS`) and the `Y_TILED` import is byte-exact once the producer's surface is uncompressed.
+  `NV12` two-plane remains, and it needs more than an import: sampling a two-plane YCbCr format needs
+  `VK_KHR_sampler_ycbcr_conversion` or a shader-side conversion. These are the cases
   [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md) §4.4 requires before the
   path counts.
 - **Cross-device.** Export, import and the `sync_file` fence all run on one device (the integrated
