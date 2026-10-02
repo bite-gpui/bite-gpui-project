@@ -61,9 +61,10 @@ fence are measured; **adoption is not** — nothing yet builds an `MTLTexture` o
 [`probe-p2-macos-adoption.md`](probe-p2-macos-adoption.md).
 
 **P3 — dma-buf import on Linux (gates W3).** Run: the environment (three devices, all extensions), the
-flat-linear `VkImage` import, and the wgpu adoption plus shader sample all pass on real hardware
-([`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md)); the tiled/`NV12`
-cases and the dma-fence are the unmeasured remainder, so W3 is still gated. The full specification is
+flat-linear `VkImage` import, the wgpu adoption plus shader sample, and the `ARGB8888` format map all
+pass on real hardware ([`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md));
+the tiled-modifier query (`ERROR_FORMAT_NOT_SUPPORTED`), `NV12` and the dma-fence are the unmeasured
+remainder, so W3 is still gated. The full specification is
 [`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md).
 
 **P4 — what a video surface actually is (shapes an additive pass; does *not* gate W2).** The

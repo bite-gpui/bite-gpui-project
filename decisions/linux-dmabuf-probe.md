@@ -9,10 +9,11 @@
   (wgpu/Vulkan) renderer a fd it imports and samples?
 - **The probe** is a scratch crate, `bite-gpui`/`probes/linux-dmabuf`, kept beside the other probes.
   Run with `cargo run --manifest-path probes/linux-dmabuf/Cargo.toml` on a Linux host.
-- **Status:** the environment, the flat-linear `VkImage` import, and the wgpu adoption plus shader
-  sample are measured on real hardware and pass. The tiled-modifier, `NV12` and fence cases of
-  [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md) §4.4–§4.5 are not yet
-  measured, so the Linux arm is *mechanically possible* rather than *ready*.
+- **Status:** the environment, the flat-linear `VkImage` import, the wgpu adoption plus shader sample,
+  and the `B8G8R8A8` (`ARGB8888`) format map are measured on real hardware and pass. The
+  tiled-modifier query, `NV12` and fence cases of
+  [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md) §4.4–§4.5 are still open,
+  so the Linux arm is *mechanically possible* rather than *ready*.
 
 ## 1. What the source settles
 
@@ -82,19 +83,23 @@ the NVIDIA discrete GPU on the proprietary driver, and the llvmpipe software ras
 four external-memory extensions, so the import is refused nowhere. On the Intel device, a raw-Vulkan
 producer allocated a dma-buf, bound a linear `VkImage` over it, exported its fd; a consumer imported
 it byte-for-byte (no CPU copy); and wgpu adopted that imported image and sampled it through a shader,
-reading the known colour back exactly. This corrects 0002's one-line dismissal: the dma-buf transport
-is mechanically available *and* the renderer's adoption seam works on Linux, not just on Windows.
+reading the known colour back exactly. The same round trip holds for both `R8G8B8A8` and `B8G8R8A8`
+(the `ABGR8888` and `ARGB8888` fourccs), so the fourcc→`VkFormat` map is right. This corrects 0002's
+one-line dismissal: the dma-buf transport is mechanically available *and* the renderer's adoption seam
+works on Linux, not just on Windows.
 
-**It is not "ready".** The pass is the flat, `DRM_FORMAT_MOD_LINEAR` `R8G8B8A8_UNORM` case. A real
-producer emits `NV12` with a vendor tiling modifier — neither of which this run measures (§5) — so W3
-stays gated on those before the Linux arm is built.
+**It is not "ready".** The pass is the flat, `DRM_FORMAT_MOD_LINEAR` case in `R8G8B8A8` and
+`B8G8R8A8`. A real producer emits `NV12` with a vendor tiling modifier. The tiled-modifier query
+returns `ERROR_FORMAT_NOT_SUPPORTED` on this driver, and `NV12` is not yet run (§5), so W3 stays gated
+on those before the Linux arm is built.
 
 ## 5. What is not measured
 
-- **The format map and a real layout.** Only `R8G8B8A8_UNORM` linear is measured. `XRGB8888`, a
-  tiled (vendor) modifier, and `NV12` two-plane are the cases
+- **The format map and a real layout.** `R8G8B8A8` and `B8G8R8A8` (the `ABGR8888` and `ARGB8888`
+  fourccs) are measured linear. A tiled (vendor) modifier and `NV12` two-plane are the cases
   [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md) §4.4 requires before the
-  path counts.
+  path counts; the tiled-modifier query returns `ERROR_FORMAT_NOT_SUPPORTED` on this driver, so that
+  case still needs the right query pattern.
 - **Synchronisation.** No dma-fence (`sync_file`) orders the producer against the consumer — the
   Linux counterpart of the keyed mutex and the `MTLSharedEvent` (§4.5).
 - **Cross-device.** Export and import run on one device (the integrated GPU). Intel producer →
