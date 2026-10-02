@@ -127,8 +127,13 @@ The renderer's obligation is one method, `draw_surfaces`:
   external producer writing the resource next frame cannot race the bind.
 - **Fault softly.** A surface with zero dimensions or an invalid state is dropped for that frame,
   not a panic: the rest of the UI frame completes.
-- **Do not synchronise.** GPUI manages no fence and no keyed mutex; ordering an external writer
-  against GPUI's queue is the producer's obligation (or the interop crate's, §5).
+- **Consume the producer's fence; create none.** On Linux the handle carries an optional
+  `sync_file` (`acquire_fence`), and `draw_surfaces` waits on it before sampling — dropping the
+  surface if it does not signal within about a frame. The wait is a *host* `poll(2)`: `wgpu` owns
+  its queue and offers no hook to make a submission wait on an external semaphore, and a queue-level
+  wait has no timeout, so a producer that never signals would stall the renderer forever where a
+  poll can give up. GPUI still creates no fence of its own, and the cross-API fence bridge (Windows)
+  stays downstream (§5).
 
 ## 4. Guest mode: GPUI inside a foreign loop
 
