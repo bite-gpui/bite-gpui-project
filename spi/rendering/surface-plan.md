@@ -20,7 +20,7 @@ Each is independent of the ones below it unless the table says otherwise.
 | --- | --- | --- | --- |
 | **W1** | **Core hygiene — done.** `PixelBuffer`, and `render_scene` split from `read_pixels` | `crates/gpui_engine/src/renderer.rs:19`, `:102`, `:110` | upstream PR 1 lands; the rows in [`verification.md`](verification.md) §2 pass |
 | **W2** | **Windows surface arm — done.** RGBA/BGRA only. Extend `SurfaceSource` with the DirectX variant and implement `draw_surfaces` | `crates/gpui_authoring/src/elements/surface.rs:13`; `crates/gpui_windows/src/directx_renderer.rs:852` (retarget `:862`) | an **RGBA/BGRA** SRV composites through `surface()` on `windows-latest`; upstream PR 2. YCbCr is deliberately out (P4) |
-| **W3** | **Linux surface arm.** The `DmaBuf` variant and its import | `crates/gpui_authoring/src/elements/surface.rs:13`; `gpui_linux` + `gpui_wgpu` | a dma-buf composites on a Linux host with an adapter — gated on **P3** |
+| **W3** | **Linux surface arm.** The `DmaBuf` variant and its import | `crates/gpui_authoring/src/elements/surface.rs:13`; `gpui_linux` + `gpui_wgpu` | a dma-buf composites on a Linux host with an adapter; the buffer must be uncompressed and self-describing under its modifier, and `NV12` is sampled as two plane textures — **P3 cleared** |
 | **W4** | **`GpuCanvas` — done.** The authoring surface; Path A arm retargets onto `surface()`, the same-device arm onto `paint_imported_texture` | `crates/gpui_authoring` beside `canvas` | the hand-rolled demo becomes the element on all three platforms — Windows through `surface()`, Linux/macOS through `paint_imported_texture` |
 | **W5** | **`gpui-interop` — Host Mode.** Adapter matching, NT-handle export/import (D3D12/`wgpu` → D3D11), the fence bridge, and device-loss teardown | new downstream crate | the bridge composites with a producer on a second device, and survives the renderer losing its device — gated on **P2, P5, P6, P9** |
 | **W6** | **Guest runner.** Headless GPUI on a worker thread | the offscreen contract + a runner | a foreign loop drives GPUI and samples the frame — gated on **P1, P7** |
@@ -60,13 +60,15 @@ fence are measured; **adoption is not** — nothing yet builds an `MTLTexture` o
 `texture_from_raw` over the hand-built `MTLTexture`. *Pass:* a wgpu render reads the surface bytes. The full specification is
 [`probe-p2-macos-adoption.md`](probe-p2-macos-adoption.md).
 
-**P3 — dma-buf import on Linux (gates W3).** Run: the environment (three devices, all extensions), the
-flat-linear `VkImage` import, the wgpu adoption plus shader sample, the `ARGB8888` format map, the tiled
-`Y_TILED` import, and the `sync_file` fence all pass on real hardware
-([`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md)). The tiled import
-carries one producer-side condition — the surface must not be implicitly compressed, because ANV's
-CCS state is not in the exported single-plane dma-buf. `NV12` is the unmeasured remainder, so W3 is
-still gated. The full specification is [`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md).
+**P3 — dma-buf import on Linux (gates W3).** Run: every case probe 4 requires passes on real hardware
+— the environment (three devices, all extensions), the flat-linear `VkImage` import, the wgpu adoption
+plus shader sample, the `ARGB8888` format map, the tiled `Y_TILED` import, the `NV12` two-plane import
+with its shader-side colour conversion, and the `sync_file` fence
+([`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md)). W3 inherits two
+producer-side invariants: a tiled buffer must be uncompressed and self-describing under its modifier,
+and `NV12` is consumed as two plane textures with the matrix in the shader. Cross-device
+(Intel producer → NVIDIA consumer) is the unmeasured remainder. The full specification is
+[`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md).
 
 **P4 — what a video surface actually is (shapes an additive pass; does *not* gate W2).** The
 straight-through fragment assumes RGBA, and a VA-API/MF/NVDEC decoder emits NV12/YCbCr, often 10-bit —

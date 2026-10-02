@@ -90,6 +90,15 @@ both sides are wgpu). A Linux *cross-process* producer — a VA-API/NVDEC decode
 is exactly the case it is for. This corrects `0002`'s "Linux: no bridge needed", which was a claim
 about the same-device case alone.
 
+The Linux arm carries two invariants the P3 probe established
+([`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md)). First, the buffer
+must be **self-contained and uncompressed under its declared modifier**: ANV enables implicit (CCS)
+compression for a sampled tiled image, and that state is not carried by a single-plane dma-buf, so a
+compressed producer imports as raw compressed bytes. Second, an `NV12` buffer is consumed as **two
+plane textures** (`R8` + `R8G8`) with the colour matrix in the shader, because the native
+`VK_KHR_sampler_ycbcr_conversion` needs an immutable sampler `wgpu` cannot bind. `DmaBufHandle` is the
+consumer of that contract, not a place to negotiate it.
+
 ## 3. Host mode: composing external frames in
 
 GPUI owns the window, the loop and the swapchain; an external workload streams frames into a viewport.

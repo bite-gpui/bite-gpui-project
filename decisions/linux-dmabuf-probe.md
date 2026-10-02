@@ -10,13 +10,14 @@
 - **The probe** is a scratch crate, `bite-gpui`/`probes/linux-dmabuf`, kept beside the other probes.
   Run with `cargo run --manifest-path probes/linux-dmabuf/Cargo.toml` on a Linux host.
 - **Status:** the environment, the flat-linear `VkImage` import, the wgpu adoption plus shader sample,
-  the `B8G8R8A8` (`ARGB8888`) format map, the tiled `Y_TILED` import, and the `sync_file` fence are
-  measured on real hardware and pass. The tiled case surfaced one caveat: a producer must not let the
-  driver compress the surface — ANV enables implicit (CCS) compression for a sampled `Y_TILED`
-  `R8G8B8A8` image by default, and that state is not carried by the exported single-plane dma-buf, so
-  a consumer importing it reads the compressed payload as raw bytes. `NV12` remains
-  ([`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md) §4.4), so the Linux arm is
-  *mechanically possible* rather than *ready*.
+  the `B8G8R8A8` (`ARGB8888`) format map, the tiled `Y_TILED` import, the `NV12` two-plane import with
+  its shader-side colour conversion, and the `sync_file` fence are measured on real hardware and pass
+  — the probe's gate is cleared. Two producer-side conditions fell out and are now W3's contract: a
+  tiled buffer must be *self-describing and uncompressed* under its declared modifier (ANV's implicit
+  CCS state is not carried by a single-plane dma-buf), and a two-plane `NV12` buffer is sampled as two
+  `R8`/`R8G8` textures with the colour matrix done in the shader, because the native ycbcr conversion
+  needs an immutable sampler `wgpu` cannot bind. Cross-*device* (Intel producer → NVIDIA consumer) is
+  the only case left unmeasured ([`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md)).
 
 ## 1. What the source settles
 
@@ -42,7 +43,11 @@ The harness prints rather than asserts, in stages:
 4. the wgpu consumer importing the fd on its own device, adopting the image
    (`texture_from_raw` + `create_texture_from_hal`), and sampling it through a compute shader;
 5. the driver's DRM format modifiers, and a tiled `Y_TILED` round trip;
-6. the `sync_file` fence: the producer signals a `SYNC_FD` semaphore, the consumer imports the fd and
+6. the `NV12` two-plane round trip: the producer exports one fd carrying a luma plane and an
+   interleaved chroma plane, the raw consumer reads each plane back through its own `VkImage`, and the
+   wgpu consumer adopts the two planes as `R8`/`R8G8` textures and converts them with a shader-side
+   BT.709 matrix;
+7. the `sync_file` fence: the producer signals a `SYNC_FD` semaphore, the consumer imports the fd and
    waits on it before copying.
 
 ## 3. The printout
@@ -104,6 +109,13 @@ consumer: imported fd, modifier 0x100000000000002, plane layout offset=0 size=40
   producer self-readback: 1024/1024 bytes match
 round trip: tiled VkImage 1024/1024 bytes match the producer's gradient — MATCH
 
+=== NV12 two-plane round trip (32x32) ===
+  VK_KHR_sampler_ycbcr_conversion: true (unused — dual-plane shader conversion)
+producer: exported fd 43, 32x32 NV12, Y@0 U/V@1024, 1536 bytes
+consumer: imported fd 43, read Y 1024/1024 and U/V 512/512 bytes back through VkImages
+consumer: adopted fd 43 and fd 44 into wgpu textures on "Intel(R) HD Graphics 520 (SKL GT2)"
+sample: NV12 -> RGB, 1024 pixels, 1024/1024 match the BT.709 matrix
+
 === sync_file fence probe ===
 producer: cleared, signaled, exported sync_file fd 43
 fence: producer's clear read back after a sync_file wait — MATCH, no tear
@@ -136,21 +148,27 @@ tiling permutation could produce, i.e. decompression state the plane does not de
 trip is then byte-exact. `VK_EXT_image_compression_control`, which would disable the compression
 directly, is not advertised by this driver.
 
-**It is not "ready".** The pass is `R8G8B8A8`/`B8G8R8A8`, linear and `Y_TILED`. A real producer emits
-`NV12` with a vendor tiling modifier; `NV12` is not yet run (§5), so W3 stays gated on it before the
-Linux arm is built.
+**`NV12` passes too, as two plane textures and a shader-side matrix.** The producer exported one fd
+carrying a 32×32 luma plane and a 16×16 interleaved chroma plane; a raw consumer imported it and read
+both planes back through their own `VkImage`s byte-for-byte (Y 1024/1024, U/V 512/512); and the wgpu
+consumer adopted the two planes as `R8Unorm` and `Rg8Unorm` textures and converted them in a compute
+shader, matching the same BT.709 matrix computed on the CPU for all 1024 pixels. The conversion is
+done in the shader, not with `VK_KHR_sampler_ycbcr_conversion` even though the driver exposes it: the
+native conversion requires an immutable sampler baked into the descriptor-set and pipeline layout,
+which `wgpu` has no abstraction for, so a consumer built on `wgpu` cannot bind it. Two plane textures
+and a matrix is the shape Chromium Ozone, mpv and WebCodecs use, and the one that fits.
+
+**The gate is cleared.** Every case probe 4 requires — the fourcc→`VkFormat` map, a vendor-tiled
+modifier, and `NV12` — now passes on real hardware with no CPU copy. W3 is no longer blocked on the
+probe, and it carries two producer-side invariants the probe established: a tiled buffer must be
+uncompressed and self-describing under its declared modifier, and an `NV12` buffer is consumed as two
+plane textures with the colour conversion in the shader.
 
 ## 5. What is not measured
 
-- **`NV12` two-plane.** `R8G8B8A8` and `B8G8R8A8` (the `ABGR8888` and `ARGB8888` fourccs) are
-  measured linear and `Y_TILED`. The driver enumerates Intel tiled modifiers (`X_TILED`, `Y_TILED`,
-  `Y_TILED_CCS`) and the `Y_TILED` import is byte-exact once the producer's surface is uncompressed.
-  `NV12` two-plane remains, and it needs more than an import: sampling a two-plane YCbCr format needs
-  `VK_KHR_sampler_ycbcr_conversion` or a shader-side conversion. These are the cases
-  [`probe-p3-dmabuf-import.md`](../spi/rendering/probe-p3-dmabuf-import.md) §4.4 requires before the
-  path counts.
 - **Cross-device.** Export, import and the `sync_file` fence all run on one device (the integrated
   GPU). Intel producer → NVIDIA consumer is the hybrid case dma-buf exists for, and is not yet run, so
   cross-*device* ordering is unmeasured too.
 - **Hardware.** One machine; the NVIDIA and llvmpipe rows are enumerated but not round-tripped, so a
-  pass is *works on this adapter* rather than *works everywhere*.
+  pass is *works on this adapter* rather than *works everywhere*. The tiled import is also measured
+  only on ANV, where the compression behaviour above is specific to the Intel driver.

@@ -1,12 +1,13 @@
 # P3: dma-buf import on Linux
 
-- **Status:** run — the environment, the flat-linear `VkImage` import, the wgpu adoption plus shader
-  sample, the `B8G8R8A8` (`ARGB8888`) format map, the tiled `Y_TILED` import, and the `sync_file` fence
-  all pass. The tiled pass needs one producer-side condition: the surface must not be left compressed
-  — ANV enables implicit (CCS) compression for a sampled `Y_TILED` `R8G8B8A8` image, and that state is
-  not carried by the exported single-plane dma-buf, so the importer reads raw compressed bytes;
-  requesting `STORAGE` usage makes the allocation uncompressed and the import byte-exact. `NV12`
-  remains. The printout and outcome are
+- **Status:** run — every case probe 4 requires passes on real hardware: the environment, the
+  flat-linear `VkImage` import, the wgpu adoption plus shader sample, the `ABGR8888`/`ARGB8888` format
+  map, the tiled `Y_TILED` import, the `NV12` two-plane import with its shader conversion, and the
+  `sync_file` fence. Two producer-side conditions fell out for W3: a tiled buffer must be uncompressed
+  and self-describing under its declared modifier (ANV's implicit CCS state is not carried by a
+  single-plane dma-buf), and `NV12` is consumed as two `R8`/`R8G8` textures with the colour matrix in
+  the shader, because the native ycbcr conversion needs an immutable sampler `wgpu` cannot bind. The
+  printout and outcome are
   [`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md). It gates the Linux
   surface arm ([`surface-plan.md`](surface-plan.md) W3, [`interop-crate.md`](interop-crate.md) §3).
 - **Question:** on Linux, can a producer that is *not* wgpu — a hardware decoder, a Wayland client —
