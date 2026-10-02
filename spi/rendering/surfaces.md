@@ -160,10 +160,13 @@ what is unbuilt is the runner that ties the loop together, and it belongs with t
 
 ## 5. The boundary: what core does *not* do
 
-Core GPUI stays free of `wgpu` and Direct3D 12. Everything that needs them — matching a `wgpu`
-adapter to GPUI's Direct3D 11 adapter by LUID, exporting and opening a shared NT handle, and
-bridging an `ID3D12Fence` to an `ID3D11Fence` — lives in a **downstream companion crate**
-(`gpui-interop`, a working name). Core publishes only the two things the crate needs: the device
+Core GPUI stays free of `wgpu` and Direct3D 12. Everything that needs them lives in a **downstream
+companion crate** (`gpui-interop`, a working name) — the same three-step interchange §2 calls the
+trinity, *match the adapter, move a handle, order the queues*, in each OS's clothes. Windows is the
+worked example (match a `wgpu` adapter to GPUI's Direct3D 11 adapter by LUID, export and open a shared
+NT handle, bridge an `ID3D12Fence` to an `ID3D11Fence`); macOS is the `IOSurface` case and Linux the
+dma-buf one, so the crate is cross-platform and only its Windows module is built first. Core publishes
+only the two things the crate needs: the device
 (`Window::device_any`, `crates/gpui_authoring/src/window.rs:3031`, erased on the traits at
 `crates/gpui_platform/src/platform_window.rs:159` and `:97`) and the surface element. This is
 [`0002`](../../decisions/0002-render-extension-device-model.md)'s deferred Tier 2, now *scheduled*

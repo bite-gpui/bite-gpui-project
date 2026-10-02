@@ -12,8 +12,8 @@
 
 | what | where |
 | --- | --- |
-| the canonical ref, and what every citation resolves against | `bite_v1.23.1-pre`, tip `69835be34b` (the merged surface arm, PR #9) |
-| what the canonical ref already carries | the renderer seam (#4), the fork's CI file (#5), Path A whole (#6), and the Windows surface arm plus `GpuCanvas` (#9) |
+| the canonical ref, and what every citation resolves against | `bite_v1.23.1-pre`, tip `81e87f0708` (the squashed dma-buf surface arm, PR #10, on top of the Windows arm, PR #9) |
+| what the canonical ref already carries | the renderer seam (#4), the fork's CI file (#5), Path A whole (#6), the Windows surface arm plus `GpuCanvas` (#9), and the Linux dma-buf surface arm (#10) |
 | the design of record for external pixels | [`surfaces.md`](surfaces.md) — the surface unification [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) decides — and its plan and probes in [`surface-plan.md`](surface-plan.md) |
 | the design of record for external pixels | [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) — the surface unification; its source, the *External Surfaces, Platform Interop, and Headless Rendering in GPUI* design record, is filed with the work |
 | Path A, whole | on the canonical ref, sixteen commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
@@ -93,11 +93,15 @@ implement `draw_surfaces` by retargeting the Direct3D arm that exists
 the design record and is built (#9); the Linux half adds the dma-buf variant and is gated on P3. This is what makes `surface()` a
 capability on every desktop rather than macOS alone.
 
-**M6 — the cross-API bridge, `gpui-interop`.** 0002's Tier 2, scheduled rather than deferred by 0005:
-the measured direction (Direct3D 12 / `wgpu` → Direct3D 11 shared NT handle, with an `ID3D12Fence`
-↔ `ID3D11Fence` handshake) is the built scope. The reverse — a Direct3D 11 producer feeding a `wgpu`
-consumer — is still the one direction neither probe measured
-([`producer-reach.md`](producer-reach.md) §6), so it keeps a probe of its own.
+**M6 — the cross-API bridge, `gpui-interop`.** 0002's Tier 2, scheduled rather than deferred by 0005.
+The crate is cross-platform — the same three-step interchange (match the adapter, move a handle, order
+the queues) in each OS's clothes, per [`surfaces.md`](surfaces.md) §2 — but only Windows is
+*measured*, so the Windows module is the scope to build first: a Direct3D 12 / `wgpu` producer → a
+Direct3D 11 shared NT handle, with an `ID3D12Fence` ↔ `ID3D11Fence` handshake. The macOS module waits
+on P2 (`IOSurface` adoption); the Linux module's cross-device case is already measured by P3 (dma-buf +
+`sync_file`). The reverse direction — a Direct3D 11 producer feeding a `wgpu` consumer — is still
+unmeasured ([`producer-reach.md`](producer-reach.md) §6) and is Guest Mode's, so it keeps a probe of
+its own ([`interop-crate.md`](interop-crate.md)).
 
 **M7 — guest / headless.** The offscreen contract is built (M2); what is left is the worker-thread
 runner that hosts GPUI inside a foreign loop, which belongs in `gpui-interop`.

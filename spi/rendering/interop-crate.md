@@ -64,6 +64,13 @@ Each platform module is written only if its probe passes: `windows` on **P5/P6/P
 direction (D3D12/`wgpu` → D3D11) and on **P1** for its reverse half (D3D11 → `wgpu`, which gates W6 and
 not W5); `macos` on **P2**; `linux` on **P3**.
 
+`adapter` is the one module on every platform, but only its *interface* is universal — the mechanism is
+Windows-only. There a foreign device is matched to the renderer by LUID; on macOS there is nothing to
+match, because wgpu's adapter *is* the `MetalRenderer`'s `MTLDevice`
+([`producer-reach.md`](producer-reach.md) §7); on Linux it is device-node selection. So `attach` must
+not become LUID-shaped: the honest off-Windows answer is a caller-supplied device or a `None`, not a
+failed match. That is part of why P6 runs before §4's shape is frozen.
+
 ## 4. Public surface (a sketch)
 
 ```rust

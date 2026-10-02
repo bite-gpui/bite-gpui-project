@@ -124,7 +124,7 @@ Three things to hold to, all from the design: **`attach` is fallible and `Adapte
 
 | module | types | gate |
 | --- | --- | --- |
-| `adapter` | `Adapter` — the LUID match, and the caller-supplied fallback | **P6** (run first) |
+| `adapter` | `Adapter` — the LUID match on Windows, a caller-supplied device (or `None`) elsewhere | **P6** (run first) |
 | `windows` | `SharedSurface` (D3D12 allocate → `CreateSharedHandle` → `OpenSharedResource1` → SRV), `Fence` (`ID3D12Fence`↔`ID3D11Fence`) | **P1**, **P5** |
 | `macos` | `AdoptedSurface` (an `MTLTexture` over an `IOSurface` built with `objc2-metal`, adopted into wgpu) | **P2** |
 | `linux` | `DmaBufSurface` (fd + fourcc + modifier → `VkImage`) | **P3** |

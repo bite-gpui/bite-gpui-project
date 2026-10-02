@@ -7,8 +7,9 @@
   a dma-buf to sample with no CPU copy.
 - **The question:** can a producer that is *not* wgpu allocate a dma-buf and hand GPUI's Linux
   (wgpu/Vulkan) renderer a fd it imports and samples?
-- **The probe** is a scratch crate, `bite-gpui`/`probes/linux-dmabuf`, kept beside the other probes.
-  Run with `cargo run --manifest-path probes/linux-dmabuf/Cargo.toml` on a Linux host.
+- **The probe** was a scratch crate, `bite-gpui`/`probes/linux-dmabuf`. It was removed from the
+  canonical ref once the arm landed — the measurement is what mattered, and the crate was ~2.7k lines
+  of one-shot harness — so the printout below is the evidence and the arm it produced is what ships.
 - **Status:** the environment, the flat-linear `VkImage` import, the wgpu adoption plus shader sample,
   the `B8G8R8A8` (`ARGB8888`) format map, the tiled `Y_TILED` import, the `NV12` two-plane import with
   its shader-side colour conversion, and the `sync_file` fence are measured on real hardware and pass

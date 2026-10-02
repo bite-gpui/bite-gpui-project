@@ -38,8 +38,10 @@ mention of it anywhere in `wgpu`, `wgpu-core` or `wgpu-hal`, no `wgpu::Features`
 — access to what it made, not influence over what it makes. Calling it anyway is undefined behaviour
 per the spec, so it is not a path to ship.
 
-**Why the probe did not see this:** P3 created its *own* device and enabled the extension on it
-(`probes/linux-dmabuf/src/main.rs:679`). The renderer's device is not that device. The probe answered
+**Why the probe did not see this:** P3 created its *own* device and enabled the extension on it (the
+probe crate is no longer carried; its printout is
+[`../decisions/linux-dmabuf-probe.md`](../decisions/linux-dmabuf-probe.md)). The renderer's device is
+not that device. The probe answered
 "can a tiled dma-buf be imported?" — yes — but not "on the device GPUI actually draws with". P3's
 result stands; the missing piece is enabling the extension on `wgpu`'s device.
 
