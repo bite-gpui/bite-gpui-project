@@ -1,8 +1,9 @@
 # P3: dma-buf import on Linux
 
-- **Status:** proposed — **not run.** The probe that gates the Linux surface arm
-  ([`surface-plan.md`](surface-plan.md) W3, [`interop-crate.md`](interop-crate.md) §3). It lives with
-  the work it gates and becomes a `decisions/` evidence record when it runs.
+- **Status:** run — the environment and the flat-linear `VkImage` import pass; the tiled/`NV12`/fence
+  cases and the shader sample remain. The printout and outcome are
+  [`../../decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md). It gates the Linux
+  surface arm ([`surface-plan.md`](surface-plan.md) W3, [`interop-crate.md`](interop-crate.md) §3).
 - **Question:** on Linux, can a producer that is *not* wgpu — a hardware decoder, a Wayland client —
   hand GPUI a **dma-buf** its renderer imports and samples, with no CPU copy?
 - **Gates:** W3. **Companion:** [`probe-p2-macos-adoption.md`](probe-p2-macos-adoption.md), the same
