@@ -29,6 +29,8 @@
 #     script/interop-vm create                   # create the qcow2 disk
 #     script/interop-vm install --iso ISO        # boot the installer, GPU passed through
 #     script/interop-vm run                      # boot the installed disk
+#     sudo script/interop-vm prepare             # keep the GPU for VFIO at boot, then reboot
+#     sudo script/interop-vm prepare --revert    # undo that
 #
 # Options:
 #     --iso PATH       the installer ISO (required by `install`)
@@ -37,11 +39,26 @@
 #     --ram SIZE       guest RAM (default 4G)
 #     --cpus N         guest CPUs (default 2)
 #     --uefi           boot OVMF instead of SeaBIOS (only if the GPU has a UEFI GOP)
-#     --vnc            no local window; serve VNC on :0
+#     --vnc            no local window; serve VNC on 127.0.0.1:0 (localhost only)
+#     --rom PATH       pass a VBIOS dump to the GPU (`romfile=`)
+#     --no-rom         hide the GPU option ROM (`rombar=0`) instead of passing it
 #     --cpu MODEL      override `-cpu` (default host,kvm=off)
+#     --revert         `prepare`: undo the boot-time binding
 #     --dry-run        print the commands, change nothing
 #
-# `check` is read-only and safe. `bind`/`unbind` need root and touch the PCI device.
+# `check` is read-only and safe. `bind`/`unbind`/`prepare` need root and touch the PCI
+# device.
+#
+# `prepare` exists because a live `bind` cannot succeed while the desktop holds the GPU:
+# GNOME Shell, terminals and editors open /dev/nvidia* during EGL/Vulkan enumeration, and
+# nvidia will not release a device with a non-zero usage count
+# (`NVRM: Attempting to remove device ... with non-zero usage count!`). Keeping the GPU
+# off the host from boot means passthrough never needs a live unbind, so the guest runs
+# alongside the GNOME session.
+#
+# The GPU is a MUX-less laptop 3D controller with no readable VBIOS, so QEMU warns
+# (`Cannot read device rom at 0000:01:00.0`) and carries on. If the guest driver needs it
+# later, pass a dump with `--rom`; `--no-rom` silences the probe instead.
 
 set -euo pipefail
 
@@ -54,9 +71,20 @@ CPUS=2
 CPU_MODEL=host,kvm=off
 UEFI=0
 VNC=0
+ROM=""
+ROMBAR=""
 DRY_RUN=0
 ISO=""
 CMD=""
+
+PREPARE_REVERT=0
+MODPROBE_CONF=/etc/modprobe.d/vfio-nvidia.conf
+MODULES_LOAD=/etc/modules-load.d/vfio-pci.conf
+UDEV_RULE=/etc/udev/rules.d/10-vfio.rules
+MEMLOCK_CONF=/etc/security/limits.d/99-vfio-memlock.conf
+INITRAMFS_MODULES=/etc/initramfs-tools/modules
+VFIO_MODULES="vfio vfio_iommu_type1 vfio_pci"
+NVIDIA_UNITS="nvidia-powerd.service nvidia-persistenced.service nvidia-suspend.service nvidia-hibernate.service nvidia-resume.service nvidia-suspend-then-hibernate.service"
 
 say()  { printf '%s\n' "$*"; }
 note() { printf '  %s\n' "$*"; }
@@ -86,7 +114,7 @@ usage() { awk 'NR >= 3 && /^#/ { sub(/^# ?/, ""); print; next } NR >= 3 { exit }
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        check|bind|unbind|create|install|run) CMD="$1" ;;
+        check|bind|unbind|create|install|run|prepare) CMD="$1" ;;
         --iso)   shift; ISO="${1:?--iso needs a path}" ;;
         --dir)   shift; VM_DIR="${1:?--dir needs a path}" ;;
         --disk)  shift; DISK_SIZE="${1:?}" ;;
@@ -94,7 +122,10 @@ while [ "$#" -gt 0 ]; do
         --cpus)  shift; CPUS="${1:?}" ;;
         --cpu)   shift; CPU_MODEL="${1:?}" ;;
         --uefi)  UEFI=1 ;;
+        --revert) PREPARE_REVERT=1 ;;
         --vnc)   VNC=1 ;;
+        --rom)   shift; ROM="${1:?--rom needs a path}" ;;
+        --no-rom) ROMBAR=0 ;;
         --dry-run) DRY_RUN=1 ;;
         -h|--help|help) usage; exit 0 ;;
         *) die "unknown argument: $1 (try --help)" ;;
@@ -105,6 +136,7 @@ done
 [ -n "$CMD" ] || { usage; exit 1; }
 
 iommu_group() { readlink -f "/sys/bus/pci/devices/$GPU/iommu_group" 2>/dev/null | xargs -r basename; }
+pci_id() { lspci -n -s "$GPU_SHORT" 2>/dev/null | awk '{print $3}'; }
 current_driver() {
     local link="/sys/bus/pci/devices/$GPU/driver"
     if [ -e "$link" ]; then readlink -f "$link" | xargs -r basename; fi
@@ -138,7 +170,8 @@ cmd_check() {
     say
     say "next:"
     if [ "$(current_driver)" != "vfio-pci" ]; then
-        note "sudo $0 bind"
+        note "sudo $0 prepare   # keep the GPU for VFIO across boots (recommended)"
+        note "sudo $0 bind      # one-off; fails while GNOME/editors hold /dev/nvidia*"
     fi
     [ -f "$VM_DIR/windows.qcow2" ] || note "$0 create"
     note "$0 install --iso <path-to-windows.iso>"
@@ -183,6 +216,122 @@ cmd_unbind() {
 }
 
 # ---------------------------------------------------------------------------------------
+# prepare / prepare --revert
+# ---------------------------------------------------------------------------------------
+
+# Write a root-owned config file (no-op under --dry-run), keeping one .bak of whatever
+# was there.
+write_conf() { # path content
+    local path="$1" content="$2"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        say "  would write $path:"
+        printf '%s\n' "$content" | sed 's/^/    /'
+        return
+    fi
+    [ -f "$path" ] && [ ! -f "$path.interop-vm.bak" ] && cp -a "$path" "$path.interop-vm.bak"
+    printf '%s\n' "$content" > "$path"
+}
+
+remove_file() { # path
+    if [ ! -e "$1" ]; then
+        note "no $1"
+        return
+    fi
+    if [ "$DRY_RUN" -eq 1 ]; then
+        note "would remove $1"
+    else
+        rm -f "$1"
+        say "removed $1"
+    fi
+}
+
+# Masking is what actually stops nvidia. A blacklist only stops udev auto-loading, not
+# an explicit `modprobe` — and nvidia-powerd performs one at boot.
+unit_exists() { [ -f "/usr/lib/systemd/system/$1" ] || [ -f "/lib/systemd/system/$1" ] || [ -f "/etc/systemd/system/$1" ]; }
+
+drop_initramfs_modules() {
+    local m
+    for m in $VFIO_MODULES; do
+        if [ "$DRY_RUN" -eq 1 ]; then
+            note "would drop $m from $INITRAMFS_MODULES (if present)"
+        elif grep -qxF "$m" "$INITRAMFS_MODULES" 2>/dev/null; then
+            sed -i "/^${m}$/d" "$INITRAMFS_MODULES"
+            note "dropped $m from $INITRAMFS_MODULES"
+        fi
+    done
+}
+
+cmd_prepare() {
+    need_root
+    local id; id="$(pci_id)"
+    [ -n "$id" ] || die "could not read the PCI id of $GPU_SHORT"
+
+    say "$GPU ($id) stays on vfio-pci from boot; the host will not load nvidia for it"
+    say
+    say "1. blacklist the host drivers, and claim the id for vfio-pci"
+    write_conf "$MODPROBE_CONF" \
+"# Managed by script/interop-vm prepare --revert.
+# Keep the discrete GPU available to VFIO passthrough instead of the host.
+blacklist nouveau
+blacklist nvidia
+blacklist nvidia_drm
+blacklist nvidia_modeset
+blacklist nvidia_uvm
+blacklist nvidiafb
+options vfio-pci ids=$id"
+
+    say "2. load vfio-pci at boot, so it claims the GPU"
+    write_conf "$MODULES_LOAD" "vfio-pci"
+
+    say "3. mask the nvidia services that load the module anyway"
+    say "   (a blacklist stops udev auto-loading, not nvidia-powerd's explicit modprobe)"
+    local u
+    for u in $NVIDIA_UNITS; do
+        if unit_exists "$u"; then
+            run systemctl mask --now "$u"
+        fi
+    done
+
+    say "4. let the seated user open the vfio group node"
+    say "   (/dev/vfio/<group> is root-only by default; this grants the user an ACL)"
+    write_conf "$UDEV_RULE" '# Managed by script/interop-vm prepare --revert.
+# Grant the seated user access to /dev/vfio/<group> for passthrough.
+SUBSYSTEM=="vfio", TAG+="uaccess"'
+    run udevadm control --reload-rules
+    run udevadm trigger --subsystem-match=vfio
+
+    say "5. raise the memlock limit (QEMU locks guest RAM to map it via the IOMMU)"
+    local mlock_user="${SUDO_USER:-$USER}"
+    if [ "$mlock_user" = "root" ]; then mlock_user="*"; fi
+    write_conf "$MEMLOCK_CONF" "# Managed by script/interop-vm prepare --revert.
+# QEMU must lock the whole guest RAM to map it through the IOMMU.
+$mlock_user - memlock unlimited"
+
+    say
+    say "reboot or log back in (the memlock limit applies at login), then:"
+    note "$0 check                 # driver: should read vfio-pci"
+    note "$0 install --iso <path>  # boot the installer"
+}
+
+cmd_prepare_revert() {
+    say "undoing the boot-time VFIO binding"
+    remove_file "$MODPROBE_CONF"
+    remove_file "$MODULES_LOAD"
+    local u
+    for u in $NVIDIA_UNITS; do
+        if unit_exists "$u"; then
+            run systemctl unmask "$u"
+        fi
+    done
+    remove_file "$UDEV_RULE"
+    remove_file "$MEMLOCK_CONF"
+    drop_initramfs_modules
+    run udevadm control --reload-rules
+    run udevadm trigger --subsystem-match=vfio
+    say "reboot to let the host driver take the GPU again"
+}
+
+# ---------------------------------------------------------------------------------------
 # create / install / run
 # ---------------------------------------------------------------------------------------
 
@@ -213,6 +362,9 @@ ovmf_vars_src() {
 
 qemu_argv() { # boot-order  [cdrom]
     local boot="$1" cdrom="${2:-}"
+    local vfio="vfio-pci,host=$GPU_SHORT"
+    if [ -n "$ROM" ]; then vfio="$vfio,romfile=$ROM"; fi
+    if [ -n "$ROMBAR" ]; then vfio="$vfio,rombar=$ROMBAR"; fi
     local args=(
         -name interop-windows
         -enable-kvm
@@ -223,7 +375,7 @@ qemu_argv() { # boot-order  [cdrom]
         -drive "file=$VM_DIR/windows.qcow2,if=none,id=disk0,format=qcow2"
         -device "nvme,drive=disk0,serial=interop"
         -vga std
-        -device "vfio-pci,host=$GPU_SHORT"
+        -device "$vfio"
         -device qemu-xhci
         -device usb-tablet
         -netdev "user,id=net0"
@@ -241,11 +393,11 @@ qemu_argv() { # boot-order  [cdrom]
     fi
     [ -n "$cdrom" ] && args+=( -cdrom "$cdrom" )
     if [ "$VNC" -eq 1 ]; then
-        args+=( -display none -vnc :0 )
+        args+=( -display none -vnc 127.0.0.1:0 )
     elif [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
         args+=( -display gtk )
     else
-        args+=( -display none -vnc :0 )
+        args+=( -display none -vnc 127.0.0.1:0 )
     fi
     printf '%s\n' "${args[@]}"
 }
@@ -272,6 +424,7 @@ case "$CMD" in
     check)   cmd_check ;;
     bind)    cmd_bind ;;
     unbind)  cmd_unbind ;;
+    prepare) if [ "$PREPARE_REVERT" -eq 1 ]; then cmd_prepare_revert; else cmd_prepare; fi ;;
     create)  cmd_create ;;
     install) cmd_install ;;
     run)     cmd_run ;;
