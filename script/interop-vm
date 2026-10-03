@@ -47,6 +47,8 @@
 #     --rom PATH       pass a VBIOS dump to the GPU (`romfile=`)
 #     --no-rom         hide the GPU option ROM (`rombar=0`) instead of passing it
 #     --no-gpu         don't pass the GPU through (plain install or debug run)
+#     --gpu-subsys VVVV:DDDD
+#                      override the guest's GPU subsystem IDs (default: read from the host)
 #     --unattend       attach the bundled answer file for a hands-off install
 #                      (the BIOS or UEFI layout, chosen to match the firmware)
 #     --answer PATH    attach a custom answer file instead of the bundled one
@@ -93,6 +95,7 @@ VNC=0
 ROM=""
 ROMBAR=""
 NO_GPU=0
+GPU_SUBSYS=""
 ANSWER=""
 ANSWER_ISO=""
 UNATTEND=0
@@ -154,6 +157,7 @@ while [ "$#" -gt 0 ]; do
         --rom)   shift; ROM="${1:?--rom needs a path}" ;;
         --no-rom) ROMBAR=0 ;;
         --no-gpu) NO_GPU=1 ;;
+        --gpu-subsys) shift; GPU_SUBSYS="${1:?--gpu-subsys needs VVVV:DDDD}" ;;
         --unattend) UNATTEND=1 ;;
         --answer)   shift; ANSWER="${1:?--answer needs a path}" ;;
         --out)      shift; SHOT_OUT="${1:?--out needs a path}" ;;
@@ -398,6 +402,24 @@ qemu_argv() { # boot-order  [cdrom]
     local vfio="vfio-pci,host=$GPU_SHORT"
     if [ -n "$ROM" ]; then vfio="$vfio,romfile=$ROM"; fi
     if [ -n "$ROMBAR" ]; then vfio="$vfio,rombar=$ROMBAR"; fi
+
+    # This GPU's *standard* PCI subsystem registers read 0; the real IDs (1028:070b, Dell) live
+    # in a PCIe capability that VFIO does not forward. Without them the guest sees
+    # SUBSYS_00000000, and every NVIDIA INF entry for the 930M is subsystem-qualified, so the
+    # driver matches no device ("0 devices found"). Forward the host's subsystem IDs with
+    # QEMU's vfio-pci debug overrides; `--gpu-subsys` can force a value instead.
+    local subv="$GPU_SUBSYS" subd=""
+    if [ -n "$subv" ]; then
+        subd="${subv##*:}"; subv="${subv%%:*}"
+    else
+        subv="$(cat "/sys/bus/pci/devices/$GPU/subsystem_vendor" 2>/dev/null)"
+        subd="$(cat "/sys/bus/pci/devices/$GPU/subsystem_device" 2>/dev/null)"
+    fi
+    subv="${subv#0x}"; subd="${subd#0x}"
+    if [ -n "$subv" ] && [ -n "$subd" ] && [ "$subv" != 0000 ] && [ "$subd" != 0000 ]; then
+        vfio="$vfio,x-pci-sub-vendor-id=0x$subv,x-pci-sub-device-id=0x$subd"
+    fi
+
     local args=(
         -name interop-windows
         -monitor "tcp:$MONITOR_ADDR,server,nowait"
@@ -520,8 +542,18 @@ PY
 
 cmd_screenshot() {
     local out="${SHOT_OUT:-$VM_DIR/screenshot.png}"
-    local ppm; ppm="$(mktemp --suffix=.ppm)"
+    local ppm="$VM_DIR/screenshot.ppm"
+    rm -f "$ppm"
     monitor_send "screendump $ppm"
+    # The VM may run under sudo, so QEMU writes the file as root, and it can land a moment
+    # after the monitor returns. Wait for it to appear and stop growing before reading it.
+    local prev=-1 size i
+    for i in $(seq 1 60); do
+        size=$(stat -c %s "$ppm" 2>/dev/null || echo 0)
+        if [ "$size" -gt 0 ] && [ "$size" = "$prev" ]; then break; fi
+        prev="$size"
+        sleep 0.1
+    done
     python3 - "$ppm" "$out" <<'PY'
 import sys
 from PIL import Image
@@ -549,7 +581,12 @@ NAMED = {
     ' ': 'spc', '\\': 'backslash', '/': 'slash', '.': 'dot', '-': 'minus',
     ':': 'shift-semicolon', '_': 'shift-minus', '=': 'equal',
     ',': 'comma', ';': 'semicolon', "'": 'apostrophe', '"': 'shift-apostrophe',
-    '[': 'bracket_left', ']': 'bracket_right',
+    '[': 'bracket_left', ']': 'bracket_right', '`': 'grave_accent',
+    '~': 'shift-grave_accent', '!': 'shift-1', '@': 'shift-2', '#': 'shift-3',
+    '$': 'shift-4', '%': 'shift-5', '^': 'shift-6', '&': 'shift-7', '*': 'shift-8',
+    '(': 'shift-9', ')': 'shift-0', '+': 'shift-equal', '{': 'shift-bracket_left',
+    '}': 'shift-bracket_right', '|': 'shift-backslash', '<': 'shift-comma',
+    '>': 'shift-dot', '?': 'shift-slash',
 }
 
 def key_for(c):
