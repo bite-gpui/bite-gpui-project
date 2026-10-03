@@ -80,6 +80,14 @@ The GPU has **no readable VBIOS** (MUX-less), so QEMU warns `Cannot read device 
 `install --rom <vbios>` passes a dump (`romfile=`) and `--no-rom` sets `rombar=0` to silence the
 probe. VNC now binds `127.0.0.1:0` (localhost only).
 
+### Unattended install
+
+`script/interop-vm install --unattend` stages [`script/autounattend.xml`](../script/autounattend.xml)
+as a tiny ISO and attaches it as a second CD-ROM, so Setup runs without prompts: it wipes disk 0,
+installs **Windows 11 Pro**, bypasses the TPM/Secure Boot/RAM checks, skips OOBE and auto-logs-in a
+local admin `probe`. `--answer PATH` takes a custom file. The layout is BIOS/MBR (the SeaBIOS
+default, and what the running guest uses); `--uefi` would need a GPT variant of the file.
+
 ## What is blocked
 
 - **root, once.** `sudo script/interop-vm prepare` and the login/reboot that applies the memlock

@@ -31,6 +31,10 @@
 #     script/interop-vm run                      # boot the installed disk
 #     sudo script/interop-vm prepare             # keep the GPU for VFIO at boot, then reboot
 #     sudo script/interop-vm prepare --revert    # undo that
+#     script/interop-vm screenshot [--out F]     # save the running guest's screen to a PNG
+#     script/interop-vm sendkey --keys KEYS      # inject keys into the running guest
+#     script/interop-vm type --text STR          # type a string into the running guest
+#     script/interop-vm powerdown                # ask the guest to shut down (ACPI)
 #
 # Options:
 #     --iso PATH       the installer ISO (required by `install`)
@@ -42,9 +46,23 @@
 #     --vnc            no local window; serve VNC on 127.0.0.1:0 (localhost only)
 #     --rom PATH       pass a VBIOS dump to the GPU (`romfile=`)
 #     --no-rom         hide the GPU option ROM (`rombar=0`) instead of passing it
+#     --no-gpu         don't pass the GPU through (plain install or debug run)
+#     --unattend       attach the bundled answer file for a hands-off install
+#                      (the BIOS or UEFI layout, chosen to match the firmware)
+#     --answer PATH    attach a custom answer file instead of the bundled one
 #     --cpu MODEL      override `-cpu` (default host,kvm=off)
 #     --revert         `prepare`: undo the boot-time binding
+#     --out PATH       `screenshot`: where to write the PNG (default $VM_DIR/screenshot.png)
+#     --keys KEYS      `sendkey`: keys to send, in QEMU syntax, e.g. 'shift+f10'
+#     --text STR       `type`: the string to type (letters, digits, and \ / . - : _ space)
 #     --dry-run        print the commands, change nothing
+#
+# The guest's user-mode NIC always forwards host 127.0.0.1:2222 to guest port 22. Once the
+# guest runs an SSH server (enabled by script/autounattend*.xml) the host can drive it:
+#
+#     scp -P 2222 build/probe.exe probe@127.0.0.1:/
+#     ssh -p 2222 probe@127.0.0.1 'C:\probe.exe'
+#     script/interop-vm powerdown                # or: ssh -p 2222 probe@127.0.0.1 'shutdown /s /t 0'
 #
 # `check` is read-only and safe. `bind`/`unbind`/`prepare` need root and touch the PCI
 # device.
@@ -64,6 +82,7 @@ set -euo pipefail
 
 GPU=0000:01:00.0
 GPU_SHORT="${GPU#0000:}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VM_DIR="${INTEROP_VM_DIR:-$HOME/interop-vm}"
 DISK_SIZE=64G
 RAM=4G
@@ -73,6 +92,14 @@ UEFI=0
 VNC=0
 ROM=""
 ROMBAR=""
+NO_GPU=0
+ANSWER=""
+ANSWER_ISO=""
+UNATTEND=0
+SHOT_OUT=""
+KEYS=""
+TYPE_TEXT=""
+MONITOR_ADDR=127.0.0.1:4444
 DRY_RUN=0
 ISO=""
 CMD=""
@@ -114,7 +141,7 @@ usage() { awk 'NR >= 3 && /^#/ { sub(/^# ?/, ""); print; next } NR >= 3 { exit }
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        check|bind|unbind|create|install|run|prepare) CMD="$1" ;;
+        check|bind|unbind|create|install|run|prepare|screenshot|sendkey|type|powerdown) CMD="$1" ;;
         --iso)   shift; ISO="${1:?--iso needs a path}" ;;
         --dir)   shift; VM_DIR="${1:?--dir needs a path}" ;;
         --disk)  shift; DISK_SIZE="${1:?}" ;;
@@ -126,6 +153,12 @@ while [ "$#" -gt 0 ]; do
         --vnc)   VNC=1 ;;
         --rom)   shift; ROM="${1:?--rom needs a path}" ;;
         --no-rom) ROMBAR=0 ;;
+        --no-gpu) NO_GPU=1 ;;
+        --unattend) UNATTEND=1 ;;
+        --answer)   shift; ANSWER="${1:?--answer needs a path}" ;;
+        --out)      shift; SHOT_OUT="${1:?--out needs a path}" ;;
+        --keys)     shift; KEYS="${1:?--keys needs a value}" ;;
+        --text)     shift; TYPE_TEXT="${1:?--text needs a value}" ;;
         --dry-run) DRY_RUN=1 ;;
         -h|--help|help) usage; exit 0 ;;
         *) die "unknown argument: $1 (try --help)" ;;
@@ -367,21 +400,26 @@ qemu_argv() { # boot-order  [cdrom]
     if [ -n "$ROMBAR" ]; then vfio="$vfio,rombar=$ROMBAR"; fi
     local args=(
         -name interop-windows
+        -monitor "tcp:$MONITOR_ADDR,server,nowait"
         -enable-kvm
         -machine q35
         -cpu "$CPU_MODEL"
         -smp "$CPUS"
         -m "$RAM"
         -drive "file=$VM_DIR/windows.qcow2,if=none,id=disk0,format=qcow2"
-        -device "nvme,drive=disk0,serial=interop"
+        -device "ide-hd,drive=disk0,bus=ide.0"
         -vga std
-        -device "$vfio"
         -device qemu-xhci
         -device usb-tablet
-        -netdev "user,id=net0"
+        -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:2222-:22"
         -device "e1000,netdev=net0"
         -boot "order=$boot"
     )
+    # The GPU is the point of this VM, but a plain install or a debug boot can leave it
+    # out and keep the guest to one well-understood adapter.
+    if [ "$NO_GPU" -eq 0 ]; then
+        args+=( -device "$vfio" )
+    fi
     if [ "$UEFI" -eq 1 ]; then
         local code; code="$(ovmf_code)" || die "no OVMF firmware found — apt install ovmf"
         local vars_src; vars_src="$(ovmf_vars_src)" || die "no OVMF vars template found"
@@ -392,6 +430,7 @@ qemu_argv() { # boot-order  [cdrom]
         )
     fi
     [ -n "$cdrom" ] && args+=( -cdrom "$cdrom" )
+    [ -n "$ANSWER_ISO" ] && args+=( -drive "file=$ANSWER_ISO,media=cdrom,readonly=on,index=1" )
     if [ "$VNC" -eq 1 ]; then
         args+=( -display none -vnc 127.0.0.1:0 )
     elif [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
@@ -402,11 +441,50 @@ qemu_argv() { # boot-order  [cdrom]
     printf '%s\n' "${args[@]}"
 }
 
+# The bundled answer file comes in two layouts — BIOS/MBR and UEFI/GPT — so pick the one
+# that matches the firmware.
+pick_answer_file() {
+    [ "$UNATTEND" -eq 1 ] || return 0
+    if [ "$UEFI" -eq 1 ]; then
+        ANSWER="$SCRIPT_DIR/autounattend-uefi.xml"
+    else
+        ANSWER="$SCRIPT_DIR/autounattend.xml"
+    fi
+}
+
+# Stage the answer file as `autounattend.xml` at the root of a small ISO, attached as a
+# second CD-ROM. Setup does scan it for that name (it picked the product key up from
+# here), and the disc stays attached across Setup's reboots, so the oobeSystem pass is
+# found too.
+build_answer_iso() {
+    [ -n "$ANSWER" ] || return 0
+    [ -f "$ANSWER" ] || die "no such answer file: $ANSWER"
+    have genisoimage || die "genisoimage is required to stage the answer file"
+    ANSWER_ISO="$VM_DIR/autounattend.iso"
+    say "staging the answer file as $ANSWER_ISO"
+    run mkdir -p "$VM_DIR/answer"
+    run cp "$ANSWER" "$VM_DIR/answer/autounattend.xml"
+    run genisoimage -quiet -J -iso-level 4 -o "$ANSWER_ISO" "$VM_DIR/answer/autounattend.xml"
+}
+
+# A disk that already carries a bootable partition makes the Windows media stop and ask
+# "Press any key to boot from CD or DVD"; with nobody at the keyboard it falls through to
+# that partition instead and dies with "An operating system wasn't found". Zero the
+# partition table first, so the CD boots straight into Setup with no prompt.
+wipe_partition_table() {
+    have qemu-io || { note "qemu-io missing; leaving the disk as it is"; return 0; }
+    say "clearing the disk's partition table so Setup boots without prompting"
+    run qemu-io -f qcow2 -c 'write -z 0 1M' "$VM_DIR/windows.qcow2"
+}
+
 cmd_install() {
     [ -n "$ISO" ] || die "install needs --iso <path>"
     [ -f "$ISO" ] || die "no such ISO: $ISO"
     [ -f "$VM_DIR/windows.qcow2" ] || die "no disk — run: $0 create"
     have qemu-system-x86_64 || die "qemu-system-x86_64 is not installed"
+    pick_answer_file
+    build_answer_iso
+    wipe_partition_table
     say "booting the installer with $GPU passed through (boot order: cdrom)"
     # shellcheck disable=SC2046
     run qemu-system-x86_64 $(qemu_argv d "$ISO")
@@ -420,6 +498,89 @@ cmd_run() {
     run qemu-system-x86_64 $(qemu_argv c)
 }
 
+# ---------------------------------------------------------------------------------------
+# screenshot / sendkey — talk to a running VM's monitor
+# ---------------------------------------------------------------------------------------
+
+# QEMU's monitor is on a localhost TCP socket (a unix socket would be root-owned when the
+# VM runs under sudo, and this user could not connect to it).
+monitor_send() { # monitor-command
+    have python3 || die "python3 is required"
+    if ! python3 - "$MONITOR_ADDR" "$1" <<'PY'
+import socket, sys, time
+host, port = sys.argv[1].rsplit(':', 1)
+mon = socket.create_connection((host, int(port)), timeout=5)
+mon.sendall((sys.argv[2] + "\n").encode())
+time.sleep(0.5)
+PY
+    then
+        die "could not reach the monitor at $MONITOR_ADDR (is the VM running?)"
+    fi
+}
+
+cmd_screenshot() {
+    local out="${SHOT_OUT:-$VM_DIR/screenshot.png}"
+    local ppm; ppm="$(mktemp --suffix=.ppm)"
+    monitor_send "screendump $ppm"
+    python3 - "$ppm" "$out" <<'PY'
+import sys
+from PIL import Image
+Image.open(sys.argv[1]).save(sys.argv[2])
+PY
+    rm -f "$ppm"
+    say "screenshot: $out"
+}
+
+cmd_sendkey() {
+    [ -n "$KEYS" ] || die "sendkey needs --keys (e.g. --keys 'shift+f10')"
+    monitor_send "sendkey $KEYS"
+    say "sent: $KEYS"
+}
+
+# Type a string one key at a time. Only the characters a typing-in-a-console command
+# needs are mapped; anything unmapped is skipped.
+cmd_type() {
+    [ -n "$TYPE_TEXT" ] || die "type needs --text STR"
+    have python3 || die "python3 is required"
+    if ! python3 - "$MONITOR_ADDR" "$TYPE_TEXT" <<'PY'
+import socket, sys, time
+
+NAMED = {
+    ' ': 'spc', '\\': 'backslash', '/': 'slash', '.': 'dot', '-': 'minus',
+    ':': 'shift-semicolon', '_': 'shift-minus', '=': 'equal',
+    ',': 'comma', ';': 'semicolon', "'": 'apostrophe', '"': 'shift-apostrophe',
+    '[': 'bracket_left', ']': 'bracket_right',
+}
+
+def key_for(c):
+    if c in NAMED:
+        return NAMED[c]
+    if c.isalnum():
+        return c
+    return None
+
+host, port = sys.argv[1].rsplit(':', 1)
+sock = socket.create_connection((host, int(port)), timeout=5)
+for c in sys.argv[2]:
+    k = key_for(c)
+    if k is None:
+        continue
+    sock.sendall(("sendkey %s\n" % k).encode())
+    time.sleep(0.06)
+PY
+    then
+        die "could not reach the monitor at $MONITOR_ADDR (is the VM running?)"
+    fi
+    say "typed: $TYPE_TEXT"
+}
+
+# ACPI power-down — the same as pressing the power button. Needs no guest agent, so it
+# works before SSH is set up.
+cmd_powerdown() {
+    monitor_send "system_powerdown"
+    say "sent ACPI power-down"
+}
+
 case "$CMD" in
     check)   cmd_check ;;
     bind)    cmd_bind ;;
@@ -428,4 +589,8 @@ case "$CMD" in
     create)  cmd_create ;;
     install) cmd_install ;;
     run)     cmd_run ;;
+    screenshot) cmd_screenshot ;;
+    sendkey) cmd_sendkey ;;
+    type)    cmd_type ;;
+    powerdown) cmd_powerdown ;;
 esac
