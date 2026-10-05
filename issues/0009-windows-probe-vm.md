@@ -1,5 +1,7 @@
 - **Opened:** 2026-10-02
-- **Status:** open — the host is set up and the Windows installer is running under VNC; the guest install and the probes remain
+- **Status:** open — boot-time passthrough works (GPU on `vfio-pci`, no host nvidia), Windows 11
+  Pro is installed and reachable over SSH, but the guest's NVIDIA driver hits **Code 43**, so the
+  probes have not run
 - **Touches:** this machine (`user-Vostro-14-5459`), [`../script/interop-vm`](../script/interop-vm), [`../script/windows-iso`](../script/windows-iso), [`../spi/rendering/probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md), the `gpui_interop` crate in `bite-gpui`
 
 # The Windows guest that runs the interop probes
@@ -87,6 +89,39 @@ as a tiny ISO and attaches it as a second CD-ROM, so Setup runs without prompts:
 installs **Windows 11 Pro**, bypasses the TPM/Secure Boot/RAM checks, skips OOBE and auto-logs-in a
 local admin `probe`. `--answer PATH` takes a custom file. The layout is BIOS/MBR (the SeaBIOS
 default, and what the running guest uses); `--uefi` would need a GPT variant of the file.
+
+## Follow-up (2026-10-05): the nvidia module loop, and two script bugs
+
+`prepare` as first written still let the host churn. Three fixes, all now in
+[`../script/interop-vm`](../script/interop-vm):
+
+1. **An explicit `modprobe` ignores a blacklist — and nvidia's udev rules make one.**
+   `/usr/lib/udev/rules.d/71-nvidia.rules` runs `RUN+="/sbin/modprobe nvidia-uvm"` (and
+   `nvidia-drm`, `nvidia-modeset`) on *every* `add` of `/bus/pci/drivers/nvidia`. With the GPU on
+   `vfio-pci` that load fails, the driver unregisters, the `add` fires again — an endless
+   udev/`modprobe` loop (`udevadm monitor` shows `add`/`remove /bus/pci/drivers/nvidia` every few
+   seconds; `nvidia` never stays in `/proc/modules`). A `blacklist` only stops *alias* auto-loading,
+   so `prepare` now writes `install nvidia /bin/true` (plus the DRM/modeset/uvm submodules) into
+   `vfio-nvidia.conf` — making every explicit `modprobe` a no-op — and shadows each `*nvidia*.rules`
+   with an empty file under `/etc/udev/rules.d`. This refines obstacle 1 below, which blamed only
+   `nvidia-powerd`.
+2. **A live `bind` wedges the GPU.** GNOME Shell holds `/dev/nvidia0`, so nvidia refuses to detach
+   a device with a non-zero usage count, and the process never returns. It can leave the GPU
+   *orphaned* (bound to no driver at all); a **reboot** is the reliable recovery, after which the
+   boot-time `vfio-pci` claim lands it cleanly. This is why `prepare` binds at boot, and why `check`
+   may report an empty `driver:` after a wedged unbind.
+3. **`--qemu-arg` values were split on spaces.** `qemu_argv` printed its arguments and the call
+   sites consumed them with an unquoted `$(…)`, so any value containing a space (e.g.
+   `-smbios type=1,manufacturer=Dell Inc.,…`) was torn apart and QEMU tried to open the fragment as
+   a disk. `qemu_argv` now populates a `QEMU_ARGV` array and the call sites pass `"${QEMU_ARGV[@]}"`.
+
+State: Windows 11 Pro 26100.1 is installed (auto-logon `probe`, SSH on `127.0.0.1:2222`) and the
+guest GPU is the passed-through 930M with driver **582.78 DCH** installed. The remaining blocker is
+**Code 43** (`CM_PROB_FAILED_POST_START`): the PCI subsystem-ID override
+(`x-pci-sub-vendor-id=0x1028,x-pci-sub-device-id=0x070b`) got the driver to bind (the card's standard
+subsystem registers read `0000:0000`, so every subsystem-qualified INF entry missed), and
+`-cpu host,kvm=off,-hypervisor` clears the hypervisor bit, but the device still fails POST. It has
+**no readable VBIOS** (MUX-less; `EIO` on the ROM even unbound), which is the leading suspect.
 
 ## What is blocked
 
