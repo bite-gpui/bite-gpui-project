@@ -98,6 +98,7 @@ ROMBAR=""
 NO_GPU=0
 GPU_SUBSYS=""
 EXTRA_ARGS=()
+QEMU_ARGV=()
 ANSWER=""
 ANSWER_ISO=""
 UNATTEND=0
@@ -400,7 +401,7 @@ ovmf_vars_src() {
     return 1
 }
 
-qemu_argv() { # boot-order  [cdrom]
+qemu_argv() { # boot-order [cdrom]  -> populates the global QEMU_ARGV array
     local boot="$1" cdrom="${2:-}"
     local vfio="vfio-pci,host=$GPU_SHORT"
     if [ -n "$ROM" ]; then vfio="$vfio,romfile=$ROM"; fi
@@ -423,7 +424,7 @@ qemu_argv() { # boot-order  [cdrom]
         vfio="$vfio,x-pci-sub-vendor-id=0x$subv,x-pci-sub-device-id=0x$subd"
     fi
 
-    local args=(
+    QEMU_ARGV=(
         -name interop-windows
         -monitor "tcp:$MONITOR_ADDR,server,nowait"
         -enable-kvm
@@ -443,31 +444,30 @@ qemu_argv() { # boot-order  [cdrom]
     # The GPU is the point of this VM, but a plain install or a debug boot can leave it
     # out and keep the guest to one well-understood adapter.
     if [ "$NO_GPU" -eq 0 ]; then
-        args+=( -device "$vfio" )
+        QEMU_ARGV+=( -device "$vfio" )
     fi
     # Raw extra arguments, for experiments (e.g. -smbios). Repeatable.
     if [ "${#EXTRA_ARGS[@]}" -gt 0 ]; then
-        args+=( "${EXTRA_ARGS[@]}" )
+        QEMU_ARGV+=( "${EXTRA_ARGS[@]}" )
     fi
     if [ "$UEFI" -eq 1 ]; then
         local code; code="$(ovmf_code)" || die "no OVMF firmware found — apt install ovmf"
         local vars_src; vars_src="$(ovmf_vars_src)" || die "no OVMF vars template found"
         [ -f "$VM_DIR/OVMF_VARS.fd" ] || run cp "$vars_src" "$VM_DIR/OVMF_VARS.fd"
-        args+=(
+        QEMU_ARGV+=(
             -drive "if=pflash,format=raw,readonly=on,file=$code"
             -drive "if=pflash,format=raw,file=$VM_DIR/OVMF_VARS.fd"
         )
     fi
-    [ -n "$cdrom" ] && args+=( -cdrom "$cdrom" )
-    [ -n "$ANSWER_ISO" ] && args+=( -drive "file=$ANSWER_ISO,media=cdrom,readonly=on,index=1" )
+    [ -n "$cdrom" ] && QEMU_ARGV+=( -cdrom "$cdrom" )
+    [ -n "$ANSWER_ISO" ] && QEMU_ARGV+=( -drive "file=$ANSWER_ISO,media=cdrom,readonly=on,index=1" )
     if [ "$VNC" -eq 1 ]; then
-        args+=( -display none -vnc 127.0.0.1:0 )
+        QEMU_ARGV+=( -display none -vnc 127.0.0.1:0 )
     elif [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
-        args+=( -display gtk )
+        QEMU_ARGV+=( -display gtk )
     else
-        args+=( -display none -vnc 127.0.0.1:0 )
+        QEMU_ARGV+=( -display none -vnc 127.0.0.1:0 )
     fi
-    printf '%s\n' "${args[@]}"
 }
 
 # The bundled answer file comes in two layouts — BIOS/MBR and UEFI/GPT — so pick the one
@@ -515,16 +515,16 @@ cmd_install() {
     build_answer_iso
     wipe_partition_table
     say "booting the installer with $GPU passed through (boot order: cdrom)"
-    # shellcheck disable=SC2046
-    run qemu-system-x86_64 $(qemu_argv d "$ISO")
+    qemu_argv d "$ISO"
+    run qemu-system-x86_64 "${QEMU_ARGV[@]}"
 }
 
 cmd_run() {
     [ -f "$VM_DIR/windows.qcow2" ] || die "no disk — run: $0 create (and install)"
     have qemu-system-x86_64 || die "qemu-system-x86_64 is not installed"
     say "booting $VM_DIR/windows.qcow2 with $GPU passed through"
-    # shellcheck disable=SC2046
-    run qemu-system-x86_64 $(qemu_argv c)
+    qemu_argv c
+    run qemu-system-x86_64 "${QEMU_ARGV[@]}"
 }
 
 # ---------------------------------------------------------------------------------------
