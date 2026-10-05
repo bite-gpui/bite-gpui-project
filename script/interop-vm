@@ -81,6 +81,7 @@
 # modeset/uvm submodules). A blacklist only stops modalias auto-loading; nvidia's udev
 # rules force a `modprobe` on every nvidia driver add event, which loops forever once
 # vfio-pci owns the GPU (the load fails, nvidia unregisters, the add event re-fires).
+# `prepare` therefore also shadows those udev rules with empty files.
 #
 # The GPU is a MUX-less laptop 3D controller with no readable VBIOS, so QEMU warns
 # (`Cannot read device rom at 0000:01:00.0`) and carries on. If the guest driver needs it
@@ -119,6 +120,7 @@ PREPARE_REVERT=0
 MODPROBE_CONF=/etc/modprobe.d/vfio-nvidia.conf
 MODULES_LOAD=/etc/modules-load.d/vfio-pci.conf
 UDEV_RULE=/etc/udev/rules.d/10-vfio.rules
+UDEV_MASK_DIR=/etc/udev/rules.d
 MEMLOCK_CONF=/etc/security/limits.d/99-vfio-memlock.conf
 INITRAMFS_MODULES=/etc/initramfs-tools/modules
 VFIO_MODULES="vfio vfio_iommu_type1 vfio_pci"
@@ -308,6 +310,39 @@ drop_initramfs_modules() {
     done
 }
 
+# The nvidia driver package installs udev rules that `modprobe` the module by name (and
+# ask systemd to start nvidia-persistenced) on every nvidia driver event. Shadow each
+# file with an empty one in /etc so those RUN+/SYSTEMD_WANTS lines never fire while the
+# GPU belongs to vfio-pci. (An empty /etc file of the same name overrides /usr/lib; /lib
+# and /usr/lib are one directory on usr-merged systems, hence the dedupe.)
+nvidia_udev_rule_names() {
+    local dir f
+    for dir in /usr/lib/udev/rules.d /lib/udev/rules.d; do
+        [ -d "$dir" ] || continue
+        for f in "$dir"/*nvidia*.rules; do
+            [ -e "$f" ] || continue
+            basename "$f"
+        done
+    done | sort -u
+}
+
+mask_nvidia_udev_rules() {
+    local base
+    while IFS= read -r base; do
+        [ -n "$base" ] || continue
+        run ln -sf /dev/null "$UDEV_MASK_DIR/$base"
+    done < <(nvidia_udev_rule_names)
+}
+
+unmask_nvidia_udev_rules() {
+    local base mask
+    while IFS= read -r base; do
+        [ -n "$base" ] || continue
+        mask="$UDEV_MASK_DIR/$base"
+        if [ -L "$mask" ]; then remove_file "$mask"; fi
+    done < <(nvidia_udev_rule_names)
+}
+
 cmd_prepare() {
     need_root
     local id; id="$(pci_id)"
@@ -340,14 +375,15 @@ options vfio-pci ids=$id"
     say "2. load vfio-pci at boot, so it claims the GPU"
     write_conf "$MODULES_LOAD" "vfio-pci"
 
-    say "3. mask the nvidia services that load the module anyway"
-    say "   (a blacklist stops udev auto-loading, not nvidia-powerd's explicit modprobe)"
+    say "3. mask the nvidia services and udev rules that load the module anyway"
+    say "   (a blacklist stops udev auto-loading, not an explicit modprobe by name)"
     local u
     for u in $NVIDIA_UNITS; do
         if unit_exists "$u"; then
             run systemctl mask --now "$u"
         fi
     done
+    mask_nvidia_udev_rules
 
     say "4. let the seated user open the vfio group node"
     say "   (/dev/vfio/<group> is root-only by default; this grants the user an ACL)"
@@ -382,6 +418,7 @@ cmd_prepare_revert() {
     done
     remove_file "$UDEV_RULE"
     remove_file "$MEMLOCK_CONF"
+    unmask_nvidia_udev_rules
     drop_initramfs_modules
     run udevadm control --reload-rules
     run udevadm trigger --subsystem-match=vfio
