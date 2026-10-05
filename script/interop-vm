@@ -49,6 +49,7 @@
 #     --no-gpu         don't pass the GPU through (plain install or debug run)
 #     --gpu-subsys VVVV:DDDD
 #                      override the guest's GPU subsystem IDs (default: read from the host)
+#     --qemu-arg ARG   append a raw QEMU argument (repeatable; for experiments)
 #     --unattend       attach the bundled answer file for a hands-off install
 #                      (the BIOS or UEFI layout, chosen to match the firmware)
 #     --answer PATH    attach a custom answer file instead of the bundled one
@@ -96,6 +97,7 @@ ROM=""
 ROMBAR=""
 NO_GPU=0
 GPU_SUBSYS=""
+EXTRA_ARGS=()
 ANSWER=""
 ANSWER_ISO=""
 UNATTEND=0
@@ -158,6 +160,7 @@ while [ "$#" -gt 0 ]; do
         --no-rom) ROMBAR=0 ;;
         --no-gpu) NO_GPU=1 ;;
         --gpu-subsys) shift; GPU_SUBSYS="${1:?--gpu-subsys needs VVVV:DDDD}" ;;
+        --qemu-arg)   shift; EXTRA_ARGS+=( "$1" ) ;;
         --unattend) UNATTEND=1 ;;
         --answer)   shift; ANSWER="${1:?--answer needs a path}" ;;
         --out)      shift; SHOT_OUT="${1:?--out needs a path}" ;;
@@ -441,6 +444,10 @@ qemu_argv() { # boot-order  [cdrom]
     # out and keep the guest to one well-understood adapter.
     if [ "$NO_GPU" -eq 0 ]; then
         args+=( -device "$vfio" )
+    fi
+    # Raw extra arguments, for experiments (e.g. -smbios). Repeatable.
+    if [ "${#EXTRA_ARGS[@]}" -gt 0 ]; then
+        args+=( "${EXTRA_ARGS[@]}" )
     fi
     if [ "$UEFI" -eq 1 ]; then
         local code; code="$(ovmf_code)" || die "no OVMF firmware found — apt install ovmf"
