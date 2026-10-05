@@ -77,6 +77,11 @@
 # off the host from boot means passthrough never needs a live unbind, so the guest runs
 # alongside the GNOME session.
 #
+# `prepare` also neuters nvidia *by name* (`install nvidia /bin/true`, plus the DRM/
+# modeset/uvm submodules). A blacklist only stops modalias auto-loading; nvidia's udev
+# rules force a `modprobe` on every nvidia driver add event, which loops forever once
+# vfio-pci owns the GPU (the load fails, nvidia unregisters, the add event re-fires).
+#
 # The GPU is a MUX-less laptop 3D controller with no readable VBIOS, so QEMU warns
 # (`Cannot read device rom at 0000:01:00.0`) and carries on. If the guest driver needs it
 # later, pass a dump with `--rom`; `--no-rom` silences the probe instead.
@@ -286,8 +291,9 @@ remove_file() { # path
     fi
 }
 
-# Masking is what actually stops nvidia. A blacklist only stops udev auto-loading, not
-# an explicit `modprobe` — and nvidia-powerd performs one at boot.
+# Masking stops the nvidia *services* (nvidia-powerd performs an explicit `modprobe` at
+# boot). Stopping nvidia from ever loading is done by the `install ... /bin/true` lines in
+# MODPROBE_CONF, which neutralize every explicit `modprobe` too.
 unit_exists() { [ -f "/usr/lib/systemd/system/$1" ] || [ -f "/lib/systemd/system/$1" ] || [ -f "/etc/systemd/system/$1" ]; }
 
 drop_initramfs_modules() {
@@ -309,7 +315,7 @@ cmd_prepare() {
 
     say "$GPU ($id) stays on vfio-pci from boot; the host will not load nvidia for it"
     say
-    say "1. blacklist the host drivers, and claim the id for vfio-pci"
+    say "1. blacklist and neuter the host drivers, and claim the id for vfio-pci"
     write_conf "$MODPROBE_CONF" \
 "# Managed by script/interop-vm prepare --revert.
 # Keep the discrete GPU available to VFIO passthrough instead of the host.
@@ -319,6 +325,16 @@ blacklist nvidia_drm
 blacklist nvidia_modeset
 blacklist nvidia_uvm
 blacklist nvidiafb
+# A blacklist only blocks modalias auto-loading. The nvidia udev rules
+# (/usr/lib/udev/rules.d/71-nvidia.rules) run an explicit 'modprobe nvidia-uvm' on
+# every nvidia driver add event; with the GPU on vfio-pci that load fails, nvidia
+# unregisters, and the event re-fires - an endless modprobe loop. The 'install'
+# lines below make those explicit modprobes no-ops, so nvidia never registers and
+# the loop cannot start.
+install nvidia /bin/true
+install nvidia_drm /bin/true
+install nvidia_modeset /bin/true
+install nvidia_uvm /bin/true
 options vfio-pci ids=$id"
 
     say "2. load vfio-pci at boot, so it claims the GPU"
