@@ -796,7 +796,10 @@ unsafe fn shared_roundtrip(
 /// distinguishes a real driver reset from the recovery path invoked directly:
 /// * `true`  -- **invoked directly**: release device A while the pool's handles exist, then
 ///   rebuild on a fresh device. Exercises the bookkeeping, not the driver's reset behaviour.
-/// * `false` -- (not implemented yet) a real GPU timeout (TDR) before recovering.
+/// * `false` -- a real GPU timeout (TDR). **Not attempted on a GVT-g guest**: GVT-g executes the
+///   guest's work on the *host* iGPU, so an infinite dispatch hangs the host engine and wedges
+///   `intel_gvt_wait_vgpu_idle` until a host reboot (found 2026-10-07; see issues/0009). The flag
+///   stays so a run records the attempt, and on a real passthrough GPU it would be the stronger run.
 fn check_p9(dxgi: Result<&DxgiResult, &String>, simulate: bool) -> Result<String, String> {
     println!();
     println!("== P9 device loss + re-negotiation ==");
@@ -822,7 +825,7 @@ fn check_p9(dxgi: Result<&DxgiResult, &String>, simulate: bool) -> Result<String
         if simulate {
             mode = "simulated loss (recovery path invoked directly, no driver reset)";
         } else {
-            return Err("real-TDR loss is not implemented yet (pass --sim)".to_string());
+            mode = "skipped — a real TDR is not attempted on a GVT-g vGPU (it wedges the host GPU)";
         }
         println!("lose    : {mode}");
         // Drop A and the pool's device-bound handles: any use of them is now stale.

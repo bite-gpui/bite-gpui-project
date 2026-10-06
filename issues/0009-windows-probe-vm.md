@@ -349,11 +349,12 @@ Windows then BSODs at boot. The same disk booted with
 errors at all. So `run --no-gpu --gvt` now applies that CPU model automatically -- it is not
 optional, and it is exactly the string `gvt` prints.
 
-### The packed probe passes on the vGPU -- P5 and P6 (2026-10-06)
+### The packed probe passes on the vGPU -- P6, P5 and P9 (2026-10-06/07)
 
 [`../script/interop-probe`](../script/interop-probe) is the packed W5 checklist: P6 asks whether DXGI
-and wgpu agree on one adapter LUID, P5 runs a D3D12 -> D3D11 shared-texture fence loop. Run against
-the GVT-g adapter over SSH, both pass on **hardware**:
+and wgpu agree on one adapter LUID, P5 runs a D3D12 -> D3D11 shared-texture fence loop, and P9 loses
+the producer device while a surface is held, recovers, and re-negotiates. Run against the GVT-g
+adapter over SSH, all pass on **hardware**:
 
     == P6 DXGI ==
     adapter 0: Intel(R) HD Graphics 520  [8086:1916]  luid 00000000:0000533C  128 MiB dedicated
@@ -365,12 +366,36 @@ the GVT-g adapter over SSH, both pass on **hardware**:
     == P5 fence loop ==
     D3D12 clear -> shared 64x64 R8G8B8A8 texture -> ID3D11Fence handle -> context4.Wait(fence, 1)
     P5 fence loop: PASS -- shared texture read back byte-exact on D3D11 (0/4096 mismatched)
+    == P9 device loss ==
+    attach  : device A holds a shared surface; composite byte-exact
+    lose    : simulated loss (recovery path invoked directly, no driver reset)
+    recover : new producer device B on the same luid, removed-reason S_OK
+    re-neg. : fresh handles on B; composite byte-exact
+    P9 device loss: PASS
 
 So P6's answer -- **DXGI and wgpu name the same adapter by the same LUID** -- is recorded on a *real*
 adapter, which is the datum that freezes `gpui-interop`'s `attach`/`Adapter` API
 ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4). P5's loop is byte-exact through the
-GPU-side `ID3D11Fence::Wait`. **P9 (device loss) is still outstanding** -- it needs a deliberate
-reset/teardown, not just a boot. (The LUIDs are per boot, so the exact numbers are illustrative.)
+GPU-side `ID3D11Fence::Wait`. P9 shows the pool can **tear down and re-negotiate on a fresh device
+without crashing** -- but on the spec's *weaker* path, since a real reset turned out to be
+impossible here:
+
+### P9's real reset is not possible on a GVT-g guest (2026-10-07)
+
+`probe-p9-device-loss.md` §3 prefers a *real* driver reset (a deliberate GPU timeout) over invoking
+the recovery path directly. That is not achievable on this guest, and the reason is structural:
+**GVT-g does not emulate the GPU -- it runs the guest's command stream on the *host* iGPU.** So an
+infinite compute dispatch does not hang a virtual device, it hangs the host engine, and GVT-g's
+reset path then blocks with no timeout:
+
+    INFO: task gvt:rcs0:6031 blocked for more than 122 seconds.
+      intel_gvt_wait_vgpu_idle+0xd8/0x120 [kvmgt]
+      intel_gvt_reset_vgpu_locked+0x215/0x260 [kvmgt]
+
+Killing QEMU does not release it (`gvt:rcs0` stays in `D`); the host needs a **reboot**. So
+`interop-probe --tdr` records the attempt but stages no reset, and P9 rests on the directly-invoked
+path. On a host with a *real* passed-through GPU the TDR run is the stronger evidence and can be
+restored (it is stashed, not deleted).
 
 ## Operating it
 
@@ -410,11 +435,13 @@ The environment works; it is not yet reusable. The gaps, in order:
   (which uses `--gvt last`, so it survives a reboot); `run` refuses to start a wrongly-configured
   guest instead of booting a silently different one. What persists across a reboot, and what does
   not, is tabulated in [`../script/README.md`](../script/README.md).
-- **Run the probe -- P5 and P6 done, P9 outstanding.** [`../script/interop-probe`](../script/interop-probe)
-  was run against the adapter and **both P6 gates and P5 pass** ("The packed probe passes" above), so
-  **P6's answer is recorded -- the datum that freezes `gpui-interop`'s API**
-  ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4). What remains is **P9** (device loss),
-  which needs a deliberate reset (see [`probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md)).
+- **Run the probe -- P6, P5 and P9 done (P9 on the direct-recovery path).**
+  [`../script/interop-probe`](../script/interop-probe) was run against the adapter and **P6 (both
+  gates), P5 and P9 pass** ("The packed probe passes" above), so **P6's answer is recorded -- the
+  datum that freezes `gpui-interop`'s API** ([`interop-crate.md`](../spi/rendering/interop-crate.md)
+  §4). P9's *real-reset* variant is impossible on a GVT-g guest (see "P9's real reset is not
+  possible", above), so P9 stands on the directly-invoked recovery path; on real passthrough
+  hardware the TDR run is the stronger evidence to add.
 
 ### Boot performance -- measured, and the levers that did not help (2026-10-06)
 
