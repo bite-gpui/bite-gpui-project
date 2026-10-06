@@ -1,9 +1,9 @@
 - **Opened:** 2026-10-02
 - **Status:** open — boot-time passthrough works, and the guest's exact VBIOS was recovered and both
-  passed via `romfile=` **and** injected as an ACPI `_ROM` method, but the NVIDIA driver still hits
-  **Code 43** (`CM_PROB_FAILED_POST_START`) after a ~7 s POST; the host device sits in `D3hot`, so the
-  muxless power path (`_ON`) is the last untried lever, and a mediated iGPU (GVT-g) is the fallback.
-  The probes have not run
+  passed via `romfile=` **and** injected as an ACPI `_ROM`; the host-side ACPI `_ON` was run as well,
+  yet the NVIDIA driver still hits **Code 43** (`CM_PROB_FAILED_POST_START`). Every lever on this
+  muxless adapter is spent, so the guest is moving to a **mediated Intel iGPU (GVT-g)**; the probes
+  have not run
 - **Touches:** this machine (`user-Vostro-14-5459`), [`../script/interop-vm`](../script/interop-vm), [`../script/vbios-from-firmware.py`](../script/vbios-from-firmware.py), [`../script/windows-iso`](../script/windows-iso), [`../spi/rendering/probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md), the `gpui_interop` crate in `bite-gpui`
 
 # The Windows guest that runs the interop probes
@@ -208,18 +208,30 @@ Two more measurements from the same run:
   (the `romfile`) but never read by the mobile driver. On a muxless board the dGPU core is powered up
   by the firmware's ACPI `_ON` (`HGON`/the EC), which nothing on the host runs — no nvidia, no nouveau.
 
-So the last untried lever on this path is **power**, not configuration: run the board's `_ON` *on the
-host* before booting the guest (`acpi-call-dkms`, then `\_SB.PCI0.RP01.PEGP._ON`), which needs root and
-a reboot. If that too fails, real-GPU D3D via this adapter is spent.
+So the last untried lever on this path was **power**: run the board's `_ON` *on the host* before
+booting the guest. It was tried, and it does not help either:
 
-### The fallback: a mediated iGPU (GVT-g) is still available (2026-10-06)
+### The host `_ON` power test also fails (2026-10-06)
+
+With `acpi-call-dkms` installed, `script/interop-vm poweron` runs the GPU's own
+`\_SB_.PCI0.RP01.PEGP._ON` (the path comes from the GPU's `firmware_node/path`). The method runs to
+completion -- it returns `0xb7`, the `SSMP = 0xB7` it ends with -- and moves the device `D3cold ->
+D3hot`, but the guest is unchanged: Code 43, `nvlddmkm` Stopped, no `VideoBiosVersion`, and
+`nvidia-smi` still cannot talk to the driver.
+
+That exhausts every lever on this adapter: hypervisor masking, subsystem-ID overrides, `romfile=`
+(padded and unpadded), an injected ACPI `_ROM`, a host-side `_ON`, and forcing primary VGA. A muxless
+mobile GeForce is not passable here.
+
+### The pivot: a mediated iGPU (GVT-g) is available (2026-10-06)
 
 `modinfo i915` on this host still carries `enable_gvt` (default false), so GVT-g host support is
 compiled in, and the Skylake-U **HD Graphics 520** is a Gen9 part with real D3D11/12 (feature level
 12_1). Booting with `i915.enable_gvt=1`, loading `kvmgt`, creating an mdev and passing it to the guest
 (with Intel's GVT-g Windows driver) would give the probes a *real* hardware adapter — two of them,
-with `-vga std` — without the muxless `_ON`/`_ROM`/Code 43 wall. The cost is an out-of-tree guest
-driver. This is the recommended pivot if the host-side `_ON` test fails.
+with `-vga std` -- without the muxless `_ON`/`_ROM`/Code 43 wall. The cost is an out-of-tree guest
+driver. The host now boots with `i915.enable_gvt=1` (`kvmgt.ko` is built); the remaining step is to
+`modprobe kvmgt`, create an mdev and wire it into the guest. This is the active path.
 
 ## What is blocked
 
