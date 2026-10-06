@@ -78,6 +78,13 @@ Three traps, each of which cost time to find:
    never returns. To run something in the console session, use a scheduled task with
    `/ru probe /rp probe /it` (and confirm with `WinSta0` from `GetProcessWindowStation`).
 
+**If SSH times out or resets, suspect the host, not the guest.** QEMU's port-forward accepts the
+connection — so `nc -z 127.0.0.1 2222` still says "open" — but the guest's vCPUs are starved while
+the host is out of memory, so sshd never completes the banner exchange. On this 7.2 GiB box QEMU
+(≈2.7 GB) plus an editor (≈1.5 GB) is enough; the guest also sits on the "Welcome" logon screen
+until it gets scheduled. `free -h` and `uptime` are the tell — free memory and retry. It is not the
+VM, and there is nothing to fix in it.
+
 For anything **long or privileged**, a scheduled task also solves a second problem: closing the SSH
 channel kills the remote process. Windows Update and `pnputil /add-driver` (the Intel driver below)
 both need this:
