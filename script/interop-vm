@@ -35,6 +35,7 @@
 #     script/interop-vm sendkey --keys KEYS      # inject keys into the running guest
 #     script/interop-vm type --text STR          # type a string into the running guest
 #     script/interop-vm powerdown                # ask the guest to shut down (ACPI)
+#     sudo script/interop-vm poweron              # run the board's ACPI _ON for the dGPU (muxless)
 #
 # Options:
 #     --iso PATH       the installer ISO (required by `install`)
@@ -159,7 +160,7 @@ usage() { awk 'NR >= 3 && /^#/ { sub(/^# ?/, ""); print; next } NR >= 3 { exit }
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        check|bind|unbind|create|install|run|prepare|screenshot|sendkey|type|powerdown) CMD="$1" ;;
+        check|bind|unbind|create|install|run|prepare|screenshot|sendkey|type|powerdown|poweron) CMD="$1" ;;
         --iso)   shift; ISO="${1:?--iso needs a path}" ;;
         --dir)   shift; VM_DIR="${1:?--dir needs a path}" ;;
         --disk)  shift; DISK_SIZE="${1:?}" ;;
@@ -692,6 +693,40 @@ cmd_powerdown() {
     say "sent ACPI power-down"
 }
 
+# ---------------------------------------------------------------------------------------
+# poweron — run the board's ACPI _ON for the dGPU
+# ---------------------------------------------------------------------------------------
+
+# On a MUX-less laptop the discrete GPU core is powered down until the vendor driver asks the
+# firmware to power it (ACPI `_ON`, which pokes the EC). A guest can never reach that host
+# method, so it runs here, on the host, before the VM starts:
+#
+#     sudo apt install acpi-call-dkms
+#     sudo modprobe acpi_call
+#     sudo script/interop-vm poweron
+#
+# `_ON` writes the GPU's command register and the EC, so it wants root; acpi_call must be
+# loaded first (`/proc/acpi/call`). The method lives at the GPU's own ACPI node, which the
+# firmware_node symlink names authoritatively (here \_SB_.PCI0.RP01.PEGP).
+cmd_poweron() {
+    local fw="/sys/bus/pci/devices/$GPU/firmware_node/path"
+    [ -e "$fw" ] || die "no ACPI firmware_node path for $GPU (is the GPU present?)"
+    local apath; apath="$(cat "$fw")"
+    [ -n "$apath" ] || die "empty ACPI path for $GPU"
+    local before after
+    before="$(cat "/sys/bus/pci/devices/$GPU/power_state" 2>/dev/null)"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        note "would write '$apath._ON' to /proc/acpi/call"
+        return 0
+    fi
+    [ -e /proc/acpi/call ] || die "acpi_call is not loaded — run: sudo modprobe acpi_call (package: acpi-call-dkms)"
+    need_root
+    printf '%s._ON' "$apath" > /proc/acpi/call
+    after="$(cat /proc/acpi/call 2>/dev/null)"
+    say "_ON on $apath: $after"
+    say "power_state: $before -> $(cat "/sys/bus/pci/devices/$GPU/power_state" 2>/dev/null)"
+}
+
 case "$CMD" in
     check)   cmd_check ;;
     bind)    cmd_bind ;;
@@ -704,4 +739,5 @@ case "$CMD" in
     sendkey) cmd_sendkey ;;
     type)    cmd_type ;;
     powerdown) cmd_powerdown ;;
+    poweron)   cmd_poweron ;;
 esac
