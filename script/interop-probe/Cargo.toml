@@ -1,0 +1,32 @@
+[package]
+name = "interop-probe"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "interop-probe"
+path = "src/main.rs"
+
+# Standalone, so it is not absorbed by any enclosing workspace.
+[workspace]
+
+# Only the D3D12 backend is needed; the other backends are no-ops on this target
+# and pull dependencies that are not required for the probe.
+[dependencies]
+wgpu = { version = "29.0.4", default-features = false, features = ["dx12", "std"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Direct3D12",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+] }
+
+# Keep the release build small and quick to copy.
+[profile.release]
+opt-level = 0

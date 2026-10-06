@@ -34,7 +34,7 @@ One-time host setup: `i915.enable_gvt=1` on the kernel cmdline. After every host
 device is gone, so the bring-up is two commands:
 
     sudo script/interop-vm gvt     # load kvmgt, create the mdev, print the run line
-    script/interop-vm run --no-gpu --gvt <uuid> --vnc
+    script/interop-vm run --no-gpu --gvt last --vnc   # `last` reads the uuid from gvt.uuid
 
 The guest needs its Intel display driver installed once (see "GVT-g works" below).
 [`../script/README.md`](../script/README.md) is the operating manual: the guest's SSH access, GVT-g,
@@ -297,13 +297,61 @@ Run in the guest over SSH, it reports:
     adapter 1/2: Microsoft Basic Render Driver (WARP software) -- 11_1 / 12_1
 
 So the GVT-g vGPU is a **real D3D11 FL 11_1 / D3D12 FL 12_1 device**, and DXGI hands over its
-**LUID** -- the datum P6 needs.
+**LUID** -- the datum P6 needs. The `luid` is assigned **per boot**, so the value above is an
+example: it changes between runs and is an identity to match *within* a run, not a constant.
 
 **Gotcha worth keeping:** `D3D11CreateDevice` takes a *10th* parameter, `UINT SDKVersion`
 (`D3D11_SDK_VERSION == 7`), between `FeatureLevels` and `ppDevice`. Leaving it out shifts every later
 argument; the Intel UMD then faults on the garbage pointers, which reads exactly like a driver
 failure (it cost hours of false leads across C#, Rust and C before `gcc`'s argument-count warning on
 the C version exposed it). The `windows` crate gets this right; hand-rolled FFI must not forget it.
+
+### The memlock limit GVT-g needs -- and the BSOD when it is missing (2026-10-06)
+
+GVT-g's vGPU pins the guest's pages for its shadow GTT (`vfio_pin_pages`), so QEMU needs a raised
+`RLIMIT_MEMLOCK`. The host default is 8 MiB, and with it the vGPU dies. The kernel log says so
+plainly:
+
+    vfio_pin_page_external: Task qemu-system-x86 (PID) RLIMIT_MEMLOCK (8388608) exceeded
+    gvt: vgpu 1: vfio_pin_pages failed for iova 0x…, ret -12
+    gvt: vgpu 1: fail to emulate MMIO write 00002230 len 4
+
+and QEMU mirrors it, once per failed write:
+
+    qemu-system-x86_64: vfio_region_write(…:region0+0x2230, …) failed: Bad address
+
+The guest's Intel driver gets a dead vGPU and Windows then fails to boot (`Recovery: Windows didn't
+load correctly`), so the visible symptom is a BSOD boot-loop, not a QEMU error.
+
+`sudo script/interop-vm prepare` had installed `user - memlock unlimited` as part of its
+*passthrough* wiring; `prepare --revert` removed it, and **that** is what broke the otherwise
+working GVT-g guest. So GVT-g does share two things with the dGPU path after all: the `/dev/vfio`
+udev rule, and this memlock limit. `gvt` now asserts both, `prepare --revert` keeps the memlock
+limit, and `run` refuses to start with an 8 MiB limit. It is a **login** limit: writing the conf
+takes effect at the next login (or reboot), not in the session that wrote it.
+
+### The packed probe passes on the vGPU -- P5 and P6 (2026-10-06)
+
+[`../script/interop-probe`](../script/interop-probe) is the packed W5 checklist: P6 asks whether DXGI
+and wgpu agree on one adapter LUID, P5 runs a D3D12 -> D3D11 shared-texture fence loop. Run against
+the GVT-g adapter over SSH, both pass on **hardware**:
+
+    == P6 DXGI ==
+    adapter 0: Intel(R) HD Graphics 520  [8086:1916]  luid 00000000:0000533C  128 MiB dedicated
+    D3D11 device: adapter luid 00000000:0000533C  feature level 11_1
+    P6 DXGI+LUID : PASS -- 3 DXGI adapter(s); D3D11 device on luid ...533C via IDXGIAdapter::GetDesc
+    == P6 wgpu ==
+    wgpu adapter 0: Intel(R) HD Graphics 520  backend=Dx12 type=IntegratedGpu  luid 00000000:0000533C
+    P6 wgpu      : PASS -- LUID match between the D3D11 device and wgpu adapter 0
+    == P5 fence loop ==
+    D3D12 clear -> shared 64x64 R8G8B8A8 texture -> ID3D11Fence handle -> context4.Wait(fence, 1)
+    P5 fence loop: PASS -- shared texture read back byte-exact on D3D11 (0/4096 mismatched)
+
+So P6's answer -- **DXGI and wgpu name the same adapter by the same LUID** -- is recorded on a *real*
+adapter, which is the datum that freezes `gpui-interop`'s `attach`/`Adapter` API
+([`interop-crate.md`](../spi/rendering/interop-crate.md) §4). P5's loop is byte-exact through the
+GPU-side `ID3D11Fence::Wait`. **P9 (device loss) is still outstanding** -- it needs a deliberate
+reset/teardown, not just a boot. (The LUIDs are per boot, so the exact numbers are illustrative.)
 
 ## Operating it
 
@@ -312,10 +360,12 @@ in [`../script/README.md`](../script/README.md). Two host-side facts are worth r
 
 - The guest's **Intel display driver install is a manual, one-time step** for this VM; a golden
   image would fold it in.
-- `sudo script/interop-vm prepare` / `prepare --revert` manage the *dGPU's* binding. GVT-g does not
-  need them, so with the GeForce abandoned the host can keep its nvidia driver. `prepare` also
-  masks nvidia, raises the memlock limit and writes a udev rule -- all only for the passthrough
-  path.
+- `sudo script/interop-vm prepare` / `prepare --revert` manage the *dGPU's* binding, which the
+  abandoned GeForce no longer needs -- so with the GeForce dropped the host keeps its nvidia driver.
+  GVT-g needs none of the *modprobe* or *udev-masking* wiring either, **but it does need two of the
+  same bits**: the `/dev/vfio` udev rule, and the raised **memlock** limit (see "The memlock limit
+  GVT-g needs" above). `gvt` installs both, and `prepare --revert` no longer removes the memlock
+  limit.
 
 **RAM.** Give the guest `--ram 3G`, not 4G: on this 7.2 GiB host the 4 GB guest swaps hard and
 boots take minutes.
@@ -336,13 +386,16 @@ The environment works; it is not yet reusable. The gaps, in order:
 - **A golden image -- done.** `script/interop-vm bake` freezes the driver-complete disk as a read-only
   `windows-golden.qcow2` and runs the VM on a qcow2 overlay on it; `clone --to DIR` makes another
   overlay for a fresh VM. What remains is only to re-bake when the guest changes.
-- **One command to bring the harness up -- done.** `sudo script/interop-vm gvt` loads `kvmgt` and
-  creates the mdev (printing the `run` line), and `run` now refuses to start a wrongly-configured
-  guest instead of booting a silently different one.
-- **Run the probe.** Point W5's packed probe
-  ([`probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md)) at the adapter and record
-  P5, P6 and P9 -- after which **P6's answer freezes `gpui-interop`'s API**
-  ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4).
+- **One command to bring the harness up -- done.** `sudo script/interop-vm gvt` loads `kvmgt`,
+  creates the mdev, re-asserts the `/dev/vfio` rule and the memlock limit, and prints the `run` line
+  (which uses `--gvt last`, so it survives a reboot); `run` refuses to start a wrongly-configured
+  guest instead of booting a silently different one. What persists across a reboot, and what does
+  not, is tabulated in [`../script/README.md`](../script/README.md).
+- **Run the probe -- P5 and P6 done, P9 outstanding.** [`../script/interop-probe`](../script/interop-probe)
+  was run against the adapter and **both P6 gates and P5 pass** ("The packed probe passes" above), so
+  **P6's answer is recorded -- the datum that freezes `gpui-interop`'s API**
+  ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4). What remains is **P9** (device loss),
+  which needs a deliberate reset (see [`probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md)).
 
 ### Boot performance -- measured, and the levers that did not help (2026-10-06)
 

@@ -6,6 +6,7 @@ The operator tooling for the Windows probe VM and the repository's own workflow 
 | --- | --- |
 | [`interop-vm`](interop-vm) | the QEMU launcher and host preparation for the Windows probe guest |
 | [`d3dprobe/`](d3dprobe) | a dependency-free Windows probe: each DXGI adapter's D3D11/12 feature level and LUID |
+| [`interop-probe/`](interop-probe) | the packed W5 probe: P6 (DXGI + wgpu adapter LUID) and P5 (D3D12 -> D3D11 shared-texture fence loop) |
 | [`windows-iso`](windows-iso) | build a client Windows ISO from UUP dump |
 | [`autounattend.xml`](autounattend.xml), [`autounattend-uefi.xml`](autounattend-uefi.xml) | answer files for the unattended install (BIOS/MBR and UEFI/GPT) |
 | [`vbios-from-firmware.py`](vbios-from-firmware.py) | carve a GPU option ROM out of a host SPI-flash dump |
@@ -13,7 +14,7 @@ The operator tooling for the Windows probe VM and the repository's own workflow 
 | [`dev-env`](dev-env) | the recommended host build environment (toolchain paths, memory/swap) |
 | [`check-citations`](check-citations), [`citations.py`](citations.py) | resolve every `path:line` citation against the canonical ref |
 
-The last four are mostly historical or repository-wide; the first two are what the probe work uses.
+The last four are mostly historical or repository-wide; the first three are what the probe work uses.
 
 ---
 
@@ -46,7 +47,8 @@ sudo script/interop-vm gvt                 # recreate the mediated Intel GPU aft
 ### Options
 
 `--dir DIR` (default `$HOME/interop-vm`), `--disk SIZE`, `--ram SIZE` (**use `3G`** on this 7.2 GiB
-host; 4G swaps), `--cpus N`, `--cpu MODEL`, `--uefi`, `--vnc`, `--no-gpu`, `--gvt UUID`,
+host; 4G swaps), `--cpus N`, `--cpu MODEL`, `--uefi`, `--vnc`, `--no-gpu`, `--gvt UUID|last`
+(`last` = the mdev `gvt` last created),
 `--gvt-type TYPE`, `--gpu-subsys VVVV:DDDD`, `--rom PATH`, `--no-rom`, `--x-vga`, `--no-vga`, `--iso PATH`,
 `--unattend`, `--answer PATH`, `--qemu-arg ARG` (repeatable; raw QEMU arguments), `--out`, `--keys`,
 `--text`, `--to DIR` (`clone` destination), `--cache MODE` (QEMU disk cache; e.g. `unsafe`), `--dry-run`.
@@ -129,21 +131,41 @@ The guest's real GPU is a **mediated Intel iGPU**, not a passed-through card.
 *non-fatal* `Direct firmware load for i915/gvt/vid_0x8086_did_0x1916_rid_0x07.golden_hw_state failed`;
 the mdev types appear anyway.
 
-**After every host reboot**, the mediated device is gone. Two commands, no more:
+**After every host reboot** the mediated device is gone, so bring it back with two commands.
+Almost everything else is persistent:
 
 ```sh
-sudo script/interop-vm gvt                        # load kvmgt, create the mdev, print the run line
-script/interop-vm run --no-gpu --gvt <uuid> --vnc # the line gvt prints
+sudo script/interop-vm gvt           # kvmgt + mdev + /dev/vfio rule + memlock; prints the run line
+script/interop-vm run --dir ~/interop-vm --ram 3G --no-gpu --gvt last --vnc
 ```
 
-`gvt` picks `i915-GVTg_V5_4` (128 MB low / 512 MB high GM; override with `--gvt-type`), saves the
-UUID to `$VM_DIR/gvt.uuid`, and prints the exact `run` line. `--gvt` attaches
+What survives a reboot, and what does not:
+
+| item | where | survives? |
+| --- | --- | --- |
+| `i915.enable_gvt=1` | `/etc/default/grub` (`GRUB_CMDLINE_LINUX_DEFAULT`) | yes |
+| the `/dev/vfio` uaccess rule | `/etc/udev/rules.d/10-vfio.rules` | yes |
+| the memlock limit | `/etc/security/limits.d/99-vfio-memlock.conf` | yes |
+| the disk (golden + overlay) | `windows-golden.qcow2` / `windows.qcow2` | yes |
+| `kvmgt`, the mdev, and its uuid | sysfs | **no** — `gvt` recreates them |
+
+`gvt` picks `i915-GVTg_V5_4` (128 MB low / 512 MB high GM; override with `--gvt-type`) and is
+idempotent: it loads `kvmgt`, reuses the mdev if it still exists, re-asserts the `/dev/vfio` rule and
+the memlock limit, and writes the uuid to `$VM_DIR/gvt.uuid`. `--gvt last` reads that file, so the
+`run` line does not change across reboots. `--gvt` attaches
 `-device vfio-pci,sysfsdev=/sys/bus/pci/devices/0000:00:02.0/<uuid>`, and `--no-gpu` drops the dead
 dGPU; the guest sees an Intel `8086:1916` VGA controller.
 
 `run` refuses to start when the setup is wrong, rather than booting a silently different guest: if
 the dGPU is not on `vfio-pci` it points you at `gvt`, and if `--gvt` names an mdev that does not
 exist it says so.
+
+`gvt` also asserts the two host bits GVT-g shares with passthrough — the `/dev/vfio` udev rule and
+the **memlock** limit — and `run` refuses to start when either is missing. GVT-g's vGPU pins guest
+pages for its shadow GTT, so the host's 8 MiB `RLIMIT_MEMLOCK` default makes `vfio_pin_pages` fail
+and the guest **BSOD at boot**. The memlock limit is a *login* limit: the first time `gvt` has to
+write it, it only takes effect at the **next** login (or reboot), and `run` will refuse until then.
+Once the file persists, every later login has it, so a normal reboot is just `sudo gvt` then `run`.
 
 **Install the Intel display driver once, in the guest** — it is already in the golden image, so a
 clone does not need this. Windows Update offers `Intel Corporation - Display - 31.0.101.2111`, but
@@ -171,10 +193,16 @@ sudo reboot
 script/interop-vm check      # driver: nvidia
 ```
 
-**None of this is needed for GVT-g.** It exists only for the failed attempt to pass the discrete GPU
-through; see [`../issues/0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md) for why that
-MUX-less GeForce cannot be passed to a guest. `sudo script/interop-vm poweron` (ACPI `_ON` via
+**Most of this is dGPU-only** — it exists for the failed attempt to pass the discrete GPU through;
+see [`../issues/0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md) for why that MUX-less
+GeForce cannot be passed to a guest. `sudo script/interop-vm poweron` (ACPI `_ON` via
 `acpi-call-dkms`, for the muxless dGPU's power state) is likewise dGPU-only.
+
+**But GVT-g shares two of these bits**, so do not strip them when reverting: the `/dev/vfio` udev
+rule, and the **memlock** limit. GVT-g's vGPU pins guest pages for its shadow GTT, so the host's
+8 MiB `RLIMIT_MEMLOCK` default makes `vfio_pin_pages` fail and the guest BSOD at boot. `gvt` (and
+`prepare`) install both, and `prepare --revert` keeps the memlock limit for exactly this reason —
+removing it is what silently broke a working GVT-g guest once.
 
 ### A golden image, and clones
 
@@ -247,6 +275,9 @@ adapter 0: Intel(R) HD Graphics 520  [8086:1916]  luid 00000000:00005430  128 Mi
     D3D12 : OK, feature level 12_1 (0xC100)
 ```
 
+The `luid` is assigned **per boot**, so the number above is only an example — it changes between
+runs and is an identity to match *within* a run, not a fixed value.
+
 Two things to carry into any hand-written Windows FFI (the `windows` crate gets both right):
 
 - **`D3D11CreateDevice` has a tenth parameter.** `UINT SDKVersion` (`D3D11_SDK_VERSION == 7`) sits
@@ -255,3 +286,27 @@ Two things to carry into any hand-written Windows FFI (the `windows` crate gets 
   the earlier C#/Rust/C attempts "crash" for hours.
 - **`DXGI_ADAPTER_DESC1` puts `Description[128]` first** (`WCHAR[128]`, 256 bytes), *then* `VendorId`
   … `Flags` — not the reverse.
+
+---
+
+## The packed probe — `script/interop-probe`
+
+The W5 checklist itself: **P6** (do DXGI and wgpu agree on one adapter LUID?) and **P5** (a D3D12 ->
+D3D11 shared-texture fence loop), using `wgpu` (DX12 backend only) plus raw D3D11/DXGI. It
+cross-compiles the same way as `d3dprobe`:
+
+```sh
+export RUSTUP_HOME=…/projects/.rustup-home CARGO_HOME=…/projects/.cargo-home
+export PATH="$CARGO_HOME/bin:$PATH"
+
+cd script/interop-probe
+cargo build --release --target x86_64-pc-windows-gnu
+sshpass -p probe scp -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    target/x86_64-pc-windows-gnu/release/interop-probe.exe probe@127.0.0.1:C:/Users/probe/interop-probe.exe
+sshpass -p probe ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    probe@127.0.0.1 'C:\Users\probe\interop-probe.exe'
+```
+
+It prints `PASS`/`FAIL`/`SKIP` per gate. On the GVT-g guest both gates pass; the recorded result is
+in [`../issues/0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md) ("The packed probe
+passes").

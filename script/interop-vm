@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 #
-# The Windows guest for the interop probes, with the discrete GPU passed through.
+# The Windows guest for the interop probes, with a real (hardware) Direct3D adapter.
+#
+# The adapter that works is a **GVT-g mediated Intel iGPU** (`gvt`, then `run --no-gpu --gvt`, see
+# below and issues/0009). The discrete GPU could **not** be passed through -- it is MUX-less with no
+# readable VBIOS and its mobile driver stops at Code 43 -- so its paths (`prepare`, `bind`,
+# `poweron`, `--rom`, `--x-vga`) remain only for the record.
 #
 # W5's probes (P5, P6, P9) and the PR-2 sufficiency test need a **real** Direct3D device: a
 # software/WARP adapter is explicitly not representative (`probe-p6-adapter-luid.md` §5), and the
@@ -39,6 +44,8 @@
 #     script/interop-vm bake                     # freeze the disk as a golden image; run on an overlay
 #     script/interop-vm clone --to DIR           # a fresh VM: a new overlay on the golden image
 #     sudo script/interop-vm gvt                 # recreate the mediated Intel GPU after a reboot
+#     script/interop-vm run --no-gpu --gvt last --vnc   # the GVT-g guest (the one that works)
+#                                                # `last` reads the uuid back from gvt.uuid
 #
 # Options:
 #     --iso PATH       the installer ISO (required by `install`)
@@ -61,7 +68,7 @@
 #     --gpu-subsys VVVV:DDDD
 #                      override the guest's GPU subsystem IDs (default: read from the host)
 #     --gvt UUID       attach an Intel GVT-g mediated device (a real iGPU adapter);
-#                      create the mdev under $IGPU/mdev_supported_types/<type>/ first
+#                      `last` reuses the uuid `gvt` saved to $VM_DIR/gvt.uuid
 #     --gvt-type TYPE  the mdev type `gvt` creates (default i915-GVTg_V5_4)
 #     --qemu-arg ARG   append a raw QEMU argument (repeatable; for experiments)
 #     --unattend       attach the bundled answer file for a hands-off install
@@ -216,6 +223,15 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ -n "$CMD" ] || { usage; exit 1; }
+
+# `--gvt last` means "the mdev `gvt` last created", so a run line survives the host reboot that
+# destroys the mdev -- and its uuid. (`gvt` writes the uuid to $VM_DIR/gvt.uuid.)
+case "$GVT_UUID" in
+    last|@saved)
+        GVT_UUID="$(cat "$VM_DIR/gvt.uuid" 2>/dev/null || true)"
+        [ -n "$GVT_UUID" ] || die "--gvt last: no saved uuid at $VM_DIR/gvt.uuid — run: sudo $0 gvt"
+        ;;
+esac
 
 iommu_group() { readlink -f "/sys/bus/pci/devices/$GPU/iommu_group" 2>/dev/null | xargs -r basename; }
 pci_id() { lspci -n -s "$GPU_SHORT" 2>/dev/null | awk '{print $3}'; }
@@ -377,6 +393,24 @@ unmask_nvidia_udev_rules() {
     done < <(nvidia_udev_rule_names)
 }
 
+# QEMU must lock guest RAM to hand it to the IOMMU: for a passed-through dGPU, and equally for a
+# GVT-g vGPU, whose shadow GTT pins guest pages via `vfio_pin_pages`. The host's default
+# RLIMIT_MEMLOCK is 8 MiB, which is far too small -- with it the vGPU stops working and the guest
+# BSODs (see issues/0009). `prepare` *and* `gvt` keep this limit raised; `prepare --revert`
+# deliberately leaves it in place, because GVT-g needs it just as much as passthrough does.
+memlock_conf() {
+    local mlock_user="${SUDO_USER:-$USER}"
+    if [ "$mlock_user" = "root" ]; then mlock_user="*"; fi
+    write_conf "$MEMLOCK_CONF" "# Managed by script/interop-vm (prepare / gvt).
+# QEMU locks guest RAM to map it through the IOMMU (dGPU passthrough), and GVT-g pins guest
+# pages for the vGPU's shadow GTT. The default 8 MiB is too small, and the vGPU then dies.
+$mlock_user - memlock unlimited"
+}
+
+# RLIMIT_MEMLOCK of the calling process, in KiB (`unlimited` if so set). It is a *login* limit:
+# writing $MEMLOCK_CONF only takes effect at the next login (or reboot).
+memlock_kib() { ulimit -l; }
+
 cmd_prepare() {
     need_root
     local id; id="$(pci_id)"
@@ -428,11 +462,7 @@ SUBSYSTEM=="vfio", TAG+="uaccess"'
     run udevadm trigger --subsystem-match=vfio
 
     say "5. raise the memlock limit (QEMU locks guest RAM to map it via the IOMMU)"
-    local mlock_user="${SUDO_USER:-$USER}"
-    if [ "$mlock_user" = "root" ]; then mlock_user="*"; fi
-    write_conf "$MEMLOCK_CONF" "# Managed by script/interop-vm prepare --revert.
-# QEMU must lock the whole guest RAM to map it through the IOMMU.
-$mlock_user - memlock unlimited"
+    memlock_conf
 
     say
     say "reboot or log back in (the memlock limit applies at login), then:"
@@ -451,7 +481,10 @@ cmd_prepare_revert() {
         fi
     done
     remove_file "$UDEV_RULE"
-    remove_file "$MEMLOCK_CONF"
+    # Deliberately keep $MEMLOCK_CONF: GVT-g needs the raised limit too (its shadow GTT pins
+    # guest pages), and a higher memlock is harmless. Removing it here is what silently broke
+    # the working GVT-g guest once. `gvt` re-asserts it as well.
+    if [ -e "$MEMLOCK_CONF" ]; then note "keeping $MEMLOCK_CONF (GVT-g needs it too)"; fi
     unmask_nvidia_udev_rules
     drop_initramfs_modules
     run udevadm control --reload-rules
@@ -623,6 +656,17 @@ cmd_run() {
     [ -f "$VM_DIR/windows.qcow2" ] || die "no disk — run: $0 create (and install)"
     have qemu-system-x86_64 || die "qemu-system-x86_64 is not installed"
 
+    # QEMU locks guest RAM for VFIO (a passed-through dGPU, or a GVT-g vGPU). If the limit is
+    # still the 8 MiB default, GVT-g's vfio_pin_pages fails and the guest BSODs at boot, with a
+    # "vfio_region_write ... Bad address" in QEMU's log. Catch it here rather than in the VM.
+    if { [ "$NO_GPU" -eq 0 ] || [ -n "$GVT_UUID" ]; } && [ "$(id -u)" -ne 0 ] && [ "$(memlock_kib)" != "unlimited" ]; then
+        if [ "$DRY_RUN" -eq 1 ]; then
+            note "(dry-run) memlock is $(memlock_kib) KiB — a real run would refuse (GVT-g/VFIO need it raised)"
+        else
+            die "memlock is $(memlock_kib) KiB — too low for GVT-g/VFIO (the guest BSODs at boot).  Fix: sudo $0 gvt, then log out and back in"
+        fi
+    fi
+
     local what=""
     if [ "$NO_GPU" -eq 0 ]; then
         local drv; drv="$(current_driver)"
@@ -634,6 +678,15 @@ cmd_run() {
     if [ -n "$GVT_UUID" ]; then
         [ -e "/sys/bus/pci/devices/$IGPU/$GVT_UUID" ] ||
             die "no mediated device $GVT_UUID — create one: sudo $0 gvt"
+        # GVT-g reaches QEMU over vfio, so the invoking user must be able to open the device's
+        # iommu-group node. It stays root-only until the udev rule `gvt` installs has run (a
+        # `prepare --revert` removes it), and without this check the failure is a bare QEMU
+        # "Could not open '/dev/vfio/N': Permission denied".
+        local grp
+        grp="$(basename "$(readlink -f "/sys/bus/mdev/devices/$GVT_UUID/iommu_group" 2>/dev/null)" 2>/dev/null)"
+        if [ -n "$grp" ] && [ -e "/dev/vfio/$grp" ] && [ ! -r "/dev/vfio/$grp" ]; then
+            die "/dev/vfio/$grp is not accessible to you — run: sudo $0 gvt (grants /dev/vfio and reuses the mdev)"
+        fi
         what="${what:+$what + }GVT-g $GVT_UUID"
     fi
     say "booting $VM_DIR/windows.qcow2 with ${what:-no GPU}"
@@ -816,6 +869,16 @@ SUBSYSTEM=="vfio", TAG+="uaccess"'
         run udevadm trigger --subsystem-match=vfio
     fi
 
+    # GVT-g also needs the memlock limit raised: its vGPU pins guest pages for the shadow GTT
+    # via `vfio_pin_pages`, and the host's 8 MiB default makes that fail -- the vGPU then dies
+    # under the guest's Intel driver and Windows boot-loops. `prepare --revert` used to strip
+    # this very file, which is what broke a working GVT-g guest.
+    if [ ! -f "$MEMLOCK_CONF" ]; then
+        say "raising the memlock limit (GVT-g pins guest pages for the vGPU)"
+        memlock_conf
+        note "log out and back in for it to apply (it is a login limit), or reboot"
+    fi
+
     # Idempotent: reuse an existing mdev rather than making a second one (the type allows one).
     local uuid=""
     if [ -f "$VM_DIR/gvt.uuid" ]; then uuid="$(cat "$VM_DIR/gvt.uuid")"; fi
@@ -847,7 +910,8 @@ SUBSYSTEM=="vfio", TAG+="uaccess"'
     fi
     say
     say "start the VM with:"
-    note "$0 run --dir $VM_DIR --ram 3G --cpu 'host,kvm=off,-hypervisor,hv_vendor_id=0123456789ab' --no-gpu --gvt $uuid --vnc"
+    note "$0 run --dir $VM_DIR --ram 3G --cpu 'host,kvm=off,-hypervisor,hv_vendor_id=0123456789ab' --no-gpu --gvt last --vnc"
+    note "(or --gvt $uuid; 'last' reads it back from $VM_DIR/gvt.uuid)"
 }
 
 # ---------------------------------------------------------------------------------------
