@@ -101,6 +101,25 @@ The QEMU monitor takes raw commands, so scripting it is just `printf`:
 printf 'system_powerdown\n' | nc -q1 127.0.0.1 4444     # same as: script/interop-vm powerdown
 ```
 
+### Security posture
+
+The guest is reached by **password, not a key**: a local administrator `probe` whose password is
+literally `probe` (`script/autounattend.xml`), with password-authenticated OpenSSH — the answer file
+installs `OpenSSH.Server`, sets `sshd` to auto-start, and opens the guest firewall for port 22.
+
+What keeps that acceptable is the **network shape**, not the credential:
+
+- QEMU uses a **user-mode NIC**, so the guest is not on the real network at all. The only way in is
+  the host's forward — `hostfwd=tcp:127.0.0.1:2222-:22` — bound to **loopback**.
+- The monitor (`127.0.0.1:4444`) and VNC (`127.0.0.1:0`) are loopback too.
+
+The password is public in this repository **on purpose** (it is a local, throwaway probe VM), which
+is exactly the property to keep an eye on. Two changes would make it unacceptable and should be made
+*first*, not after: forwarding to a non-loopback address (or switching to a bridged/tap NIC), and
+putting the golden image somewhere anyone else can reach. If either is ever needed, move to key auth
+— `ssh-keygen`, then drop the public key in the guest's `administrators_authorized_keys` (the Windows
+OpenSSH convention for an admin user) — and stop passing the password through `sshpass`.
+
 ### GVT-g — the adapter that works
 
 The guest's real GPU is a **mediated Intel iGPU**, not a passed-through card. One-time host setup:
