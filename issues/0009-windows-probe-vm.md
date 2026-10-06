@@ -1,8 +1,9 @@
 - **Opened:** 2026-10-02
-- **Status:** open — boot-time passthrough works (GPU on `vfio-pci`, no host nvidia), Windows 11
-  Pro is installed and reachable over SSH, but the guest's NVIDIA driver hits **Code 43**, so the
+- **Status:** open — boot-time passthrough works and the guest's exact VBIOS has been recovered from the
+  host firmware and passed through, but the NVIDIA driver still hits **Code 43**
+  (`CM_PROB_FAILED_POST_START`); the remaining cause is the muxless ACPI/power-state path, so the
   probes have not run
-- **Touches:** this machine (`user-Vostro-14-5459`), [`../script/interop-vm`](../script/interop-vm), [`../script/windows-iso`](../script/windows-iso), [`../spi/rendering/probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md), the `gpui_interop` crate in `bite-gpui`
+- **Touches:** this machine (`user-Vostro-14-5459`), [`../script/interop-vm`](../script/interop-vm), [`../script/vbios-from-firmware.py`](../script/vbios-from-firmware.py), [`../script/windows-iso`](../script/windows-iso), [`../spi/rendering/probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md), the `gpui_interop` crate in `bite-gpui`
 
 # The Windows guest that runs the interop probes
 
@@ -122,6 +123,47 @@ guest GPU is the passed-through 930M with driver **582.78 DCH** installed. The r
 subsystem registers read `0000:0000`, so every subsystem-qualified INF entry missed), and
 `-cpu host,kvm=off,-hypervisor` clears the hypervisor bit, but the device still fails POST. It has
 **no readable VBIOS** (MUX-less; `EIO` on the ROM even unbound), which is the leading suspect.
+
+## VBIOS recovery from the host firmware (2026-10-06)
+
+The usual fix for Code 43 is handing the guest the GPU's option ROM (`romfile=`). Route B (a dump
+from TechPowerUp) was a dead end: TPU has no entry for a muxless part like the 930M, and it
+Cloudflare-blocks non-browser clients. So we recovered the **exact** ROM from this laptop's own SPI
+flash. [`../script/vbios-from-firmware.py`](../script/vbios-from-firmware.py) automates the last
+step; the obstacles, in order, were:
+
+1. **Secure Boot / kernel lockdown.** `flashrom -p internal` failed with *Could not get I/O
+   privileges* and `/dev/mem` with *Permission denied*: `mokutil --sb-state` = enabled, so lockdown
+   was `integrity` (`dmesg`: *Lockdown: flashrom: raw io port access is restricted*), which revokes
+   raw port I/O and `/dev/mem` even for root. Disabling Secure Boot in the Dell BIOS drops lockdown
+   to `none`.
+2. **The ME region is read-protected.** A full read dies at *cannot read inside Management Engine
+   region (0x001000..0x3fffff)*; the descriptor is `fd 0-0xfff / me 0x1000-0x3fffff / bios
+   0x400000-0xbfffff` (12 MB). Read only the BIOS region:
+   `flashrom -p internal:laptop=force_I_want_a_brick --ifd -i bios -r bios.bin` (the `laptop=` switch
+   is mandatory on laptops; `-r` is a pure read).
+3. **The VBIOS is compressed, not a plain option ROM.** The 8 MB BIOS region has **no `NVIDIA`
+   string, no `55AA`+`PCIR`, no `NPDE`** -- the ROM is LZMA-compressed inside a firmware volume that
+   AMI parks in an *AMI ROM hole* at `0x5FAF10`, under file GUID
+   `DB8F87A0-8921-4D09-BE7B-93D5F1ECB0A0`. `UEFIExtract bios.bin all` decompresses it.
+4. **Non-standard PDS pointer.** `PCIR` is *not* at ROM offset 0x18 here: the 16-bit value at 0x18
+   is a *pointer* to the PCI Data Structure, and this ROM points to `0x190`. Following the pointer
+   is the difference between "no ROM found" and two valid ones.
+
+The result is **two distinct 36352-byte option ROMs** for `10DE:1346` (`checksum 0`, PDS
+image-length 71 units, `VIDEO` / `IBM VGA Compatible`, date `08/04/15`) -- the exact production VBIOS
+for this board.
+
+**It does not fix Code 43.** Passing either variant via `-device vfio-pci,...,romfile=...` (verified
+in the live QEMU command line) leaves the device at `Problem Code 43 (CM_PROB_FAILED_POST_START)` and
+`nvidia-smi` still cannot talk to the driver.
+
+So the VBIOS was **necessary-but-not-sufficient**. The remaining cause is the second muxless hurdle:
+the guest cannot bring the GPU up because the power/routing methods (`_ON` / `_OFF` / `_PS0` /
+`_PS3` / `_DSM`, and a `_ROM` in SSDT10) live in the **host** DSDT/SSDT, which the guest never sees.
+The ACPI tables were captured to `/home/user/interop-vm/acpi/` for that work. Next candidates, in
+order: an older guest NVIDIA driver, then making the GPU the primary VGA (`-vga none` +
+`x-vga=on`); failing those, real-GPU D3D on this muxless laptop is likely infeasible.
 
 ## What is blocked
 
