@@ -735,7 +735,7 @@ cmd_poweron() {
     [ -e /proc/acpi/call ] || die "acpi_call is not loaded — run: sudo modprobe acpi_call (package: acpi-call-dkms)"
     need_root
     printf '%s._ON' "$apath" > /proc/acpi/call
-    after="$(cat /proc/acpi/call 2>/dev/null)"
+    after="$(tr -d '\000' < /proc/acpi/call 2>/dev/null)"
     say "_ON on $apath: $after"
     say "power_state: $before -> $(cat "/sys/bus/pci/devices/$GPU/power_state" 2>/dev/null)"
 }
