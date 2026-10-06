@@ -31,6 +31,7 @@ being committed to any of them.
 | [`spi/`](spi/README.md) | service provider interfaces — the trait contracts a layer implements to be replaced, with the bootstrap each is installed through |
 | [`decisions/`](decisions/README.md) | dated decision records: what was decided, on what evidence, and what was rejected |
 | [`issues/`](issues/README.md) | the issue tracker, for work that spans repositories |
+| [`script/`](script/README.md) | the operator tooling: the Windows probe VM (`interop-vm`, `d3dprobe`) and the repository workflow scripts |
 | [`repositories.md`](repositories.md) | every repository in the organisation, in canonical names with the legacy names |
 | [`references.md`](references.md) | the other repositories, branches and published names, and what each is for |
 | [`online-resources.md`](online-resources.md) | the crates.io packages, GitHub repositories and Pages site, with the description and topics each carries |

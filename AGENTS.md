@@ -39,7 +39,7 @@ kind of error that is only caught much later.
 
 ## Verifying citations — `script/check-citations`
 
-The one tool in this repository, and the thing an agent must run after any edit that
+The tool an agent must run after any edit that
 touches or adds a `path:line` citation. It **prints, does not judge**: it resolves every
 citation against the canonical ref and shows the line each now points at. A blank line is
 usually drift; only "unresolved", "out of range" and "missing" fail. `--drift` prints
@@ -82,5 +82,8 @@ there rather than here so it is not a second copy.
   `decisions/0001-no-third-swap.md` record.
 - `decisions/` — numbered, dated records; unnumbered files are *evidence*, not decisions.
 - `issues/` — work that spans repositories. One file per issue, `NNNN-short-title.md`.
+- `script/` — operator tooling rather than architecture: the Windows probe VM and the workflow
+  scripts. [`script/README.md`](script/README.md) is the manual, and
+  [`issues/0009`](issues/0009-windows-probe-vm.md) is why the guest is shaped the way it is.
 - `spi/rendering-project/` — nothing but symlinks into the real documents. Do not write a
   real document here; opening a symlink edits the original.

@@ -1,9 +1,14 @@
 - **Opened:** 2026-10-02
-- **Status:** open — the muxless GeForce is unusable in a guest (every lever spent, recorded below), but
-  the guest now has a **real** hardware adapter via GVT-g: an Intel HD Graphics 520 with driver
-  `31.0.101.2111`, problem code 0, confirmed by probe to be **D3D11 FL 11_1 / D3D12 FL 12_1**,
-  alongside `-vga std`. Next: run W5's probes on it.
-- **Touches:** this machine (`user-Vostro-14-5459`), [`../script/interop-vm`](../script/interop-vm), [`../script/vbios-from-firmware.py`](../script/vbios-from-firmware.py), [`../script/windows-iso`](../script/windows-iso), [`../spi/rendering/probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md), the `gpui_interop` crate in `bite-gpui`
+- **Status:** closed — the MUX-less GeForce cannot be passed through (every route tried, recorded
+  below), but the guest runs on a **mediated Intel iGPU (GVT-g)**: a real **D3D11 FL 11_1 / D3D12
+  FL 12_1** device at problem code 0. The environment is usable; running the probes, and
+  productionising it into a golden image, are separate next steps.
+- **Touches:** this machine (`user-Vostro-14-5459`), [`../script/interop-vm`](../script/interop-vm),
+  [`../script/d3dprobe`](../script/d3dprobe), [`../script/windows-iso`](../script/windows-iso),
+  [`../script/vbios-from-firmware.py`](../script/vbios-from-firmware.py),
+  [`../script/nvrom-ssdt.py`](../script/nvrom-ssdt.py), [`../script/README.md`](../script/README.md),
+  [`../spi/rendering/probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md), the
+  `gpui_interop` crate in `bite-gpui`
 
 # The Windows guest that runs the interop probes
 
@@ -14,6 +19,27 @@ the PR-2 sufficiency test need a **real** Direct3D device. The fork's `windows-l
 runs WARP, which `probe-p6-adapter-luid.md` §5 says is *"recorded but … not representative of
 hardware"*, and P6 in particular wants a **two-GPU** machine. So the Windows half of W5 has nowhere
 to run, and this box is Linux. A QEMU guest with the discrete GPU passed through is the answer.
+
+## The environment, as it stands (2026-10-06)
+
+The guest is **Windows 11 Pro 26100.1**, auto-logon `probe`/`probe`, reachable over SSH on
+`127.0.0.1:2222` (QEMU monitor on `127.0.0.1:4444`). Its real adapter is a **GVT-g mediated Intel HD
+Graphics 520** (`8086:1916`, driver `31.0.101.2111`, problem code 0), which
+[`../script/d3dprobe`](../script/d3dprobe) confirms is **D3D11 FL 11_1 / D3D12 FL 12_1**; QEMU's
+`-vga std` supplies a second, basic adapter. The MUX-less GeForce is **not** passed through -- it
+cannot be (the routes that failed are below) -- so it is left out of the guest entirely, and the
+host keeps its nvidia driver.
+
+One-time host setup: `i915.enable_gvt=1` on the kernel cmdline, and `modprobe kvmgt` after each
+boot. Then:
+
+    sudo tee /sys/bus/pci/devices/0000:00:02.0/mdev_supported_types/i915-GVTg_V5_4/create <<< "$(uuidgen)"
+    script/interop-vm run --dir ~/interop-vm --ram 3G \
+        --cpu 'host,kvm=off,-hypervisor,hv_vendor_id=0123456789ab' --no-gpu --gvt <uuid> --vnc
+
+The guest needs its Intel display driver installed once (see "GVT-g works" below).
+[`../script/README.md`](../script/README.md) is the operating manual: the guest's SSH access, GVT-g,
+the host prep and the `d3dprobe` cross-compile all live there.
 
 ## What this machine already offers (measured 2026-10-02)
 
@@ -280,16 +306,20 @@ argument; the Intel UMD then faults on the garbage pointers, which reads exactly
 failure (it cost hours of false leads across C#, Rust and C before `gcc`'s argument-count warning on
 the C version exposed it). The `windows` crate gets this right; hand-rolled FFI must not forget it.
 
-## What is blocked
+## Operating it
 
-- **root, once.** `sudo script/interop-vm prepare` and the login/reboot that applies the memlock
-  limit need `sudo`, which is *not* passwordless here, so they are human steps.
-- **the guest install.** Running now (the section above records the host setup); driving Windows
-  Setup over VNC is still manual work.
-- **RAM.** The 4 GB guest pins ~4 GB; free memory fell to ~1.6 GB during the install — close the
-  editor.
-- **building inside the guest is heavy.** Better to build the probe on `windows-latest` (where `fxc`
-  works anyway) and copy the artifact in via the guest's shared folder.
+The day-to-day commands -- SSH in, screenshot, run something privileged, rebuild the probe -- are
+in [`../script/README.md`](../script/README.md). Two host-side facts are worth repeating here:
+
+- The guest's **Intel display driver install is a manual, one-time step** for this VM; a golden
+  image would fold it in.
+- `sudo script/interop-vm prepare` / `prepare --revert` manage the *dGPU's* binding. GVT-g does not
+  need them, so with the GeForce abandoned the host can keep its nvidia driver. `prepare` also
+  masks nvidia, raises the memlock limit and writes a udev rule -- all only for the passthrough
+  path.
+
+**RAM.** Give the guest `--ram 3G`, not 4G: on this 7.2 GiB host the 4 GB guest swaps hard and
+boots take minutes.
 
 ## Alternatives weighed
 
@@ -300,7 +330,17 @@ the C version exposed it). The `windows` crate gets this right; hand-rolled FFI 
 - **UUP dump directly** — what `script/windows-iso` drives; needs the tooling above.
 - **A cloud Windows GPU VM** — no local root/RAM strain, but cost.
 
-## What would close it
+## What is next: productionising
 
-A probe run inside the guest printing P5, P6 and P9 and the sufficiency result — after which **P6's
-answer freezes `gpui-interop`'s API** ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4).
+The environment works; it is not yet reusable. The gaps, in order:
+
+- **A golden image.** The guest's Intel driver install is manual and slow (Windows Update offers the
+  package, but it must be applied with `pnputil` from a scheduled task). Baking the driver-complete
+  disk into a qcow2 -- or a qcow2 backing file -- turns a fresh probe VM into a copy, not an
+  install.
+- **One command to bring the harness up.** The `kvmgt` modprobe and the GVT-g mdev creation could
+  fold behind an `interop-vm gvt` step, so `run --gvt` is not preceded by two manual commands.
+- **Run the probe.** Point W5's packed probe
+  ([`probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md)) at the adapter and record
+  P5, P6 and P9 -- after which **P6's answer freezes `gpui-interop`'s API**
+  ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4).
