@@ -829,21 +829,50 @@ fn pnputil_restart(id: &str) -> Result<String, String> {
     }
 }
 
-/// Create device B, retrying for up to `seconds` (a PnP restart leaves the adapter briefly absent).
-unsafe fn create_device_retry(adapter: &IDXGIAdapter, seconds: u32) -> Result<ID3D12Device, String> {
-    let mut last = String::from("no attempt");
-    for _ in 0..(seconds * 2) {
-        let mut d: Option<ID3D12Device> = None;
-        match D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0, &mut d) {
-            Ok(()) => {
-                if let Some(dev) = d {
-                    if dev.GetDeviceRemovedReason().is_ok() {
-                        return Ok(dev);
-                    }
-                    last = "created but removed-reason != S_OK".to_string();
+/// (Re-)enumerate the Intel hardware adapter. A PnP restart destroys and recreates the device
+/// instance, so an `IDXGIAdapter` held across the loss is stale -- the pool must re-enumerate, and
+/// so must we.
+unsafe fn enumerate_hw_adapter() -> Option<IDXGIAdapter> {
+    let factory: IDXGIFactory1 = CreateDXGIFactory1().ok()?;
+    let mut i = 0u32;
+    while let Ok(a) = factory.EnumAdapters1(i) {
+        if let Ok(desc) = a.GetDesc1() {
+            let software = desc.Flags & (DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32) != 0;
+            if desc.VendorId == 0x8086 && !software {
+                if let Ok(ad) = a.cast::<IDXGIAdapter>() {
+                    return Some(ad);
                 }
             }
-            Err(e) => last = format!("{e:?}"),
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Re-enumerate and create device B, retrying for up to `seconds` (a PnP restart leaves the adapter
+/// briefly absent). Returns the fresh adapter, the device, and its LUID.
+unsafe fn create_device_retry(
+    seconds: u32,
+) -> Result<(IDXGIAdapter, ID3D12Device, LUID), String> {
+    let mut last = String::from("no hardware adapter enumerated");
+    for _ in 0..(seconds * 2) {
+        if let Some(adapter) = enumerate_hw_adapter() {
+            let mut d: Option<ID3D12Device> = None;
+            match D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_11_0, &mut d) {
+                Ok(()) => {
+                    if let Some(dev) = d {
+                        if dev.GetDeviceRemovedReason().is_ok() {
+                            let luid = adapter
+                                .GetDesc()
+                                .map(|x| x.AdapterLuid)
+                                .unwrap_or(LUID { LowPart: 0, HighPart: 0 });
+                            return Ok((adapter, dev, luid));
+                        }
+                        last = "created but removed-reason != S_OK".to_string();
+                    }
+                }
+                Err(e) => last = format!("{e:?}"),
+            }
         }
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
@@ -882,7 +911,7 @@ fn check_p9(dxgi: Result<&DxgiResult, &String>, simulate: bool, pnp: bool) -> Re
         if mism_a != 0 {
             return Err(format!("attach composite was not byte-exact ({mism_a} mismatched)"));
         }
-        println!("attach  : device A holds a shared surface; composite byte-exact ({note_a})");
+        println!("attach  : device A holds a shared surface on luid {luid}; composite byte-exact ({note_a})");
 
         // Lose the device.
         let mode: String = if pnp {
@@ -911,20 +940,21 @@ fn check_p9(dxgi: Result<&DxgiResult, &String>, simulate: bool, pnp: bool) -> Re
         let _ = CloseHandle(h_fence_a);
         drop(device_a);
 
-        // Recover: a fresh producer device B on the same adapter.
-        let device_b = create_device_retry(adapter, 30)?;
-        println!("recover : new producer device B on luid {luid}, removed-reason S_OK");
+        // Recover: re-enumerate (a PnP restart recreates the adapter instance, so the one held
+        // across the loss is stale) and create a fresh producer device B.
+        let (adapter_b, device_b, luid_b) = create_device_retry(30)?;
+        println!("recover : new producer device B on luid {}, removed-reason S_OK", luid_str(luid_b));
 
         // Re-negotiate: fresh handles on B, re-open on D3D11, composite again.
         let (h_tex_b, h_fence_b, mism_b, note_b) =
-            shared_roundtrip(&device_b, adapter, "re-negotiate")?;
+            shared_roundtrip(&device_b, &adapter_b, "re-negotiate")?;
         let _ = CloseHandle(h_tex_b);
         let _ = CloseHandle(h_fence_b);
         if mism_b != 0 {
             return Err(format!("re-negotiated composite was not byte-exact ({mism_b} mismatched)"));
         }
         println!("re-neg. : fresh handles on B; composite byte-exact ({note_b})");
-        println!("P9 frame after recovery: no panic, byte-exact on luid {luid}");
+        println!("P9 frame after recovery: no panic, byte-exact on luid {}", luid_str(luid_b));
         Ok(mode)
     }
 }

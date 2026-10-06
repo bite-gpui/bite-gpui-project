@@ -367,18 +367,19 @@ adapter over SSH, all pass on **hardware**:
     D3D12 clear -> shared 64x64 R8G8B8A8 texture -> ID3D11Fence handle -> context4.Wait(fence, 1)
     P5 fence loop: PASS -- shared texture read back byte-exact on D3D11 (0/4096 mismatched)
     == P9 device loss ==
-    attach  : device A holds a shared surface; composite byte-exact
-    lose    : simulated loss (recovery path invoked directly, no driver reset)
-    recover : new producer device B on the same luid, removed-reason S_OK
+    attach  : device A holds a shared surface on luid 00000000:000A5464; composite byte-exact
+    lose    : pnputil /restart-device <intel instance> -> "Device restarted successfully."
+            : device A removal observed: 0x887A0005 (DXGI_ERROR_DEVICE_REMOVED)
+    recover : new producer device B on luid 00000000:00391894, removed-reason S_OK
     re-neg. : fresh handles on B; composite byte-exact
     P9 device loss: PASS
 
 So P6's answer -- **DXGI and wgpu name the same adapter by the same LUID** -- is recorded on a *real*
 adapter, which is the datum that freezes `gpui-interop`'s `attach`/`Adapter` API
 ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4). P5's loop is byte-exact through the
-GPU-side `ID3D11Fence::Wait`. P9 shows the pool can **tear down and re-negotiate on a fresh device
-without crashing** -- but on the spec's *weaker* path, since a real reset turned out to be
-impossible here:
+GPU-side `ID3D11Fence::Wait`. P9 stages a *real* device removal -- a PnP restart of the adapter --
+and the pool **tears down and re-negotiates on a fresh device without crashing**. The one staging it
+cannot use here is a driver timeout, for a structural reason:
 
 ### P9's real reset is not possible on a GVT-g guest (2026-10-07)
 
@@ -397,11 +398,17 @@ Killing QEMU does not release it (`gvt:rcs0` stays in `D`); the host needs a **r
 path. On a host with a *real* passed-through GPU the TDR run is the stronger evidence and can be
 restored (it is stashed, not deleted).
 
-**What to try instead: stage the loss from *inside the guest*.** `interop-probe --pnp` restarts the
-adapter's PnP device (`pnputil /restart-device "<instance-id>"`). That stops and starts the driver,
-so the D3D device really is removed and re-added (`DXGI_ERROR_DEVICE_REMOVED`), while the host GPU
-executes nothing and cannot wedge. It is a *removal*, not a TDR, so the printout records it as such:
-stronger than invoking the recovery path directly, weaker than a driver timeout.
+**What works instead: stage the loss from *inside the guest*.** `interop-probe --pnp` restarts the
+adapter's PnP device (`pnputil /restart-device "<instance-id>"`): a real driver stop/start, so the
+D3D device really is removed and re-added (`DXGI_ERROR_DEVICE_REMOVED`), while the host GPU executes
+nothing and cannot wedge. It is a *removal*, not a TDR -- the printout records it as such: stronger
+than invoking the recovery path directly, weaker than a driver timeout. **It passes.**
+
+It also exposed a real P9 finding: **a PnP restart recreates the adapter instance**, so an
+`IDXGIAdapter` held across the loss is stale -- creating a device on it fails with
+`DXGI_ERROR_UNSUPPORTED` indefinitely. The pool (and the probe) must **re-enumerate** after the loss,
+and the LUID changes with the new instance (`00000000:00391894` versus the pre-restart
+`00000000:000A5464`). The contract cannot assume the adapter survives a loss unchanged.
 
 ## Operating it
 
@@ -441,13 +448,12 @@ The environment works; it is not yet reusable. The gaps, in order:
   (which uses `--gvt last`, so it survives a reboot); `run` refuses to start a wrongly-configured
   guest instead of booting a silently different one. What persists across a reboot, and what does
   not, is tabulated in [`../script/README.md`](../script/README.md).
-- **Run the probe -- P6, P5 and P9 done (P9 on the direct-recovery path).**
-  [`../script/interop-probe`](../script/interop-probe) was run against the adapter and **P6 (both
-  gates), P5 and P9 pass** ("The packed probe passes" above), so **P6's answer is recorded -- the
-  datum that freezes `gpui-interop`'s API** ([`interop-crate.md`](../spi/rendering/interop-crate.md)
-  §4). P9's *real-reset* variant is impossible on a GVT-g guest (see "P9's real reset is not
-  possible", above), so P9 stands on the directly-invoked recovery path; on real passthrough
-  hardware the TDR run is the stronger evidence to add.
+- **Run the probe -- P6, P5 and P9 done.** [`../script/interop-probe`](../script/interop-probe) was
+  run against the adapter and **P6 (both gates), P5 and P9 pass** ("The packed probe passes" above),
+  so **P6's answer is recorded -- the datum that freezes `gpui-interop`'s API**
+  ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4). P9 stages a real device removal (a PnP
+  restart) and re-negotiates; only a driver *timeout* is unavailable here (see "P9's real reset is not
+  possible", above), which on real passthrough hardware would be the last staging to add.
 
 ### Boot performance -- measured, and the levers that did not help (2026-10-06)
 

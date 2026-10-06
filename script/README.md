@@ -319,6 +319,7 @@ It prints `PASS`/`FAIL`/`SKIP` per gate. For P9's loss, `--pnp` restarts the ada
 but is **not attempted on GVT-g** (GVT-g runs the guest's work on the *host* iGPU, so a hung
 dispatch wedges the host engine — see
 [`../issues/0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md)); with neither flag P9
-invokes the recovery path directly. On the GVT-g guest all gates pass; the recorded result is in
+invokes the recovery path directly. The recorded GVT-g run used `--pnp` (a real removal) and all
+gates pass; the result is in
 [`../issues/0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md) ("The packed probe
 passes").
