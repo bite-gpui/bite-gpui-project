@@ -334,13 +334,35 @@ boots take minutes.
 
 The environment works; it is not yet reusable. The gaps, in order:
 
-- **A golden image.** The guest's Intel driver install is manual and slow (Windows Update offers the
-  package, but it must be applied with `pnputil` from a scheduled task). Baking the driver-complete
-  disk into a qcow2 -- or a qcow2 backing file -- turns a fresh probe VM into a copy, not an
-  install.
+- **A golden image -- done.** `script/interop-vm bake` freezes the driver-complete disk as a read-only
+  `windows-golden.qcow2` and runs the VM on a qcow2 overlay on it; `clone --to DIR` makes another
+  overlay for a fresh VM. What remains is only to re-bake when the guest changes.
 - **One command to bring the harness up.** The `kvmgt` modprobe and the GVT-g mdev creation could
   fold behind an `interop-vm gvt` step, so `run --gvt` is not preceded by two manual commands.
 - **Run the probe.** Point W5's packed probe
   ([`probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md)) at the adapter and record
   P5, P6 and P9 -- after which **P6's answer freezes `gpui-interop`'s API**
   ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4).
+
+### Boot performance -- measured, and the levers that did not help (2026-10-06)
+
+A boot takes ~4 minutes, and a fresh probe cycle is dominated by it. Three levers were tried:
+
+| run | time |
+| --- | --- |
+| cold boot | ~4 m 11 s |
+| cold boot with `--cache unsafe` | ~4 m 53 s |
+| hibernate (`shutdown /h`) | 47 s to power off, resume ~4 m 47 s |
+| hybrid shutdown (Fast Startup) | hung > 8 min |
+
+None helps, because the cost is the **host** -- a 44 GB image on a 5400 rpm HDD with 7.2 GiB RAM and
+`load ~6` -- not the guest's init phase:
+
+- `cache=unsafe` only skips *write* flushes, and a boot is read-bound (kept as a `--cache` knob).
+- Hibernation resumes by reading `hiberfil` from the same slow disk, so it costs a cold boot's worth
+  of I/O; the init it saves is a small slice.
+- Fast Startup's **hybrid shutdown hangs** with the vGPU attached -- a regression, so Fast Startup
+  stays off and the golden is baked with hibernation off.
+
+So the "instant" cycle is to **keep the guest running** and drive it over SSH, rebooting only when a
+test needs a fresh device (P9 does).

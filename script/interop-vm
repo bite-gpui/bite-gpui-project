@@ -36,10 +36,16 @@
 #     script/interop-vm type --text STR          # type a string into the running guest
 #     script/interop-vm powerdown                # ask the guest to shut down (ACPI)
 #     sudo script/interop-vm poweron              # run the board's ACPI _ON for the dGPU (muxless)
+#     script/interop-vm bake                     # freeze the disk as a golden image; run on an overlay
+#     script/interop-vm clone --to DIR           # a fresh VM: a new overlay on the golden image
 #
 # Options:
 #     --iso PATH       the installer ISO (required by `install`)
-#     --dir DIR        VM directory (default $HOME/interop-vm)
+#     --dir DIR        VM directory (default $HOME/interop-vm); for `clone`, where the golden image is
+#     --to DIR         `clone`: the directory to create the new VM in
+#     --cache MODE     QEMU disk cache mode for the guest disk, e.g. `unsafe` (default: QEMU's)
+#                      `unsafe` skips flushes to the *guest image only* -- it can lose guest
+#                      writes on a host crash, but cannot touch anything else on the host
 #     --disk SIZE      disk size for `create` (default 64G)
 #     --ram SIZE       guest RAM (default 4G)
 #     --cpus N         guest CPUs (default 2)
@@ -114,6 +120,9 @@ X_VGA=0
 VGA_NONE=0
 GPU_SUBSYS=""
 GVT_UUID=""
+GOLDEN_NAME="windows-golden.qcow2"
+CLONE_DIR=""
+CACHE=""
 EXTRA_ARGS=()
 QEMU_ARGV=()
 ANSWER=""
@@ -165,9 +174,11 @@ usage() { awk 'NR >= 3 && /^#/ { sub(/^# ?/, ""); print; next } NR >= 3 { exit }
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        check|bind|unbind|create|install|run|prepare|screenshot|sendkey|type|powerdown|poweron) CMD="$1" ;;
+        check|bind|unbind|create|install|run|prepare|screenshot|sendkey|type|powerdown|poweron|bake|clone) CMD="$1" ;;
         --iso)   shift; ISO="${1:?--iso needs a path}" ;;
         --dir)   shift; VM_DIR="${1:?--dir needs a path}" ;;
+        --to)    shift; CLONE_DIR="${1:?--to needs a path}" ;;
+        --cache) shift; CACHE="${1:?--cache needs a mode}" ;;
         --disk)  shift; DISK_SIZE="${1:?}" ;;
         --ram)   shift; RAM="${1:?}" ;;
         --cpus)  shift; CPUS="${1:?}" ;;
@@ -470,6 +481,8 @@ ovmf_vars_src() {
 
 qemu_argv() { # boot-order [cdrom]  -> populates the global QEMU_ARGV array
     local boot="$1" cdrom="${2:-}"
+    local cache=""
+    if [ -n "$CACHE" ]; then cache=",cache=$CACHE"; fi
     local vfio="vfio-pci,host=$GPU_SHORT"
     if [ -n "$ROM" ]; then vfio="$vfio,romfile=$ROM"; fi
     if [ -n "$ROMBAR" ]; then vfio="$vfio,rombar=$ROMBAR"; fi
@@ -500,7 +513,7 @@ qemu_argv() { # boot-order [cdrom]  -> populates the global QEMU_ARGV array
         -cpu "$CPU_MODEL"
         -smp "$CPUS"
         -m "$RAM"
-        -drive "file=$VM_DIR/windows.qcow2,if=none,id=disk0,format=qcow2"
+        -drive "file=$VM_DIR/windows.qcow2,if=none,id=disk0,format=qcow2,discard=unmap$cache"
         -device "ide-hd,drive=disk0,bus=ide.0"
         -device qemu-xhci
         -device usb-tablet
@@ -740,6 +753,64 @@ cmd_poweron() {
     say "power_state: $before -> $(cat "/sys/bus/pci/devices/$GPU/power_state" 2>/dev/null)"
 }
 
+# ---------------------------------------------------------------------------------------
+# bake / clone — a golden image, and per-VM overlays on it
+# ---------------------------------------------------------------------------------------
+
+# Booting a probe VM should be a copy, not a Windows install. `bake` freezes the installed,
+# driver-complete disk as $VM_DIR/$GOLDEN_NAME (made read-only) and replaces the working disk
+# with a qcow2 overlay on it, so the VM carries on unchanged. `clone --to DIR` makes another
+# overlay for a fresh VM. The golden is a dependency of every overlay: keep it, or they break.
+#
+#     script/interop-vm powerdown            # the VM must be stopped
+#     script/interop-vm bake
+#     script/interop-vm clone --to ~/interop-vm-2
+#
+# Run one guest at a time on this host: the SSH forward and the monitor port are fixed (2222,
+# 4444), and the GVT-g mdev allows a single instance.
+
+vm_up() { # 0 if a monitor is answering on $MONITOR_ADDR
+    have python3 || return 1
+    python3 - "$MONITOR_ADDR" <<'PY' 2>/dev/null
+import socket, sys
+host, port = sys.argv[1].rsplit(':', 1)
+socket.create_connection((host, int(port)), timeout=2).close()
+PY
+}
+
+overlay_backing() { # the backing filename of a qcow2, empty if it has none
+    qemu-img info --output=json "$1" 2>/dev/null |
+        python3 -c 'import json,sys; print(json.load(sys.stdin).get("backing-filename",""))' 2>/dev/null
+}
+
+cmd_bake() {
+    have qemu-img || die "qemu-img is not installed"
+    [ -f "$VM_DIR/windows.qcow2" ] || die "no disk to bake — run: $0 create (and install)"
+    if vm_up; then die "a VM is running — power it down first: $0 powerdown"; fi
+    local golden="$VM_DIR/$GOLDEN_NAME"
+    if [ -f "$golden" ]; then die "$golden already exists (remove it to re-bake)"; fi
+    if [ -n "$(overlay_backing "$VM_DIR/windows.qcow2")" ]; then
+        die "$VM_DIR/windows.qcow2 is already an overlay on a golden image"
+    fi
+    run mv "$VM_DIR/windows.qcow2" "$golden"
+    run chmod a-w "$golden"
+    run qemu-img create -f qcow2 -F qcow2 -b "$(readlink -f "$golden")" "$VM_DIR/windows.qcow2"
+    say "baked $golden; $VM_DIR/windows.qcow2 is now an overlay on it"
+    say "a fresh VM: $0 clone --to DIR"
+}
+
+cmd_clone() {
+    have qemu-img || die "qemu-img is not installed"
+    local golden="$VM_DIR/$GOLDEN_NAME"
+    [ -f "$golden" ] || die "no golden image at $golden — bake one first: $0 bake"
+    [ -n "$CLONE_DIR" ] || die "clone needs --to DIR"
+    local dest="$CLONE_DIR/windows.qcow2"
+    if [ -e "$dest" ] && [ "$DRY_RUN" -eq 0 ]; then die "$dest already exists"; fi
+    run mkdir -p "$CLONE_DIR"
+    run qemu-img create -f qcow2 -F qcow2 -b "$(readlink -f "$golden")" "$dest"
+    say "clone ready: $0 run --dir $CLONE_DIR --gvt <uuid> ..."
+}
+
 case "$CMD" in
     check)   cmd_check ;;
     bind)    cmd_bind ;;
@@ -753,4 +824,6 @@ case "$CMD" in
     type)    cmd_type ;;
     powerdown) cmd_powerdown ;;
     poweron)   cmd_poweron ;;
+    bake)      cmd_bake ;;
+    clone)     cmd_clone ;;
 esac

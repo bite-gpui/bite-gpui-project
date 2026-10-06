@@ -38,6 +38,8 @@ sudo script/interop-vm poweron             # run the dGPU's ACPI _ON on the host
 script/interop-vm screenshot [--out F]     # save the running guest's screen to a PNG
 script/interop-vm sendkey --keys KEYS      # inject keys (e.g. --keys 'shift+f10')
 script/interop-vm type --text STR          # type a string
+script/interop-vm bake                     # freeze the disk as a golden image; run on an overlay
+script/interop-vm clone --to DIR           # a fresh VM: a new overlay on the golden image
 ```
 
 ### Options
@@ -46,7 +48,7 @@ script/interop-vm type --text STR          # type a string
 host; 4G swaps), `--cpus N`, `--cpu MODEL`, `--uefi`, `--vnc`, `--no-gpu`, `--gvt UUID`,
 `--gpu-subsys VVVV:DDDD`, `--rom PATH`, `--no-rom`, `--x-vga`, `--no-vga`, `--iso PATH`,
 `--unattend`, `--answer PATH`, `--qemu-arg ARG` (repeatable; raw QEMU arguments), `--out`, `--keys`,
-`--text`, `--dry-run`.
+`--text`, `--to DIR` (`clone` destination), `--cache MODE` (QEMU disk cache; e.g. `unsafe`), `--dry-run`.
 
 The guest is built by `install --unattend` (it wipes disk 0, installs Windows 11 Pro, skips OOBE and
 auto-logs-in a local admin `probe`). Once installed, `run` boots it.
@@ -139,6 +141,39 @@ script/interop-vm check      # driver: nvidia
 through; see [`../issues/0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md) for why that
 MUX-less GeForce cannot be passed to a guest. `sudo script/interop-vm poweron` (ACPI `_ON` via
 `acpi-call-dkms`, for the muxless dGPU's power state) is likewise dGPU-only.
+
+### A golden image, and clones
+
+Booting a probe VM should be a copy, not a Windows install:
+
+```sh
+script/interop-vm powerdown          # the VM must be stopped
+script/interop-vm bake               # freeze the disk, run the VM on a read-only overlay
+script/interop-vm clone --to ~/interop-vm-2
+```
+
+`bake` renames the installed disk to `windows-golden.qcow2` (and makes it read-only), then replaces
+`$VM_DIR/windows.qcow2` with a qcow2 **overlay** backed by it — so the VM carries on unchanged, and
+`clone --to DIR` creates another overlay for a fresh VM. The golden is a dependency of every overlay:
+keep it, or they break. Run one guest at a time (the SSH and monitor ports are fixed at 2222/4444,
+and the GVT-g mdev allows a single instance).
+
+### Booting is slow, and what does not help
+
+A boot takes ~4 minutes. Three levers were measured on 2026-10-06 and **none** helps, because the
+cost is the host — a 44 GB image on a 5400 rpm HDD with 7.2 GiB RAM — not the guest's init phase:
+
+| run | time |
+| --- | --- |
+| cold boot | ~4 m 11 s |
+| cold boot with `--cache unsafe` | ~4 m 53 s |
+| hibernate (`shutdown /h`) | 47 s to power off, resume ~4 m 47 s |
+| hybrid shutdown (Fast Startup) | hung > 8 min |
+
+So `cache=unsafe` is just a knob (it skips *write* flushes; a boot is read-bound), hibernation buys
+nothing, and Fast Startup's hybrid shutdown *hangs* with the vGPU — keep it off. The only "instant" is
+to **keep the guest running** and drive it over SSH, rebooting only when a test needs a fresh device
+(P9 does).
 
 ---
 
