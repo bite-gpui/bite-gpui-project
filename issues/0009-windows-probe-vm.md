@@ -1,7 +1,8 @@
 - **Opened:** 2026-10-02
-- **Status:** open — the muxless GeForce is unusable in a guest (every lever spent, recorded below),
-  but the guest now has a **real** hardware adapter via GVT-g: an Intel HD Graphics 520 with driver
-  `31.0.101.2111`, problem code 0, alongside `-vga std`. Next: run W5's probes on it.
+- **Status:** open — the muxless GeForce is unusable in a guest (every lever spent, recorded below), but
+  the guest now has a **real** hardware adapter via GVT-g: an Intel HD Graphics 520 with driver
+  `31.0.101.2111`, problem code 0, confirmed by probe to be **D3D11 FL 11_1 / D3D12 FL 12_1**,
+  alongside `-vga std`. Next: run W5's probes on it.
 - **Touches:** this machine (`user-Vostro-14-5459`), [`../script/interop-vm`](../script/interop-vm), [`../script/vbios-from-firmware.py`](../script/vbios-from-firmware.py), [`../script/windows-iso`](../script/windows-iso), [`../spi/rendering/probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md), the `gpui_interop` crate in `bite-gpui`
 
 # The Windows guest that runs the interop probes
@@ -252,6 +253,32 @@ An obvious last idea for the GeForce is ruled out too: passing the 930M *alongsi
 (`run --rom … --gvt …`, three adapters) leaves the Intel device at problem code 0 but the NVIDIA
 device still at **Code 43**. So the mobile driver does not need a real iGPU next to it -- the muxless
 GeForce is simply not usable in a guest, and GVT-g is the adapter to build on.
+
+### Verified: the vGPU is a real D3D11/12 device (2026-10-06)
+
+[`../script/d3dprobe`](../script/d3dprobe) is a dependency-free Rust probe that enumerates the DXGI
+adapters and asks each one for its Direct3D feature levels. It is cross-compiled on this host with the
+project's rustup:
+
+    rustup target add x86_64-pc-windows-gnu          # once
+    sudo apt-get install -y gcc-mingw-w64-x86-64     # the gnu target's linker
+    cargo build --release --target x86_64-pc-windows-gnu
+
+Run in the guest over SSH, it reports:
+
+    adapter 0: Intel(R) HD Graphics 520  [8086:1916]  luid 00000000:00005430  128 MiB dedicated
+        D3D11 : OK, feature level 11_1 (0xB100)
+        D3D12 : OK, feature level 12_1 (0xC100)
+    adapter 1/2: Microsoft Basic Render Driver (WARP software) -- 11_1 / 12_1
+
+So the GVT-g vGPU is a **real D3D11 FL 11_1 / D3D12 FL 12_1 device**, and DXGI hands over its
+**LUID** -- the datum P6 needs.
+
+**Gotcha worth keeping:** `D3D11CreateDevice` takes a *10th* parameter, `UINT SDKVersion`
+(`D3D11_SDK_VERSION == 7`), between `FeatureLevels` and `ppDevice`. Leaving it out shifts every later
+argument; the Intel UMD then faults on the garbage pointers, which reads exactly like a driver
+failure (it cost hours of false leads across C#, Rust and C before `gcc`'s argument-count warning on
+the C version exposed it). The `windows` crate gets this right; hand-rolled FFI must not forget it.
 
 ## What is blocked
 

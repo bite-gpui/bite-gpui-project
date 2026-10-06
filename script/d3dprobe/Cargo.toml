@@ -1,0 +1,14 @@
+[package]
+name = "d3dprobe"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "d3dprobe"
+path = "src/main.rs"
+
+# Standalone, so it is not absorbed by any enclosing workspace.
+[workspace]
+
+[profile.release]
+panic = "abort"
