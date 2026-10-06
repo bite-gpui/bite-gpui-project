@@ -165,6 +165,22 @@ The ACPI tables were captured to `/home/user/interop-vm/acpi/` for that work. Ne
 order: an older guest NVIDIA driver, then making the GPU the primary VGA (`-vga none` +
 `x-vga=on`); failing those, real-GPU D3D on this muxless laptop is likely infeasible.
 
+### The primary-VGA route is impossible here (2026-10-06)
+
+Making the 930M the primary/boot adapter was the obvious next try, and it fails on two counts:
+
+- **`x-vga=on` is refused outright.** QEMU aborts at startup: *vfio 0000:01:00.0: failed getting
+  region info for VGA region index 8: Invalid argument / device does not support requested feature
+  x-vga*. The 930M is a `[0302]` **3D controller with no VGA region**, so VFIO will never let it be
+  a boot VGA -- the same muxless fact (no display outputs) showing up in config space.
+- **Dropping the emulated VGA does not help either.** With `-vga none` (and no `x-vga`) the guest
+  boots headless and the device enumerates *undriven* -- a generic "3D Video Controller",
+  `CM_PROB_REINSTALL` (Code 18) -- instead of driver-bound-but-failed (Code 43). Forcing a driver
+  update left it at Code 18.
+
+Both knobs are kept in [`../script/interop-vm`](../script/interop-vm) as `--x-vga` / `--no-vga`,
+with the caveat recorded.
+
 ## What is blocked
 
 - **root, once.** `sudo script/interop-vm prepare` and the login/reboot that applies the memlock
