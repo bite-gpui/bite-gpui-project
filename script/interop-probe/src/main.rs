@@ -81,14 +81,17 @@ fn main() {
     println!("adapter order and LUIDs come from DXGI; wgpu is DX12-only here");
     println!();
 
-    // P9 stages its loss either by a real GPU timeout (TDR) or by invoking the recovery path
-    // directly; the printout records which, because they are not equal evidence.
-    let simulate = !std::env::args().any(|a| a == "--tdr");
+    // P9 stages its loss one of three ways; the printout records which, because they are not
+    // equal evidence. `--pnp` restarts the adapter's PnP device (a real stop/start); `--tdr`
+    // would ask for a GPU timeout but is skipped on GVT-g; otherwise the recovery path is
+    // invoked directly.
+    let pnp = std::env::args().any(|a| a == "--pnp");
+    let simulate = !pnp && !std::env::args().any(|a| a == "--tdr");
 
     let dxgi = check_p6_dxgi();
     let wgpu = check_p6_wgpu(dxgi.as_ref());
     let p5 = check_p5(dxgi.as_ref());
-    let p9 = check_p9(dxgi.as_ref(), simulate);
+    let p9 = check_p9(dxgi.as_ref(), simulate, pnp);
 
     println!();
     println!("SUMMARY");
@@ -790,17 +793,78 @@ unsafe fn shared_roundtrip(
     Ok((res_handle, fence_handle, mismatches, order_note))
 }
 
+/// PnP instance id of the Intel display adapter (`PCI\VEN_8086...`), for the `--pnp` loss.
+fn intel_display_instance() -> Result<String, String> {
+    let out = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            "(Get-PnpDevice -Class Display | Where-Object { $_.InstanceId -like 'PCI\\VEN_8086*' } | Select-Object -First 1 -ExpandProperty InstanceId)",
+        ])
+        .output()
+        .map_err(|e| format!("powershell: {e}"))?;
+    let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if id.is_empty() {
+        Err("no 'PCI\\VEN_8086...' display device found".to_string())
+    } else {
+        Ok(id)
+    }
+}
+
+/// Restart a PnP device (stop + start), which removes and re-adds its D3D adapter.
+fn pnputil_restart(id: &str) -> Result<String, String> {
+    let out = std::process::Command::new("pnputil")
+        .args(["/restart-device", id])
+        .output()
+        .map_err(|e| format!("pnputil: {e}"))?;
+    let text = format!(
+        "{} {}",
+        String::from_utf8_lossy(&out.stdout).trim(),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    if out.status.success() {
+        Ok(text.trim().to_string())
+    } else {
+        Err(format!("pnputil exit {:?}: {text}", out.status.code()))
+    }
+}
+
+/// Create device B, retrying for up to `seconds` (a PnP restart leaves the adapter briefly absent).
+unsafe fn create_device_retry(adapter: &IDXGIAdapter, seconds: u32) -> Result<ID3D12Device, String> {
+    let mut last = String::from("no attempt");
+    for _ in 0..(seconds * 2) {
+        let mut d: Option<ID3D12Device> = None;
+        match D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0, &mut d) {
+            Ok(()) => {
+                if let Some(dev) = d {
+                    if dev.GetDeviceRemovedReason().is_ok() {
+                        return Ok(dev);
+                    }
+                    last = "created but removed-reason != S_OK".to_string();
+                }
+            }
+            Err(e) => last = format!("{e:?}"),
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    Err(format!(
+        "device B did not come back within {seconds}s (last: {last})"
+    ))
+}
+
 /// P9: lose the producer device while a shared surface is held, recover, and re-negotiate.
 ///
-/// `simulate` selects how the loss is staged and is recorded in the printout, because the spec
-/// distinguishes a real driver reset from the recovery path invoked directly:
-/// * `true`  -- **invoked directly**: release device A while the pool's handles exist, then
-///   rebuild on a fresh device. Exercises the bookkeeping, not the driver's reset behaviour.
-/// * `false` -- a real GPU timeout (TDR). **Not attempted on a GVT-g guest**: GVT-g executes the
-///   guest's work on the *host* iGPU, so an infinite dispatch hangs the host engine and wedges
-///   `intel_gvt_wait_vgpu_idle` until a host reboot (found 2026-10-07; see issues/0009). The flag
-///   stays so a run records the attempt, and on a real passthrough GPU it would be the stronger run.
-fn check_p9(dxgi: Result<&DxgiResult, &String>, simulate: bool) -> Result<String, String> {
+/// The loss is staged one of three ways, and the choice is recorded in the printout, because the
+/// spec distinguishes a real reset from the recovery path invoked directly:
+/// * `pnp`      -- **restart the adapter's PnP device** (`pnputil /restart-device`): a real driver
+///   stop/start, which removes the D3D adapter and re-adds it. The host GPU runs nothing, so it is
+///   safe on GVT-g. This is the strongest staging available on this guest.
+/// * `simulate` -- **invoked directly**: release device A while the pool's handles exist, then
+///   rebuild on a fresh device. Exercises the bookkeeping, not the driver's behaviour.
+/// * neither    -- a real GPU timeout (TDR) would be stronger still, but **it is not attempted on a
+///   GVT-g guest**: GVT-g runs the guest's work on the *host* iGPU, so an infinite dispatch hangs
+///   the host engine and wedges `intel_gvt_wait_vgpu_idle` until a host reboot (2026-10-07).
+fn check_p9(dxgi: Result<&DxgiResult, &String>, simulate: bool, pnp: bool) -> Result<String, String> {
     println!();
     println!("== P9 device loss + re-negotiation ==");
     let dxgi = dxgi.map_err(|e| format!("no DXGI baseline: {e}"))?;
@@ -821,12 +885,26 @@ fn check_p9(dxgi: Result<&DxgiResult, &String>, simulate: bool) -> Result<String
         println!("attach  : device A holds a shared surface; composite byte-exact ({note_a})");
 
         // Lose the device.
-        let mode;
-        if simulate {
-            mode = "simulated loss (recovery path invoked directly, no driver reset)";
+        let mode: String = if pnp {
+            let id = intel_display_instance()?;
+            println!("lose    : restarting the PnP device {id} (a real driver stop/start)");
+            let note = pnputil_restart(&id)?;
+            println!("        : pnputil: {note}");
+            match device_a.GetDeviceRemovedReason() {
+                Err(e) => println!("        : device A removal observed: {e:?}"),
+                Ok(()) => {
+                    return Err(
+                        "the PnP restart did not remove device A (removed-reason S_OK)".to_string(),
+                    )
+                }
+            }
+            format!("PnP restart of {id} — a real device stop/start, not a TDR")
+        } else if simulate {
+            "simulated loss (recovery path invoked directly, no driver reset)".to_string()
         } else {
-            mode = "skipped — a real TDR is not attempted on a GVT-g vGPU (it wedges the host GPU)";
-        }
+            "skipped — a real TDR is not attempted on a GVT-g vGPU (it wedges the host GPU)"
+                .to_string()
+        };
         println!("lose    : {mode}");
         // Drop A and the pool's device-bound handles: any use of them is now stale.
         let _ = CloseHandle(h_tex_a);
@@ -834,13 +912,7 @@ fn check_p9(dxgi: Result<&DxgiResult, &String>, simulate: bool) -> Result<String
         drop(device_a);
 
         // Recover: a fresh producer device B on the same adapter.
-        let mut b: Option<ID3D12Device> = None;
-        D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0, &mut b)
-            .map_err(|e| format!("D3D12CreateDevice(B): {e:?}"))?;
-        let device_b = b.ok_or_else(|| "D3D12CreateDevice(B) returned no device".to_string())?;
-        device_b
-            .GetDeviceRemovedReason()
-            .map_err(|e| format!("recovered device B is not healthy: {e:?}"))?;
+        let device_b = create_device_retry(adapter, 30)?;
         println!("recover : new producer device B on luid {luid}, removed-reason S_OK");
 
         // Re-negotiate: fresh handles on B, re-open on D3D11, composite again.
@@ -853,7 +925,7 @@ fn check_p9(dxgi: Result<&DxgiResult, &String>, simulate: bool) -> Result<String
         }
         println!("re-neg. : fresh handles on B; composite byte-exact ({note_b})");
         println!("P9 frame after recovery: no panic, byte-exact on luid {luid}");
-        Ok(mode.to_string())
+        Ok(mode)
     }
 }
 

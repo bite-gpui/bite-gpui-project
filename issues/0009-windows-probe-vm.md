@@ -397,6 +397,12 @@ Killing QEMU does not release it (`gvt:rcs0` stays in `D`); the host needs a **r
 path. On a host with a *real* passed-through GPU the TDR run is the stronger evidence and can be
 restored (it is stashed, not deleted).
 
+**What to try instead: stage the loss from *inside the guest*.** `interop-probe --pnp` restarts the
+adapter's PnP device (`pnputil /restart-device "<instance-id>"`). That stops and starts the driver,
+so the D3D device really is removed and re-added (`DXGI_ERROR_DEVICE_REMOVED`), while the host GPU
+executes nothing and cannot wedge. It is a *removal*, not a TDR, so the printout records it as such:
+stronger than invoking the recovery path directly, weaker than a driver timeout.
+
 ## Operating it
 
 The day-to-day commands -- SSH in, screenshot, run something privileged, rebuild the probe -- are

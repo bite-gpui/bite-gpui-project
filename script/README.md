@@ -314,9 +314,11 @@ sshpass -p probe ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/
     probe@127.0.0.1 'C:\Users\probe\interop-probe.exe'
 ```
 
-It prints `PASS`/`FAIL`/`SKIP` per gate. `--tdr` asks P9 to stage a real GPU timeout, which is
-**not attempted on the GVT-g guest**: GVT-g runs the guest's work on the *host* iGPU, so a hung
-dispatch wedges the host engine (see [`../issues/0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md))
--- P9 uses its directly-invoked recovery path instead. On the GVT-g guest all gates pass; the
-recorded result is in [`../issues/0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md)
-("The packed probe passes").
+It prints `PASS`/`FAIL`/`SKIP` per gate. For P9's loss, `--pnp` restarts the adapter's PnP device
+(`pnputil /restart-device`) — a real driver stop/start, host-safe; `--tdr` would stage a GPU timeout
+but is **not attempted on GVT-g** (GVT-g runs the guest's work on the *host* iGPU, so a hung
+dispatch wedges the host engine — see
+[`../issues/0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md)); with neither flag P9
+invokes the recovery path directly. On the GVT-g guest all gates pass; the recorded result is in
+[`../issues/0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md) ("The packed probe
+passes").
