@@ -108,7 +108,12 @@ GPU_SHORT="${GPU#0000:}"
 # The Intel iGPU a GVT-g mediated device hangs off (`--gvt`).
 IGPU="${INTEROP_VM_IGPU:-0000:00:02.0}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VM_DIR="${INTEROP_VM_DIR:-$HOME/interop-vm}"
+# The VM lives in the *invoking* user's home. Under sudo, $HOME is root's, so a root-only
+# command (`gvt`, `prepare`, `poweron`) would otherwise print a run line pointing at root's
+# home -- and write gvt.uuid there.
+INVOKING_HOME="$( { getent passwd "${SUDO_USER:-$USER}" 2>/dev/null || true; } | cut -d: -f6 )"
+[ -n "$INVOKING_HOME" ] || INVOKING_HOME="$HOME"
+VM_DIR="${INTEROP_VM_DIR:-$INVOKING_HOME/interop-vm}"
 DISK_SIZE=64G
 RAM=4G
 CPUS=2
@@ -784,7 +789,10 @@ cmd_gvt() {
     need_root
     local types="/sys/bus/pci/devices/$IGPU/mdev_supported_types"
     local type="${GVT_TYPE:-i915-GVTg_V5_4}"
-    if ! lsmod | grep -q '^kvmgt'; then
+    # kvmgt is what creates mdev_supported_types, so its presence IS the loaded check. (Don't
+    # use `lsmod | grep -q`: with `set -o pipefail`, grep -q exiting early SIGPIPEs lsmod and the
+    # pipeline reads as failure even on a match.)
+    if [ ! -d "$types" ]; then
         say "loading kvmgt"
         if [ "$DRY_RUN" -eq 1 ]; then
             note "would run: modprobe kvmgt"
@@ -795,17 +803,48 @@ cmd_gvt() {
     fi
     [ -d "$types" ] || die "no GVT-g types at $types — is i915.enable_gvt=1 on the kernel cmdline?"
     [ -d "$types/$type" ] || die "no mdev type '$type' (have: $(ls "$types" | tr '\n' ' '))"
-    local uuid
-    uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)"
-    if [ "$DRY_RUN" -eq 1 ]; then
-        note "would write $uuid to $types/$type/create"
-        return 0
+
+    # GVT-g hands the vGPU to QEMU over vfio, so the seated user must be able to open
+    # /dev/vfio/<group>. `prepare` writes this rule for the dGPU path and `prepare --revert`
+    # removes it, so assert it here as well.
+    if [ ! -f "$UDEV_RULE" ]; then
+        say "granting the user access to /dev/vfio (udev rule)"
+        write_conf "$UDEV_RULE" '# Managed by script/interop-vm (gvt / prepare).
+# Grant the seated user access to /dev/vfio/<group>: GVT-g and dGPU passthrough both need it.
+SUBSYSTEM=="vfio", TAG+="uaccess"'
+        run udevadm control --reload-rules
+        run udevadm trigger --subsystem-match=vfio
     fi
-    printf '%s' "$uuid" > "$types/$type/create"
-    mkdir -p "$VM_DIR"
-    printf '%s\n' "$uuid" > "$VM_DIR/gvt.uuid"
-    say "GVT-g mediated device ready: $uuid  ($type)"
-    say "saved to $VM_DIR/gvt.uuid"
+
+    # Idempotent: reuse an existing mdev rather than making a second one (the type allows one).
+    local uuid=""
+    if [ -f "$VM_DIR/gvt.uuid" ]; then uuid="$(cat "$VM_DIR/gvt.uuid")"; fi
+    if [ -n "$uuid" ] && [ ! -e "/sys/bus/pci/devices/$IGPU/$uuid" ]; then uuid=""; fi
+    if [ -z "$uuid" ]; then
+        local d
+        for d in /sys/bus/mdev/devices/*; do
+            [ -e "$d" ] || continue
+            uuid="$(basename "$d")"
+            break
+        done
+    fi
+
+    if [ -n "$uuid" ]; then
+        say "reusing the existing GVT-g device: $uuid"
+    else
+        uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)"
+        if [ "$DRY_RUN" -eq 1 ]; then
+            note "would write $uuid to $types/$type/create"
+            return 0
+        fi
+        printf '%s' "$uuid" > "$types/$type/create"
+        say "GVT-g mediated device ready: $uuid  ($type)"
+    fi
+    if [ "$DRY_RUN" -eq 0 ]; then
+        mkdir -p "$VM_DIR"
+        printf '%s\n' "$uuid" > "$VM_DIR/gvt.uuid"
+        say "saved to $VM_DIR/gvt.uuid"
+    fi
     say
     say "start the VM with:"
     note "$0 run --dir $VM_DIR --ram 3G --cpu 'host,kvm=off,-hypervisor,hv_vendor_id=0123456789ab' --no-gpu --gvt $uuid --vnc"
