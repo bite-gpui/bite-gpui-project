@@ -40,13 +40,14 @@ script/interop-vm sendkey --keys KEYS      # inject keys (e.g. --keys 'shift+f10
 script/interop-vm type --text STR          # type a string
 script/interop-vm bake                     # freeze the disk as a golden image; run on an overlay
 script/interop-vm clone --to DIR           # a fresh VM: a new overlay on the golden image
+sudo script/interop-vm gvt                 # recreate the mediated Intel GPU after a host reboot
 ```
 
 ### Options
 
 `--dir DIR` (default `$HOME/interop-vm`), `--disk SIZE`, `--ram SIZE` (**use `3G`** on this 7.2 GiB
 host; 4G swaps), `--cpus N`, `--cpu MODEL`, `--uefi`, `--vnc`, `--no-gpu`, `--gvt UUID`,
-`--gpu-subsys VVVV:DDDD`, `--rom PATH`, `--no-rom`, `--x-vga`, `--no-vga`, `--iso PATH`,
+`--gvt-type TYPE`, `--gpu-subsys VVVV:DDDD`, `--rom PATH`, `--no-rom`, `--x-vga`, `--no-vga`, `--iso PATH`,
 `--unattend`, `--answer PATH`, `--qemu-arg ARG` (repeatable; raw QEMU arguments), `--out`, `--keys`,
 `--text`, `--to DIR` (`clone` destination), `--cache MODE` (QEMU disk cache; e.g. `unsafe`), `--dry-run`.
 
@@ -122,33 +123,40 @@ OpenSSH convention for an admin user) — and stop passing the password through 
 
 ### GVT-g — the adapter that works
 
-The guest's real GPU is a **mediated Intel iGPU**, not a passed-through card. One-time host setup:
+The guest's real GPU is a **mediated Intel iGPU**, not a passed-through card.
 
-1. `i915.enable_gvt=1` on the kernel cmdline, reboot, then `sudo modprobe kvmgt` after each boot.
-   i915 logs a *non-fatal* `Direct firmware load for i915/gvt/vid_0x8086_did_0x1916_rid_0x07.golden_hw_state
-   failed`; the mdev types appear anyway.
-2. Create the mediated device — it does **not** survive a host reboot:
+**One-time host setup:** `i915.enable_gvt=1` on the kernel cmdline, then reboot. i915 logs a
+*non-fatal* `Direct firmware load for i915/gvt/vid_0x8086_did_0x1916_rid_0x07.golden_hw_state failed`;
+the mdev types appear anyway.
 
-   ```sh
-   sudo tee /sys/bus/pci/devices/0000:00:02.0/mdev_supported_types/i915-GVTg_V5_4/create <<< "$(uuidgen)"
-   ls /sys/bus/mdev/devices/      # -> the new <uuid>
-   ```
+**After every host reboot**, the mediated device is gone. Two commands, no more:
 
-3. Boot with it: `run --no-gpu --gvt <uuid>` (`--gvt` attaches
-   `-device vfio-pci,sysfsdev=/sys/bus/pci/devices/0000:00:02.0/<uuid>`; `--no-gpu` drops the dead
-   dGPU). The guest sees an Intel `8086:1916` VGA controller.
-4. **Install the Intel display driver once, in the guest.** Windows Update offers
-   `Intel Corporation - Display - 31.0.101.2111`, but the WU COM downloader returns `E_ACCESSDENIED`
-   over SSH and `0x80240016` from a SYSTEM task. The package still lands in
-   `C:\Windows\SoftwareDistribution\Download\Install` (1.35 GB; it ships `ig9icd64.dll` /
-   `igd9dxva64.dll`, i.e. Gen9), so apply it directly — this takes several minutes, hence the
-   scheduled task:
+```sh
+sudo script/interop-vm gvt                        # load kvmgt, create the mdev, print the run line
+script/interop-vm run --no-gpu --gvt <uuid> --vnc # the line gvt prints
+```
 
-   ```cmd
-   pnputil /add-driver "C:\Windows\SoftwareDistribution\Download\Install\iigd_dch.inf" /install
-   ```
+`gvt` picks `i915-GVTg_V5_4` (128 MB low / 512 MB high GM; override with `--gvt-type`), saves the
+UUID to `$VM_DIR/gvt.uuid`, and prints the exact `run` line. `--gvt` attaches
+`-device vfio-pci,sysfsdev=/sys/bus/pci/devices/0000:00:02.0/<uuid>`, and `--no-gpu` drops the dead
+dGPU; the guest sees an Intel `8086:1916` VGA controller.
 
-   The adapter then reports `Intel(R) HD Graphics 520`, driver `31.0.101.2111`, problem code 0.
+`run` refuses to start when the setup is wrong, rather than booting a silently different guest: if
+the dGPU is not on `vfio-pci` it points you at `gvt`, and if `--gvt` names an mdev that does not
+exist it says so.
+
+**Install the Intel display driver once, in the guest** — it is already in the golden image, so a
+clone does not need this. Windows Update offers `Intel Corporation - Display - 31.0.101.2111`, but
+the WU COM downloader returns `E_ACCESSDENIED` over SSH and `0x80240016` from a SYSTEM task. The
+package still lands in `C:\Windows\SoftwareDistribution\Download\Install` (1.35 GB; it ships
+`ig9icd64.dll` / `igd9dxva64.dll`, i.e. Gen9), so apply it directly — this takes several minutes,
+hence the scheduled task:
+
+```cmd
+pnputil /add-driver "C:\Windows\SoftwareDistribution\Download\Install\iigd_dch.inf" /install
+```
+
+The adapter then reports `Intel(R) HD Graphics 520`, driver `31.0.101.2111`, problem code 0.
 
 ### Host preparation, and the dGPU
 

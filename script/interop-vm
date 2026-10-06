@@ -38,6 +38,7 @@
 #     sudo script/interop-vm poweron              # run the board's ACPI _ON for the dGPU (muxless)
 #     script/interop-vm bake                     # freeze the disk as a golden image; run on an overlay
 #     script/interop-vm clone --to DIR           # a fresh VM: a new overlay on the golden image
+#     sudo script/interop-vm gvt                 # recreate the mediated Intel GPU after a reboot
 #
 # Options:
 #     --iso PATH       the installer ISO (required by `install`)
@@ -61,6 +62,7 @@
 #                      override the guest's GPU subsystem IDs (default: read from the host)
 #     --gvt UUID       attach an Intel GVT-g mediated device (a real iGPU adapter);
 #                      create the mdev under $IGPU/mdev_supported_types/<type>/ first
+#     --gvt-type TYPE  the mdev type `gvt` creates (default i915-GVTg_V5_4)
 #     --qemu-arg ARG   append a raw QEMU argument (repeatable; for experiments)
 #     --unattend       attach the bundled answer file for a hands-off install
 #                      (the BIOS or UEFI layout, chosen to match the firmware)
@@ -120,6 +122,7 @@ X_VGA=0
 VGA_NONE=0
 GPU_SUBSYS=""
 GVT_UUID=""
+GVT_TYPE=""
 GOLDEN_NAME="windows-golden.qcow2"
 CLONE_DIR=""
 CACHE=""
@@ -174,7 +177,7 @@ usage() { awk 'NR >= 3 && /^#/ { sub(/^# ?/, ""); print; next } NR >= 3 { exit }
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        check|bind|unbind|create|install|run|prepare|screenshot|sendkey|type|powerdown|poweron|bake|clone) CMD="$1" ;;
+        check|bind|unbind|create|install|run|prepare|screenshot|sendkey|type|powerdown|poweron|bake|clone|gvt) CMD="$1" ;;
         --iso)   shift; ISO="${1:?--iso needs a path}" ;;
         --dir)   shift; VM_DIR="${1:?--dir needs a path}" ;;
         --to)    shift; CLONE_DIR="${1:?--to needs a path}" ;;
@@ -193,6 +196,7 @@ while [ "$#" -gt 0 ]; do
         --no-vga) VGA_NONE=1 ;;
         --gpu-subsys) shift; GPU_SUBSYS="${1:?--gpu-subsys needs VVVV:DDDD}" ;;
         --gvt)       shift; GVT_UUID="${1:?--gvt needs a mediated-device UUID}" ;;
+        --gvt-type)  shift; GVT_TYPE="${1:?--gvt-type needs a type}" ;;
         --qemu-arg)   shift; EXTRA_ARGS+=( "$1" ) ;;
         --unattend) UNATTEND=1 ;;
         --answer)   shift; ANSWER="${1:?--answer needs a path}" ;;
@@ -613,9 +617,20 @@ cmd_install() {
 cmd_run() {
     [ -f "$VM_DIR/windows.qcow2" ] || die "no disk — run: $0 create (and install)"
     have qemu-system-x86_64 || die "qemu-system-x86_64 is not installed"
+
     local what=""
-    [ "$NO_GPU" -eq 0 ] && what="$GPU"
-    [ -n "$GVT_UUID" ] && what="${what:+$what + }GVT-g $GVT_UUID"
+    if [ "$NO_GPU" -eq 0 ]; then
+        local drv; drv="$(current_driver)"
+        if [ "$drv" != "vfio-pci" ]; then
+            die "$GPU is on '${drv:-no driver}', not vfio-pci — the dGPU cannot be passed.  For the GVT-g guest: sudo $0 gvt, then: $0 run --no-gpu --gvt <uuid>"
+        fi
+        what="$GPU"
+    fi
+    if [ -n "$GVT_UUID" ]; then
+        [ -e "/sys/bus/pci/devices/$IGPU/$GVT_UUID" ] ||
+            die "no mediated device $GVT_UUID — create one: sudo $0 gvt"
+        what="${what:+$what + }GVT-g $GVT_UUID"
+    fi
     say "booting $VM_DIR/windows.qcow2 with ${what:-no GPU}"
     qemu_argv c
     run qemu-system-x86_64 "${QEMU_ARGV[@]}"
@@ -754,6 +769,49 @@ cmd_poweron() {
 }
 
 # ---------------------------------------------------------------------------------------
+# gvt — recreate the mediated Intel GPU after a host reboot
+# ---------------------------------------------------------------------------------------
+
+# The GVT-g mdev does not survive a host reboot: `kvmgt` must be loaded and the mdev created
+# again, both as root. This does it and prints the `run` line to paste:
+#
+#     sudo script/interop-vm gvt
+#     script/interop-vm run --no-gpu --gvt <uuid>
+#
+# The type defaults to i915-GVTg_V5_4 (128 MB low / 512 MB high GM); `--gvt-type` overrides
+# it. The UUID is also saved to $VM_DIR/gvt.uuid.
+cmd_gvt() {
+    need_root
+    local types="/sys/bus/pci/devices/$IGPU/mdev_supported_types"
+    local type="${GVT_TYPE:-i915-GVTg_V5_4}"
+    if ! lsmod | grep -q '^kvmgt'; then
+        say "loading kvmgt"
+        if [ "$DRY_RUN" -eq 1 ]; then
+            note "would run: modprobe kvmgt"
+            note "would write a uuid to $types/$type/create"
+            return 0
+        fi
+        modprobe kvmgt
+    fi
+    [ -d "$types" ] || die "no GVT-g types at $types — is i915.enable_gvt=1 on the kernel cmdline?"
+    [ -d "$types/$type" ] || die "no mdev type '$type' (have: $(ls "$types" | tr '\n' ' '))"
+    local uuid
+    uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        note "would write $uuid to $types/$type/create"
+        return 0
+    fi
+    printf '%s' "$uuid" > "$types/$type/create"
+    mkdir -p "$VM_DIR"
+    printf '%s\n' "$uuid" > "$VM_DIR/gvt.uuid"
+    say "GVT-g mediated device ready: $uuid  ($type)"
+    say "saved to $VM_DIR/gvt.uuid"
+    say
+    say "start the VM with:"
+    note "$0 run --dir $VM_DIR --ram 3G --cpu 'host,kvm=off,-hypervisor,hv_vendor_id=0123456789ab' --no-gpu --gvt $uuid --vnc"
+}
+
+# ---------------------------------------------------------------------------------------
 # bake / clone — a golden image, and per-VM overlays on it
 # ---------------------------------------------------------------------------------------
 
@@ -826,4 +884,5 @@ case "$CMD" in
     poweron)   cmd_poweron ;;
     bake)      cmd_bake ;;
     clone)     cmd_clone ;;
+    gvt)       cmd_gvt ;;
 esac

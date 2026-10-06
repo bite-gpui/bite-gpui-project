@@ -30,12 +30,11 @@ Graphics 520** (`8086:1916`, driver `31.0.101.2111`, problem code 0), which
 cannot be (the routes that failed are below) -- so it is left out of the guest entirely, and the
 host keeps its nvidia driver.
 
-One-time host setup: `i915.enable_gvt=1` on the kernel cmdline, and `modprobe kvmgt` after each
-boot. Then:
+One-time host setup: `i915.enable_gvt=1` on the kernel cmdline. After every host reboot the mediated
+device is gone, so the bring-up is two commands:
 
-    sudo tee /sys/bus/pci/devices/0000:00:02.0/mdev_supported_types/i915-GVTg_V5_4/create <<< "$(uuidgen)"
-    script/interop-vm run --dir ~/interop-vm --ram 3G \
-        --cpu 'host,kvm=off,-hypervisor,hv_vendor_id=0123456789ab' --no-gpu --gvt <uuid> --vnc
+    sudo script/interop-vm gvt     # load kvmgt, create the mdev, print the run line
+    script/interop-vm run --no-gpu --gvt <uuid> --vnc
 
 The guest needs its Intel display driver installed once (see "GVT-g works" below).
 [`../script/README.md`](../script/README.md) is the operating manual: the guest's SSH access, GVT-g,
@@ -337,8 +336,9 @@ The environment works; it is not yet reusable. The gaps, in order:
 - **A golden image -- done.** `script/interop-vm bake` freezes the driver-complete disk as a read-only
   `windows-golden.qcow2` and runs the VM on a qcow2 overlay on it; `clone --to DIR` makes another
   overlay for a fresh VM. What remains is only to re-bake when the guest changes.
-- **One command to bring the harness up.** The `kvmgt` modprobe and the GVT-g mdev creation could
-  fold behind an `interop-vm gvt` step, so `run --gvt` is not preceded by two manual commands.
+- **One command to bring the harness up -- done.** `sudo script/interop-vm gvt` loads `kvmgt` and
+  creates the mdev (printing the `run` line), and `run` now refuses to start a wrongly-configured
+  guest instead of booting a silently different one.
 - **Run the probe.** Point W5's packed probe
   ([`probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md)) at the adapter and record
   P5, P6 and P9 -- after which **P6's answer freezes `gpui-interop`'s API**
