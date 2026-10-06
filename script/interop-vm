@@ -47,6 +47,9 @@
 #     --rom PATH       pass a VBIOS dump to the GPU (`romfile=`)
 #     --no-rom         hide the GPU option ROM (`rombar=0`) instead of passing it
 #     --no-gpu         don't pass the GPU through (plain install or debug run)
+#     --x-vga          pass x-vga=on to the GPU (make it the primary/boot VGA);
+#                      needs a VGA-capable device -- VFIO rejects it for a 0302 3D controller
+#     --no-vga         drop QEMU's emulated `-vga std` (use with --x-vga, or alone)
 #     --gpu-subsys VVVV:DDDD
 #                      override the guest's GPU subsystem IDs (default: read from the host)
 #     --qemu-arg ARG   append a raw QEMU argument (repeatable; for experiments)
@@ -102,6 +105,8 @@ VNC=0
 ROM=""
 ROMBAR=""
 NO_GPU=0
+X_VGA=0
+VGA_NONE=0
 GPU_SUBSYS=""
 EXTRA_ARGS=()
 QEMU_ARGV=()
@@ -167,6 +172,8 @@ while [ "$#" -gt 0 ]; do
         --rom)   shift; ROM="${1:?--rom needs a path}" ;;
         --no-rom) ROMBAR=0 ;;
         --no-gpu) NO_GPU=1 ;;
+        --x-vga)  X_VGA=1 ;;
+        --no-vga) VGA_NONE=1 ;;
         --gpu-subsys) shift; GPU_SUBSYS="${1:?--gpu-subsys needs VVVV:DDDD}" ;;
         --qemu-arg)   shift; EXTRA_ARGS+=( "$1" ) ;;
         --unattend) UNATTEND=1 ;;
@@ -459,6 +466,7 @@ qemu_argv() { # boot-order [cdrom]  -> populates the global QEMU_ARGV array
     local vfio="vfio-pci,host=$GPU_SHORT"
     if [ -n "$ROM" ]; then vfio="$vfio,romfile=$ROM"; fi
     if [ -n "$ROMBAR" ]; then vfio="$vfio,rombar=$ROMBAR"; fi
+    if [ "$X_VGA" -eq 1 ]; then vfio="$vfio,x-vga=on"; fi
 
     # This GPU's *standard* PCI subsystem registers read 0; the real IDs (1028:070b, Dell) live
     # in a PCIe capability that VFIO does not forward. Without them the guest sees
@@ -487,13 +495,19 @@ qemu_argv() { # boot-order [cdrom]  -> populates the global QEMU_ARGV array
         -m "$RAM"
         -drive "file=$VM_DIR/windows.qcow2,if=none,id=disk0,format=qcow2"
         -device "ide-hd,drive=disk0,bus=ide.0"
-        -vga std
         -device qemu-xhci
         -device usb-tablet
         -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:2222-:22"
         -device "e1000,netdev=net0"
         -boot "order=$boot"
     )
+    # Emulated VGA is the normal path; --no-vga drops it so a passed-through GPU with
+    # x-vga=on can be the guest's primary/boot display adapter instead.
+    if [ "$VGA_NONE" -eq 1 ]; then
+        QEMU_ARGV+=( -vga none )
+    else
+        QEMU_ARGV+=( -vga std )
+    fi
     # The GPU is the point of this VM, but a plain install or a debug boot can leave it
     # out and keep the guest to one well-understood adapter.
     if [ "$NO_GPU" -eq 0 ]; then
