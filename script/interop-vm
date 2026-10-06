@@ -600,7 +600,10 @@ cmd_install() {
 cmd_run() {
     [ -f "$VM_DIR/windows.qcow2" ] || die "no disk — run: $0 create (and install)"
     have qemu-system-x86_64 || die "qemu-system-x86_64 is not installed"
-    say "booting $VM_DIR/windows.qcow2 with $GPU passed through"
+    local what=""
+    [ "$NO_GPU" -eq 0 ] && what="$GPU"
+    [ -n "$GVT_UUID" ] && what="${what:+$what + }GVT-g $GVT_UUID"
+    say "booting $VM_DIR/windows.qcow2 with ${what:-no GPU}"
     qemu_argv c
     run qemu-system-x86_64 "${QEMU_ARGV[@]}"
 }

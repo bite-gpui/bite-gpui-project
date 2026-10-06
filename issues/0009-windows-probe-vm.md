@@ -1,9 +1,7 @@
 - **Opened:** 2026-10-02
-- **Status:** open — boot-time passthrough works, and the guest's exact VBIOS was recovered and both
-  passed via `romfile=` **and** injected as an ACPI `_ROM`; the host-side ACPI `_ON` was run as well,
-  yet the NVIDIA driver still hits **Code 43** (`CM_PROB_FAILED_POST_START`). Every lever on this
-  muxless adapter is spent, so the guest is moving to a **mediated Intel iGPU (GVT-g)**; the probes
-  have not run
+- **Status:** open — the muxless GeForce is unusable in a guest (every lever spent, recorded below),
+  but the guest now has a **real** hardware adapter via GVT-g: an Intel HD Graphics 520 with driver
+  `31.0.101.2111`, problem code 0, alongside `-vga std`. Next: run W5's probes on it.
 - **Touches:** this machine (`user-Vostro-14-5459`), [`../script/interop-vm`](../script/interop-vm), [`../script/vbios-from-firmware.py`](../script/vbios-from-firmware.py), [`../script/windows-iso`](../script/windows-iso), [`../spi/rendering/probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md), the `gpui_interop` crate in `bite-gpui`
 
 # The Windows guest that runs the interop probes
@@ -223,15 +221,32 @@ That exhausts every lever on this adapter: hypervisor masking, subsystem-ID over
 (padded and unpadded), an injected ACPI `_ROM`, a host-side `_ON`, and forcing primary VGA. A muxless
 mobile GeForce is not passable here.
 
-### The pivot: a mediated iGPU (GVT-g) is available (2026-10-06)
+### GVT-g works: the guest has a real hardware adapter (2026-10-06)
 
-`modinfo i915` on this host still carries `enable_gvt` (default false), so GVT-g host support is
-compiled in, and the Skylake-U **HD Graphics 520** is a Gen9 part with real D3D11/12 (feature level
-12_1). Booting with `i915.enable_gvt=1`, loading `kvmgt`, creating an mdev and passing it to the guest
-(with Intel's GVT-g Windows driver) would give the probes a *real* hardware adapter — two of them,
-with `-vga std` -- without the muxless `_ON`/`_ROM`/Code 43 wall. The cost is an out-of-tree guest
-driver. The host now boots with `i915.enable_gvt=1` (`kvmgt.ko` is built); the remaining step is to
-`modprobe kvmgt`, create an mdev and wire it into the guest. This is the active path.
+`modinfo i915` carried `enable_gvt`, so GVT-g host support was compiled in. The steps that worked:
+
+1. `i915.enable_gvt=1` on the kernel cmdline, reboot, then `sudo modprobe kvmgt`. i915 logs a
+   non-fatal `Direct firmware load for i915/gvt/vid_0x8086_did_0x1916_rid_0x07.golden_hw_state
+   failed`; the mdev types appear anyway.
+2. Create a mediated device:
+   `sudo tee /sys/bus/pci/devices/0000:00:02.0/mdev_supported_types/i915-GVTg_V5_4/create`
+   (128 MB low / 512 MB high GM; `device_api = vfio-pci`).
+3. Boot with `--no-gpu --gvt <uuid>`. The 930M is dead weight, so it is dropped; the guest gets
+   `-vga std` plus the vGPU (`8086:1916`).
+4. Install the display driver **in the guest**. Windows Update offers `Intel Corporation - Display -
+   31.0.101.2111` for the vGPU, but the WU COM downloader returns `E_ACCESSDENIED` over SSH and the
+   SYSTEM-scheduled install returns `0x80240016`. The package still lands in
+   `C:\Windows\SoftwareDistribution\Download\Install` (1.35 GB; it ships `ig9icd64.dll` and
+   `igd9dxva64.dll`, i.e. Gen9), so install it directly -- this takes several minutes:
+
+       pnputil /add-driver C:\Windows\SoftwareDistribution\Download\Install\iigd_dch.inf /install
+
+   (pnputil cannot be driven over a plain SSH channel -- the channel closes and kills it; run it from
+   a scheduled task.)
+
+The guest then reports `Intel(R) HD Graphics 520`, driver `31.0.101.2111`, problem code 0, next to the
+`-vga std` adapter -- two adapters, and a **real** D3D11/12 device. This is the adapter the probes
+should use. The driver install is heavy, so it is a manual step for now.
 
 ## What is blocked
 
