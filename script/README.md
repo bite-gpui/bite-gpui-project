@@ -47,7 +47,7 @@ sudo script/interop-vm gvt                 # recreate the mediated Intel GPU aft
 ### Options
 
 `--dir DIR` (default `$HOME/interop-vm`), `--disk SIZE`, `--ram SIZE` (**use `3G`** on this 7.2 GiB
-host; 4G swaps), `--cpus N`, `--cpu MODEL`, `--uefi`, `--vnc`, `--no-gpu`, `--gvt UUID|last`
+host; 4G swaps), `--cpus N`, `--cpu MODEL` (with `--gvt`, defaults to the GVT-g model), `--uefi`, `--vnc`, `--no-gpu`, `--gvt UUID|last`
 (`last` = the mdev `gvt` last created),
 `--gvt-type TYPE`, `--gpu-subsys VVVV:DDDD`, `--rom PATH`, `--no-rom`, `--x-vga`, `--no-vga`, `--iso PATH`,
 `--unattend`, `--answer PATH`, `--qemu-arg ARG` (repeatable; raw QEMU arguments), `--out`, `--keys`,
@@ -148,6 +148,13 @@ What survives a reboot, and what does not:
 | the memlock limit | `/etc/security/limits.d/99-vfio-memlock.conf` | yes |
 | the disk (golden + overlay) | `windows-golden.qcow2` / `windows.qcow2` | yes |
 | `kvmgt`, the mdev, and its uuid | sysfs | **no** — `gvt` recreates them |
+
+`--gvt` also raises the guest CPU model to `host,kvm=off,-hypervisor,hv_vendor_id=0123456789ab`,
+which **hides the hypervisor**. That is required, not cosmetic: with the hypervisor-present CPUID bit
+set, the guest's Intel driver never initialises the vGPU — GVT-g logs `Detected your guest driver
+doesn't support GVT-g` and then floods `gvt: vgpu 1: Invalid aperture offset …`, QEMU shows
+`vfio_region_read(…region2…) failed: Bad address`, and Windows BSODs at boot. `--cpu` overrides it if
+you know better.
 
 `gvt` picks `i915-GVTg_V5_4` (128 MB low / 512 MB high GM; override with `--gvt-type`) and is
 idempotent: it loads `kvmgt`, reuses the mdev if it still exists, re-asserts the `/dev/vfio` rule and

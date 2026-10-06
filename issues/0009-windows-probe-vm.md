@@ -330,6 +330,25 @@ udev rule, and this memlock limit. `gvt` now asserts both, `prepare --revert` ke
 limit, and `run` refuses to start with an 8 MiB limit. It is a **login** limit: writing the conf
 takes effect at the next login (or reboot), not in the session that wrote it.
 
+### GVT-g needs the hypervisor hidden as well (2026-10-07)
+
+A second, independent requirement, found the same way. With the host's default guest CPU model
+(`host,kvm=off`, i.e. the hypervisor-present CPUID bit set), the guest's Intel driver never
+initialises the vGPU. GVT-g says so, then floods the log:
+
+    Detected your guest driver doesn't support GVT-g.
+    gvt: vgpu 1: Invalid aperture offset 24920064
+    ...
+
+and QEMU mirrors it:
+
+    qemu-system-x86_64: vfio_region_read(…:region2+0x17c4000, 8) failed: Bad address
+
+Windows then BSODs at boot. The same disk booted with
+`-cpu 'host,kvm=off,-hypervisor,hv_vendor_id=0123456789ab'` (hypervisor hidden) works, with no GVT-g
+errors at all. So `run --no-gpu --gvt` now applies that CPU model automatically -- it is not
+optional, and it is exactly the string `gvt` prints.
+
 ### The packed probe passes on the vGPU -- P5 and P6 (2026-10-06)
 
 [`../script/interop-probe`](../script/interop-probe) is the packed W5 checklist: P6 asks whether DXGI

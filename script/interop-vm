@@ -74,7 +74,8 @@
 #     --unattend       attach the bundled answer file for a hands-off install
 #                      (the BIOS or UEFI layout, chosen to match the firmware)
 #     --answer PATH    attach a custom answer file instead of the bundled one
-#     --cpu MODEL      override `-cpu` (default host,kvm=off)
+#     --cpu MODEL      override `-cpu` (default host,kvm=off; `--gvt` raises it to the GVT-g
+#                      model that hides the hypervisor)
 #     --revert         `prepare`: undo the boot-time binding
 #     --out PATH       `screenshot`: where to write the PNG (default $VM_DIR/screenshot.png)
 #     --keys KEYS      `sendkey`: keys to send, in QEMU syntax, e.g. 'shift+f10'
@@ -125,6 +126,10 @@ DISK_SIZE=64G
 RAM=4G
 CPUS=2
 CPU_MODEL=host,kvm=off
+# GVT-g needs the hypervisor hidden from the guest, or its Intel driver never initialises the vGPU
+# (see the `--gvt` note by the argument parsing). Implied by `--gvt` unless `--cpu` overrides it.
+GVT_CPU_MODEL="host,kvm=off,-hypervisor,hv_vendor_id=0123456789ab"
+CPU_GIVEN=0
 UEFI=0
 VNC=0
 ROM=""
@@ -197,7 +202,7 @@ while [ "$#" -gt 0 ]; do
         --disk)  shift; DISK_SIZE="${1:?}" ;;
         --ram)   shift; RAM="${1:?}" ;;
         --cpus)  shift; CPUS="${1:?}" ;;
-        --cpu)   shift; CPU_MODEL="${1:?}" ;;
+        --cpu)   shift; CPU_MODEL="${1:?}"; CPU_GIVEN=1 ;;
         --uefi)  UEFI=1 ;;
         --revert) PREPARE_REVERT=1 ;;
         --vnc)   VNC=1 ;;
@@ -232,6 +237,15 @@ case "$GVT_UUID" in
         [ -n "$GVT_UUID" ] || die "--gvt last: no saved uuid at $VM_DIR/gvt.uuid — run: sudo $0 gvt"
         ;;
 esac
+
+# GVT-g needs the hypervisor hidden from the guest. With the hypervisor-present CPUID bit set, the
+# guest's Intel driver does not initialise the vGPU: GVT-g logs "Detected your guest driver doesn't
+# support GVT-g" and then floods "gvt: vgpu 1: Invalid aperture offset ...", and Windows BSODs at
+# boot (QEMU shows `vfio_region_read(...region2+...) failed: Bad address`). This is why it is not
+# optional. `--gvt` therefore implies this CPU model, unless `--cpu` says otherwise.
+if [ -n "$GVT_UUID" ] && [ "$CPU_GIVEN" -eq 0 ]; then
+    CPU_MODEL="$GVT_CPU_MODEL"
+fi
 
 iommu_group() { readlink -f "/sys/bus/pci/devices/$GPU/iommu_group" 2>/dev/null | xargs -r basename; }
 pci_id() { lspci -n -s "$GPU_SHORT" 2>/dev/null | awk '{print $3}'; }
@@ -910,8 +924,9 @@ SUBSYSTEM=="vfio", TAG+="uaccess"'
     fi
     say
     say "start the VM with:"
-    note "$0 run --dir $VM_DIR --ram 3G --cpu 'host,kvm=off,-hypervisor,hv_vendor_id=0123456789ab' --no-gpu --gvt last --vnc"
-    note "(or --gvt $uuid; 'last' reads it back from $VM_DIR/gvt.uuid)"
+    note "$0 run --dir $VM_DIR --ram 3G --no-gpu --gvt last --vnc"
+    note "(--gvt applies the GVT-g CPU model automatically: $GVT_CPU_MODEL)"
+    note "(and 'last' reads the uuid back from $VM_DIR/gvt.uuid)"
 }
 
 # ---------------------------------------------------------------------------------------
