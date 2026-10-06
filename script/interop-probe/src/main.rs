@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll, Wake, Waker};
 
 use windows::core::{Interface, PCWSTR};
-use windows::Win32::Foundation::{CloseHandle, LUID};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, LUID};
 use windows::Win32::Graphics::Direct3D::{
     D3D_DRIVER_TYPE_UNKNOWN, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1,
 };
@@ -77,13 +77,18 @@ struct WgpuResult {
 }
 
 fn main() {
-    println!("interop-probe: the packed Windows checklist (P6 adapter identity + P5 fence loop)");
+    println!("interop-probe: the packed Windows checklist (P6 adapter identity + P5 fence loop + P9 device loss)");
     println!("adapter order and LUIDs come from DXGI; wgpu is DX12-only here");
     println!();
+
+    // P9 stages its loss either by a real GPU timeout (TDR) or by invoking the recovery path
+    // directly; the printout records which, because they are not equal evidence.
+    let simulate = !std::env::args().any(|a| a == "--tdr");
 
     let dxgi = check_p6_dxgi();
     let wgpu = check_p6_wgpu(dxgi.as_ref());
     let p5 = check_p5(dxgi.as_ref());
+    let p9 = check_p9(dxgi.as_ref(), simulate);
 
     println!();
     println!("SUMMARY");
@@ -105,6 +110,13 @@ fn main() {
         "P5 fence loop: {}",
         match &p5 {
             Ok(note) => format!("PASS — byte-exact via {note}"),
+            Err(e) => format!("FAIL/SKIP — {e}"),
+        }
+    );
+    println!(
+        "P9 device loss: {}",
+        match &p9 {
+            Ok(mode) => format!("PASS — {mode}"),
             Err(e) => format!("FAIL/SKIP — {e}"),
         }
     );
@@ -584,6 +596,261 @@ fn check_p5(dxgi: Result<&DxgiResult, &String>) -> Result<String, String> {
                 first_bad
             ))
         }
+    }
+}
+
+/// One D3D12 -> D3D11 shared-texture round trip, parameterised by the producer device.
+///
+/// `producer` clears a *fresh* shared texture to the known colour into a *fresh* shared
+/// fence; a fresh D3D11 device on `adapter` opens both, orders on the fence, and reads the
+/// bytes back. The two NT handles are left open and returned, so a caller can test what
+/// happens to them after `producer` is gone (P9's stale-handle hazard).
+unsafe fn shared_roundtrip(
+    producer: &ID3D12Device,
+    adapter: &IDXGIAdapter,
+    label: &str,
+) -> Result<(HANDLE, HANDLE, usize, String), String> {
+    let fence12: ID3D12Fence = producer
+        .CreateFence(0, D3D12_FENCE_FLAG_SHARED)
+        .map_err(|e| format!("{label}: D3D12 CreateFence(SHARED): {e:?}"))?;
+    let fence_handle = producer
+        .CreateSharedHandle(&fence12, None, GENERIC_ALL, PCWSTR::null())
+        .map_err(|e| format!("{label}: D3D12 fence CreateSharedHandle: {e:?}"))?;
+
+    let heap_props = D3D12_HEAP_PROPERTIES {
+        Type: D3D12_HEAP_TYPE_DEFAULT,
+        CPUPageProperty: D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        MemoryPoolPreference: D3D12_MEMORY_POOL_UNKNOWN,
+        CreationNodeMask: 1,
+        VisibleNodeMask: 1,
+    };
+    let res_desc = D3D12_RESOURCE_DESC {
+        Dimension: D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        Alignment: 0,
+        Width: TEX_W as u64,
+        Height: TEX_H,
+        DepthOrArraySize: 1,
+        MipLevels: 1,
+        Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        Layout: D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        Flags: D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
+    };
+    let clear = D3D12_CLEAR_VALUE {
+        Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+        Anonymous: D3D12_CLEAR_VALUE_0 { Color: CLEAR_RGBA },
+    };
+    let mut res_opt: Option<ID3D12Resource> = None;
+    producer
+        .CreateCommittedResource(
+            &heap_props,
+            D3D12_HEAP_FLAG_SHARED,
+            &res_desc,
+            D3D12_RESOURCE_STATE_COMMON,
+            Some(&clear),
+            &mut res_opt,
+        )
+        .map_err(|e| format!("{label}: D3D12 CreateCommittedResource(heap SHARED): {e:?}"))?;
+    let resource = res_opt.ok_or_else(|| format!("{label}: no shared resource"))?;
+    let res_handle = producer
+        .CreateSharedHandle(&resource, None, GENERIC_ALL, PCWSTR::null())
+        .map_err(|e| format!("{label}: D3D12 resource CreateSharedHandle: {e:?}"))?;
+
+    let rtv_heap: ID3D12DescriptorHeap = producer
+        .CreateDescriptorHeap(&D3D12_DESCRIPTOR_HEAP_DESC {
+            Type: D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+            NumDescriptors: 1,
+            Flags: D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+            NodeMask: 0,
+        })
+        .map_err(|e| format!("{label}: D3D12 CreateDescriptorHeap(RTV): {e:?}"))?;
+    let rtv = rtv_heap.GetCPUDescriptorHandleForHeapStart();
+    producer.CreateRenderTargetView(&resource, None, rtv);
+
+    let queue: ID3D12CommandQueue = producer
+        .CreateCommandQueue(&D3D12_COMMAND_QUEUE_DESC {
+            Type: D3D12_COMMAND_LIST_TYPE_DIRECT,
+            Priority: 0,
+            Flags: D3D12_COMMAND_QUEUE_FLAG_NONE,
+            NodeMask: 0,
+        })
+        .map_err(|e| format!("{label}: D3D12 CreateCommandQueue: {e:?}"))?;
+    let allocator: ID3D12CommandAllocator = producer
+        .CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)
+        .map_err(|e| format!("{label}: D3D12 CreateCommandAllocator: {e:?}"))?;
+    let list: ID3D12GraphicsCommandList = producer
+        .CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, &allocator, None::<&ID3D12PipelineState>)
+        .map_err(|e| format!("{label}: D3D12 CreateCommandList: {e:?}"))?;
+
+    let to_rt = transition(&resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    let to_common = transition(&resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
+    list.ResourceBarrier(&[to_rt]);
+    list.ClearRenderTargetView(rtv, &CLEAR_RGBA, None);
+    list.ResourceBarrier(&[to_common]);
+    list.Close().map_err(|e| format!("{label}: D3D12 list Close: {e:?}"))?;
+    let cl: ID3D12CommandList = list.cast().map_err(|e| format!("{label}: list cast: {e:?}"))?;
+    queue.ExecuteCommandLists(&[Some(cl)]);
+    queue.Signal(&fence12, 1).map_err(|e| format!("{label}: D3D12 queue Signal: {e:?}"))?;
+
+    let levels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
+    let mut dev11: Option<ID3D11Device> = None;
+    let mut flevel = D3D_FEATURE_LEVEL(0);
+    let mut ctx11: Option<ID3D11DeviceContext> = None;
+    D3D11CreateDevice(
+        adapter,
+        D3D_DRIVER_TYPE_UNKNOWN,
+        Default::default(),
+        D3D11_CREATE_DEVICE_FLAG(0),
+        Some(&levels),
+        D3D11_SDK_VERSION,
+        Some(&mut dev11),
+        Some(&mut flevel),
+        Some(&mut ctx11),
+    )
+    .map_err(|e| format!("{label}: D3D11CreateDevice: {e:?}"))?;
+    let device11 = dev11.ok_or_else(|| format!("{label}: no D3D11 device"))?;
+    let context11 = ctx11.ok_or_else(|| format!("{label}: no D3D11 context"))?;
+    let device1: ID3D11Device1 = device11.cast().map_err(|e| format!("{label}: ID3D11Device1: {e:?}"))?;
+    let texture: ID3D11Texture2D = device1
+        .OpenSharedResource1(res_handle)
+        .map_err(|e| format!("{label}: ID3D11 OpenSharedResource1: {e:?}"))?;
+    let mut srv_opt: Option<ID3D11ShaderResourceView> = None;
+    device11
+        .CreateShaderResourceView(&texture, None, Some(&mut srv_opt))
+        .map_err(|e| format!("{label}: ID3D11 CreateShaderResourceView: {e:?}"))?;
+    let _srv = srv_opt.ok_or_else(|| format!("{label}: no D3D11 SRV"))?;
+
+    let order_note: String;
+    let gpu_fence = (|| -> Result<ID3D11Fence, String> {
+        let device5: ID3D11Device5 = device11.cast().map_err(|e| format!("ID3D11Device5: {e:?}"))?;
+        let mut f: Option<ID3D11Fence> = None;
+        device5
+            .OpenSharedFence(fence_handle, &mut f)
+            .map_err(|e| format!("OpenSharedFence: {e:?}"))?;
+        let fence11 = f.ok_or_else(|| "OpenSharedFence returned nothing".to_string())?;
+        let context4: ID3D11DeviceContext4 =
+            context11.cast().map_err(|e| format!("ID3D11DeviceContext4: {e:?}"))?;
+        context4.Wait(&fence11, 1).map_err(|e| format!("context4.Wait: {e:?}"))?;
+        Ok(fence11)
+    })();
+    match gpu_fence {
+        Ok(_) => order_note = "ID3D11Fence (GPU-side context4.Wait)".to_string(),
+        Err(e) => {
+            let event = CreateEventW(None, false, false, PCWSTR::null())
+                .map_err(|e| format!("{label}: CreateEventW: {e:?}"))?;
+            fence12
+                .SetEventOnCompletion(1, event)
+                .map_err(|e| format!("{label}: SetEventOnCompletion: {e:?}"))?;
+            let w = WaitForSingleObject(event, INFINITE);
+            let _ = CloseHandle(event);
+            if w.0 != 0 {
+                return Err(format!("{label}: WaitForSingleObject returned {}", w.0));
+            }
+            order_note = format!("CPU wait fallback ({e})");
+        }
+    }
+
+    let staging_desc = D3D11_TEXTURE2D_DESC {
+        Width: TEX_W,
+        Height: TEX_H,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        Usage: D3D11_USAGE_STAGING,
+        BindFlags: 0,
+        CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+        MiscFlags: 0,
+    };
+    let mut staging_opt: Option<ID3D11Texture2D> = None;
+    device11
+        .CreateTexture2D(&staging_desc, None, Some(&mut staging_opt))
+        .map_err(|e| format!("{label}: D3D11 CreateTexture2D(staging): {e:?}"))?;
+    let staging = staging_opt.ok_or_else(|| format!("{label}: no staging texture"))?;
+
+    context11.CopyResource(&staging, &texture);
+    let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+    context11
+        .Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
+        .map_err(|e| format!("{label}: D3D11 Map(staging): {e:?}"))?;
+    let pitch = mapped.RowPitch as usize;
+    let base = mapped.pData as *const u8;
+    let mut mismatches = 0usize;
+    for y in 0..TEX_H {
+        for x in 0..TEX_W {
+            let off = y as usize * pitch + x as usize * 4;
+            let px = [*base.add(off), *base.add(off + 1), *base.add(off + 2), *base.add(off + 3)];
+            if px != EXPECTED_RGBA {
+                mismatches += 1;
+            }
+        }
+    }
+    context11.Unmap(&staging, 0);
+
+    Ok((res_handle, fence_handle, mismatches, order_note))
+}
+
+/// P9: lose the producer device while a shared surface is held, recover, and re-negotiate.
+///
+/// `simulate` selects how the loss is staged and is recorded in the printout, because the spec
+/// distinguishes a real driver reset from the recovery path invoked directly:
+/// * `true`  -- **invoked directly**: release device A while the pool's handles exist, then
+///   rebuild on a fresh device. Exercises the bookkeeping, not the driver's reset behaviour.
+/// * `false` -- (not implemented yet) a real GPU timeout (TDR) before recovering.
+fn check_p9(dxgi: Result<&DxgiResult, &String>, simulate: bool) -> Result<String, String> {
+    println!();
+    println!("== P9 device loss + re-negotiation ==");
+    let dxgi = dxgi.map_err(|e| format!("no DXGI baseline: {e}"))?;
+    let adapter = &dxgi.adapter;
+    let luid = luid_str(dxgi.device_luid);
+
+    unsafe {
+        // Attach: producer device A holds a shared surface, and it composites.
+        let mut a: Option<ID3D12Device> = None;
+        D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0, &mut a)
+            .map_err(|e| format!("D3D12CreateDevice(A): {e:?}"))?;
+        let device_a = a.ok_or_else(|| "D3D12CreateDevice(A) returned no device".to_string())?;
+
+        let (h_tex_a, h_fence_a, mism_a, note_a) = shared_roundtrip(&device_a, adapter, "attach")?;
+        if mism_a != 0 {
+            return Err(format!("attach composite was not byte-exact ({mism_a} mismatched)"));
+        }
+        println!("attach  : device A holds a shared surface; composite byte-exact ({note_a})");
+
+        // Lose the device.
+        let mode;
+        if simulate {
+            mode = "simulated loss (recovery path invoked directly, no driver reset)";
+        } else {
+            return Err("real-TDR loss is not implemented yet (pass --sim)".to_string());
+        }
+        println!("lose    : {mode}");
+        // Drop A and the pool's device-bound handles: any use of them is now stale.
+        let _ = CloseHandle(h_tex_a);
+        let _ = CloseHandle(h_fence_a);
+        drop(device_a);
+
+        // Recover: a fresh producer device B on the same adapter.
+        let mut b: Option<ID3D12Device> = None;
+        D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0, &mut b)
+            .map_err(|e| format!("D3D12CreateDevice(B): {e:?}"))?;
+        let device_b = b.ok_or_else(|| "D3D12CreateDevice(B) returned no device".to_string())?;
+        device_b
+            .GetDeviceRemovedReason()
+            .map_err(|e| format!("recovered device B is not healthy: {e:?}"))?;
+        println!("recover : new producer device B on luid {luid}, removed-reason S_OK");
+
+        // Re-negotiate: fresh handles on B, re-open on D3D11, composite again.
+        let (h_tex_b, h_fence_b, mism_b, note_b) =
+            shared_roundtrip(&device_b, adapter, "re-negotiate")?;
+        let _ = CloseHandle(h_tex_b);
+        let _ = CloseHandle(h_fence_b);
+        if mism_b != 0 {
+            return Err(format!("re-negotiated composite was not byte-exact ({mism_b} mismatched)"));
+        }
+        println!("re-neg. : fresh handles on B; composite byte-exact ({note_b})");
+        println!("P9 frame after recovery: no panic, byte-exact on luid {luid}");
+        Ok(mode.to_string())
     }
 }
 
