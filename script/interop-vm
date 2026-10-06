@@ -53,6 +53,8 @@
 #     --no-vga         drop QEMU's emulated `-vga std` (use with --x-vga, or alone)
 #     --gpu-subsys VVVV:DDDD
 #                      override the guest's GPU subsystem IDs (default: read from the host)
+#     --gvt UUID       attach an Intel GVT-g mediated device (a real iGPU adapter);
+#                      create the mdev under $IGPU/mdev_supported_types/<type>/ first
 #     --qemu-arg ARG   append a raw QEMU argument (repeatable; for experiments)
 #     --unattend       attach the bundled answer file for a hands-off install
 #                      (the BIOS or UEFI layout, chosen to match the firmware)
@@ -95,6 +97,8 @@ set -euo pipefail
 
 GPU=0000:01:00.0
 GPU_SHORT="${GPU#0000:}"
+# The Intel iGPU a GVT-g mediated device hangs off (`--gvt`).
+IGPU="${INTEROP_VM_IGPU:-0000:00:02.0}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VM_DIR="${INTEROP_VM_DIR:-$HOME/interop-vm}"
 DISK_SIZE=64G
@@ -109,6 +113,7 @@ NO_GPU=0
 X_VGA=0
 VGA_NONE=0
 GPU_SUBSYS=""
+GVT_UUID=""
 EXTRA_ARGS=()
 QEMU_ARGV=()
 ANSWER=""
@@ -176,6 +181,7 @@ while [ "$#" -gt 0 ]; do
         --x-vga)  X_VGA=1 ;;
         --no-vga) VGA_NONE=1 ;;
         --gpu-subsys) shift; GPU_SUBSYS="${1:?--gpu-subsys needs VVVV:DDDD}" ;;
+        --gvt)       shift; GVT_UUID="${1:?--gvt needs a mediated-device UUID}" ;;
         --qemu-arg)   shift; EXTRA_ARGS+=( "$1" ) ;;
         --unattend) UNATTEND=1 ;;
         --answer)   shift; ANSWER="${1:?--answer needs a path}" ;;
@@ -513,6 +519,10 @@ qemu_argv() { # boot-order [cdrom]  -> populates the global QEMU_ARGV array
     # out and keep the guest to one well-understood adapter.
     if [ "$NO_GPU" -eq 0 ]; then
         QEMU_ARGV+=( -device "$vfio" )
+    fi
+    # A GVT-g mediated iGPU is a *second* hardware adapter; an mdev needs no IOMMU group.
+    if [ -n "$GVT_UUID" ]; then
+        QEMU_ARGV+=( -device "vfio-pci,sysfsdev=/sys/bus/pci/devices/$IGPU/$GVT_UUID" )
     fi
     # Raw extra arguments, for experiments (e.g. -smbios). Repeatable.
     if [ "${#EXTRA_ARGS[@]}" -gt 0 ]; then
