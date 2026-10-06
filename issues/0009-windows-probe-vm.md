@@ -1,8 +1,9 @@
 - **Opened:** 2026-10-02
-- **Status:** open — boot-time passthrough works and the guest's exact VBIOS has been recovered from the
-  host firmware and passed through, but the NVIDIA driver still hits **Code 43**
-  (`CM_PROB_FAILED_POST_START`); the remaining cause is the muxless ACPI/power-state path, so the
-  probes have not run
+- **Status:** open — boot-time passthrough works, and the guest's exact VBIOS was recovered and both
+  passed via `romfile=` **and** injected as an ACPI `_ROM` method, but the NVIDIA driver still hits
+  **Code 43** (`CM_PROB_FAILED_POST_START`) after a ~7 s POST; the host device sits in `D3hot`, so the
+  muxless power path (`_ON`) is the last untried lever, and a mediated iGPU (GVT-g) is the fallback.
+  The probes have not run
 - **Touches:** this machine (`user-Vostro-14-5459`), [`../script/interop-vm`](../script/interop-vm), [`../script/vbios-from-firmware.py`](../script/vbios-from-firmware.py), [`../script/windows-iso`](../script/windows-iso), [`../spi/rendering/probe-windows-packed.md`](../spi/rendering/probe-windows-packed.md), the `gpui_interop` crate in `bite-gpui`
 
 # The Windows guest that runs the interop probes
@@ -180,6 +181,45 @@ Making the 930M the primary/boot adapter was the obvious next try, and it fails 
 
 Both knobs are kept in [`../script/interop-vm`](../script/interop-vm) as `--x-vga` / `--no-vga`,
 with the caveat recorded.
+
+### The ACPI `_ROM` route — injected, loaded, still Code 43 (2026-10-06)
+
+The vendor SSDT (`/home/user/interop-vm/acpi/SSDT10`, *"Genuine NVIDIA Certified Optimus Ready
+Motherboard"*) shows *how* this board serves the VBIOS: the node `\_SB.PCI0.RP01.PEGP` carries a
+`_ROM` method that returns the image from the GPU's on-card NVS region in 0x8000-byte chunks
+(`RBF1..RBF4`), alongside `_ON`/`_OFF`/`_PS0`/`_PS3` and the Optimus `_DSM`. A guest has none of it,
+which is exactly the kind of thing a mobile driver reaches for when the ROM BAR is empty.
+
+[`../script/nvrom-ssdt.py`](../script/nvrom-ssdt.py) builds an SSDT that defines a device under
+`\_SB.PCI0` at the guest GPU's `_ADR` with a `_ROM` method returning the recovered VBIOS;
+`run --qemu-arg -acpitable --qemu-arg file=…` injects it. On this guest the 930M is `00:04.0`, so
+`_ADR = 0x00040000`.
+
+**It does not help.** The table *is* loaded (Windows exposes an `SSDT\VFIOPC` key under
+`HKLM\HARDWARE\ACPI\SSDT`) and the device still fails: `CM_PROB_FAILED_POST_START` (43), `nvlddmkm`
+Stopped, and no `VideoBiosVersion`/`HardwareInformation` is ever written for the adapter.
+
+Two more measurements from the same run:
+
+- **The driver's start is slow, not an instant VM rejection.** `Microsoft-Windows-Kernel-PnP/Driver
+  Watchdog` records the device event-queue thread running ~7 s before failing with *Event Argument:
+  0x2B* (= 43) — the driver drives the hardware and times out.
+- **The host device is `D3hot` while the guest runs** (`power_state`), with its ROM BAR `[virtual]`
+  (the `romfile`) but never read by the mobile driver. On a muxless board the dGPU core is powered up
+  by the firmware's ACPI `_ON` (`HGON`/the EC), which nothing on the host runs — no nvidia, no nouveau.
+
+So the last untried lever on this path is **power**, not configuration: run the board's `_ON` *on the
+host* before booting the guest (`acpi-call-dkms`, then `\_SB.PCI0.RP01.PEGP._ON`), which needs root and
+a reboot. If that too fails, real-GPU D3D via this adapter is spent.
+
+### The fallback: a mediated iGPU (GVT-g) is still available (2026-10-06)
+
+`modinfo i915` on this host still carries `enable_gvt` (default false), so GVT-g host support is
+compiled in, and the Skylake-U **HD Graphics 520** is a Gen9 part with real D3D11/12 (feature level
+12_1). Booting with `i915.enable_gvt=1`, loading `kvmgt`, creating an mdev and passing it to the guest
+(with Intel's GVT-g Windows driver) would give the probes a *real* hardware adapter — two of them,
+with `-vga std` — without the muxless `_ON`/`_ROM`/Code 43 wall. The cost is an out-of-tree guest
+driver. This is the recommended pivot if the host-side `_ON` test fails.
 
 ## What is blocked
 
