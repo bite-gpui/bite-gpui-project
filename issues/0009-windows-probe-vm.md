@@ -248,6 +248,11 @@ The guest then reports `Intel(R) HD Graphics 520`, driver `31.0.101.2111`, probl
 `-vga std` adapter -- two adapters, and a **real** D3D11/12 device. This is the adapter the probes
 should use. The driver install is heavy, so it is a manual step for now.
 
+An obvious last idea for the GeForce is ruled out too: passing the 930M *alongside* the Intel vGPU
+(`run --rom … --gvt …`, three adapters) leaves the Intel device at problem code 0 but the NVIDIA
+device still at **Code 43**. So the mobile driver does not need a real iGPU next to it -- the muxless
+GeForce is simply not usable in a guest, and GVT-g is the adapter to build on.
+
 ## What is blocked
 
 - **root, once.** `sudo script/interop-vm prepare` and the login/reboot that applies the memlock
