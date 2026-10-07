@@ -1,8 +1,9 @@
 # P5: the fence bridge, end to end
 
-- **Status:** proposed — **not run.** The probe that gates the *ordering* half of W5
-  ([`surface-plan.md`](surface-plan.md) W5, [`interop-crate.md`](interop-crate.md) §4). It lives with
-  the work it gates and becomes a `decisions/` evidence record when it runs.
+- **Status:** **run — PASS** (2026-10-06/07), on the Windows probe guest with a real GVT-g adapter;
+  recorded in [`../../decisions/windows-fence-loop-probe.md`](../../decisions/windows-fence-loop-probe.md).
+  The probe that gates the *ordering* half of W5
+  ([`surface-plan.md`](surface-plan.md) W5, [`interop-crate.md`](interop-crate.md) §4).
 - **Question:** on Windows, can an `ID3D12Fence` be shared with a Direct3D 11 device, so a producer
   *signals* and a consumer *waits* **GPU-side** — with no CPU stall and no keyed-mutex serialization?
 - **Gates:** W5.
@@ -71,6 +72,6 @@ Direct3D 12/`wgpu` producer and a Direct3D 11 consumer. **Harness.** A scratch c
 
 ## 7. What it produces
 
-A printout, filed as a `decisions/` evidence record beside
-[`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md), and the
-[`surface-plan.md`](surface-plan.md) §2 entry for P5 replaced by a link to it.
+**Filed:** [`../../decisions/windows-fence-loop-probe.md`](../../decisions/windows-fence-loop-probe.md),
+and [`surface-plan.md`](surface-plan.md) §2's entry carries its result. The outcome is the first in
+§5: a shared fence opens and orders, so `submit` is a signal and the consumer a wait.

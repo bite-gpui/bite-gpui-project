@@ -115,7 +115,10 @@ Three shapes are the point, and each follows from a decision already taken:
 - **`attach` should be able to take a device the caller already has.** P6 decides whether a matching
   adapter can be found at all; on a two-GPU laptop, or a driver that hides the LUID, it may not be, and
   the API's escape is the application handing over the device or adapter it owns. That is why P6 runs
-  *before* this shape is frozen ([`surface-plan.md`](surface-plan.md) §2).
+  *before* this shape is frozen ([`surface-plan.md`](surface-plan.md) §2). **Answered:** a LUID match is
+  available on the probe machine, so the default resolves one and this stays an escape rather than the
+  primary path ([evidence](../../decisions/windows-adapter-luid-probe.md)); the two-GPU choice is the
+  case still open.
 
 **Device loss is part of the contract, not an edge.** A Windows driver resets on sleep, a monitor
 unplug, a DPI change or a GPU timeout (TDR), and GPUI recreates its device; every handle, fence and

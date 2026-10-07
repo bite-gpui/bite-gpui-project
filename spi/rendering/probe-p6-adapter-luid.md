@@ -1,8 +1,9 @@
 # P6: adapter LUID matching
 
-- **Status:** proposed — **not run.** The probe that gates W5's *adapter selection* — and, because its
-  answer is the crate's API, the one to **run first**
-  ([`surface-plan.md`](surface-plan.md) §2, [`interop-crate.md`](interop-crate.md) §4).
+- **Status:** **run — PASS** (2026-10-06/07), on the Windows probe guest with a real GVT-g adapter;
+  recorded in [`../../decisions/windows-adapter-luid-probe.md`](../../decisions/windows-adapter-luid-probe.md).
+  The probe that gates W5's *adapter selection* — and, because its answer is the crate's API, the one
+  to **run first** ([`surface-plan.md`](surface-plan.md) §2, [`interop-crate.md`](interop-crate.md) §4).
 - **Question:** can the crate select, *through wgpu*, the physical adapter GPUI's Direct3D 11 device is
   on — and if it cannot, what must the API take instead?
 - **Gates:** W5, and the shape of `Interop`/`Adapter`.
@@ -62,7 +63,7 @@ because a single-GPU machine is the case that hides the problem. **Harness.** A 
 
 ## 7. What it produces
 
-A printout, filed as a `decisions/` evidence record beside
-[`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md), and the
-[`surface-plan.md`](surface-plan.md) §2 entry for P6 replaced by a link to it. Its answer **fixes
-[`interop-crate.md`](interop-crate.md) §4's API** — which is why it runs before the crate is written.
+**Filed:** [`../../decisions/windows-adapter-luid-probe.md`](../../decisions/windows-adapter-luid-probe.md),
+and [`surface-plan.md`](surface-plan.md) §2's entry carries its result. Its answer **fixed
+[`interop-crate.md`](interop-crate.md) §4's API** — a LUID match is available, so `attach` resolves the
+adapter and stays a one-liner, with the caller-supplied escape kept for the two-GPU case.

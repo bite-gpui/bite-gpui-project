@@ -110,18 +110,22 @@ formats real decoders produce on each platform. *Pass:* a decision on whether YC
 out of scope. *Consequence:* it adds a pass; it never blocks W2. The full specification is
 [`probe-p4-video-formats.md`](probe-p4-video-formats.md).
 
-**P5 — the fence bridge end to end (gates W5).** `ID3D12Fence` exported as a shared NT handle and
-opened as an `ID3D11Fence`: `shared-surface.md` clears, polls and reads across the two devices but
-carries **no fence between them**, and its fence probe orders two buffers on *one* device. *Harness:*
-two devices, a full produce→signal→wait→consume loop. *Pass:* no tearing, no keyed-mutex stall. The
-full specification is [`probe-p5-fence-loop.md`](probe-p5-fence-loop.md).
+**P5 — the fence bridge end to end (gates W5).** Run: an `ID3D12Fence` exported as a shared NT handle
+opens on Direct3D 11 as an `ID3D11Fence`, and the consumer orders with `ID3D11DeviceContext4::Wait` —
+**GPU-side**, no stall — with the shared texture byte-exact
+([`../../decisions/windows-fence-loop-probe.md`](../../decisions/windows-fence-loop-probe.md)).
+`shared-surface.md` clears, polls and reads across the two devices but carries **no fence between
+them**; this probe supplies it. The keyed-mutex alternative and the multi-frame ring are unmeasured,
+and the record says so. The full specification is [`probe-p5-fence-loop.md`](probe-p5-fence-loop.md).
 
-**P6 — adapter LUID matching (gates W5's adapter selection).** `wgpu` must select the *physical*
-adapter GPUI's Direct3D 11 device is on. *Harness:* read both LUIDs and compare, per the hazard
-[`windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) §5 names. *Pass:* a rule that
-picks the same adapter, or a statement that it cannot be asserted and is therefore the application's.
-**Run this early:** its answer is the crate's API — whether `attach` can find the adapter or the caller
-must supply one ([`interop-crate.md`](interop-crate.md) §4) — so a late answer is a redesign. The full specification is
+**P6 — adapter LUID matching (gates W5's adapter selection).** Run: the Direct3D 11 device's LUID and
+wgpu adapter 0's LUID are **the same number**, so matching by LUID picks the same physical adapter and
+`attach` resolves it
+([`../../decisions/windows-adapter-luid-probe.md`](../../decisions/windows-adapter-luid-probe.md)).
+The API therefore stays a one-liner, with the caller-supplied escape kept for the two-GPU case this
+machine could not exercise (one hardware adapter) — where a match exists for *both* adapters and the
+hazard is the choice. **This is the answer the crate's shape needed,** which is why it ran first
+([`interop-crate.md`](interop-crate.md) §4). The full specification is
 [`probe-p6-adapter-luid.md`](probe-p6-adapter-luid.md).
 
 **P7 — guest thread viability (gates W6).** The renderer factory is `!Send` by construction (an
