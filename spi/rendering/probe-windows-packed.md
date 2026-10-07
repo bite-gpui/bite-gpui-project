@@ -1,7 +1,9 @@
 # The packed Windows probe
 
-- **Status:** proposed — **not written.** The one binary a Windows run executes, printing every
-  Windows-side measurement W5 needs, so one run answers as many questions as possible.
+- **Status:** **written and run** — `script/interop-probe`; all four items pass on the GVT-g guest
+  (2026-10-07, [`../../issues/0009-windows-probe-vm.md`](../../issues/0009-windows-probe-vm.md)).
+  The one binary a Windows run executes, printing every Windows-side measurement W5 needs, so one run
+  answers as many questions as possible.
 - **Why packed:** the probes have no cheap home. This box is Linux, the guest
   ([`../../issues/0009-windows-probe-vm.md`](../../issues/0009-windows-probe-vm.md)) is the only real
   device, and CI is the other place they can go — each run is expensive, each check is cheap, so they

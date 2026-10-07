@@ -16,14 +16,19 @@ use std::pin::pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Wake, Waker};
 
-use windows::core::{Interface, PCWSTR};
+use windows::core::{Interface, PCSTR, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, LUID};
+use windows::Win32::Graphics::Direct3D::{ID3DBlob, ID3DInclude};
+use windows::Win32::Graphics::Direct3D::Fxc::D3DCompile;
 use windows::Win32::Graphics::Direct3D::{
     D3D_DRIVER_TYPE_UNKNOWN, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1,
+    D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
 };
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Direct3D12::*;
-use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC};
+use windows::Win32::Graphics::Dxgi::Common::{
+    DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC,
+};
 use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory1, IDXGIAdapter, IDXGIAdapter1, IDXGIDevice, IDXGIFactory1,
     DXGI_ADAPTER_DESC, DXGI_ADAPTER_DESC1, DXGI_ADAPTER_FLAG_SOFTWARE,
@@ -77,7 +82,7 @@ struct WgpuResult {
 }
 
 fn main() {
-    println!("interop-probe: the packed Windows checklist (P6 adapter identity + P5 fence loop + P9 device loss)");
+    println!("interop-probe: the packed Windows checklist (P6 adapter identity + P5 fence loop + P9 device loss + the PR-2 sufficiency test)");
     println!("adapter order and LUIDs come from DXGI; wgpu is DX12-only here");
     println!();
 
@@ -92,6 +97,7 @@ fn main() {
     let wgpu = check_p6_wgpu(dxgi.as_ref());
     let p5 = check_p5(dxgi.as_ref());
     let p9 = check_p9(dxgi.as_ref(), simulate, pnp);
+    let pr2 = check_pr2(dxgi.as_ref());
 
     println!();
     println!("SUMMARY");
@@ -120,6 +126,13 @@ fn main() {
         "P9 device loss: {}",
         match &p9 {
             Ok(mode) => format!("PASS — {mode}"),
+            Err(e) => format!("FAIL/SKIP — {e}"),
+        }
+    );
+    println!(
+        "PR-2 same-device: {}",
+        match &pr2 {
+            Ok(note) => format!("PASS — {note}"),
             Err(e) => format!("FAIL/SKIP — {e}"),
         }
     );
@@ -956,6 +969,304 @@ fn check_p9(dxgi: Result<&DxgiResult, &String>, simulate: bool, pnp: bool) -> Re
         println!("re-neg. : fresh handles on B; composite byte-exact ({note_b})");
         println!("P9 frame after recovery: no panic, byte-exact on luid {}", luid_str(luid_b));
         Ok(mode)
+    }
+}
+
+// -------------------------------------------------------------------------------------------
+// The PR-2 sufficiency test: a same-device `ID3D11Texture2D` straight through, no bridge
+// (spi/rendering/interop-scaffold.md §7, `tests/same_device.rs`).
+// -------------------------------------------------------------------------------------------
+
+const PR2_VS: &str = r#"
+struct VSOut { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
+VSOut main(uint id : SV_VertexID) {
+    float2 p = float2((id << 1) & 2, id & 2);
+    VSOut o;
+    o.pos = float4(p * float2(2, -2) + float2(-1, 1), 0, 1);
+    o.uv = p;
+    return o;
+}
+"#;
+
+const PR2_PS: &str = r#"
+Texture2D tex : register(t0);
+SamplerState smp : register(s0);
+float4 main(float2 uv : TEXCOORD0) : SV_TARGET { return tex.Sample(smp, uv); }
+"#;
+
+/// The known colour: RGBA (32, 96, 192, 255)/255 -- three distinct channels, so a channel swap
+/// would not round-trip. Stored B8G8R8A8, so its raw bytes are [192, 96, 32, 255].
+const PR2_RGBA: [f32; 4] = [32.0 / 255.0, 96.0 / 255.0, 192.0 / 255.0, 1.0];
+const PR2_EXPECT_BGRA: [u8; 4] = [192, 96, 32, 255];
+const PR2_TARGET_CLEAR: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
+
+unsafe fn blob_text(b: &ID3DBlob) -> String {
+    let p = b.GetBufferPointer() as *const u8;
+    let n = b.GetBufferSize();
+    String::from_utf8_lossy(std::slice::from_raw_parts(p, n)).into_owned()
+}
+
+unsafe fn compile_hlsl(src: &str, entry: &str, target: &str) -> Result<ID3DBlob, String> {
+    let bytes = src.as_bytes();
+    let entry_c = std::ffi::CString::new(entry).unwrap();
+    let target_c = std::ffi::CString::new(target).unwrap();
+    let mut code: Option<ID3DBlob> = None;
+    let mut errs: Option<ID3DBlob> = None;
+    D3DCompile(
+        bytes.as_ptr() as *const core::ffi::c_void,
+        bytes.len(),
+        PCSTR(b"pr2.hlsl\0".as_ptr()),
+        None,
+        None::<&ID3DInclude>,
+        PCSTR(entry_c.as_ptr() as *const u8),
+        PCSTR(target_c.as_ptr() as *const u8),
+        0,
+        0,
+        &mut code,
+        Some(&mut errs),
+    )
+    .map_err(|e| {
+        let msg = errs.as_ref().map(|b| blob_text(b)).unwrap_or_default();
+        format!("D3DCompile({entry}/{target}): {e:?} {msg}")
+    })?;
+    code.ok_or_else(|| format!("D3DCompile({entry}) produced no code"))
+}
+
+unsafe fn d3d11_tex(
+    device: &ID3D11Device,
+    format: DXGI_FORMAT,
+    bind: i32,
+    usage: D3D11_USAGE,
+    cpu: u32,
+) -> Result<ID3D11Texture2D, String> {
+    let desc = D3D11_TEXTURE2D_DESC {
+        Width: TEX_W,
+        Height: TEX_H,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: format,
+        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        Usage: usage,
+        BindFlags: bind as u32,
+        CPUAccessFlags: cpu,
+        MiscFlags: 0,
+    };
+    let mut t: Option<ID3D11Texture2D> = None;
+    device
+        .CreateTexture2D(&desc, None, Some(&mut t))
+        .map_err(|e| format!("CreateTexture2D: {e:?}"))?;
+    t.ok_or_else(|| "CreateTexture2D returned none".to_string())
+}
+
+unsafe fn d3d11_rtv(
+    device: &ID3D11Device,
+    tex: &ID3D11Texture2D,
+) -> Result<ID3D11RenderTargetView, String> {
+    let mut v: Option<ID3D11RenderTargetView> = None;
+    device
+        .CreateRenderTargetView(tex, None, Some(&mut v))
+        .map_err(|e| format!("CreateRenderTargetView: {e:?}"))?;
+    v.ok_or_else(|| "CreateRenderTargetView returned none".to_string())
+}
+
+unsafe fn d3d11_srv(
+    device: &ID3D11Device,
+    tex: &ID3D11Texture2D,
+) -> Result<ID3D11ShaderResourceView, String> {
+    let mut v: Option<ID3D11ShaderResourceView> = None;
+    device
+        .CreateShaderResourceView(tex, None, Some(&mut v))
+        .map_err(|e| format!("CreateShaderResourceView: {e:?}"))?;
+    v.ok_or_else(|| "CreateShaderResourceView returned none".to_string())
+}
+
+/// Read a texture back as tight RGBA-ordered bytes (one pixel = four bytes).
+unsafe fn d3d11_read_pixels(
+    device: &ID3D11Device,
+    context: &ID3D11DeviceContext,
+    src: &ID3D11Texture2D,
+) -> Result<Vec<u8>, String> {
+    let staging = d3d11_tex(
+        device,
+        DXGI_FORMAT_B8G8R8A8_UNORM,
+        0,
+        D3D11_USAGE_STAGING,
+        D3D11_CPU_ACCESS_READ.0 as u32,
+    )?;
+    context.CopyResource(&staging, src);
+    let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+    context
+        .Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
+        .map_err(|e| format!("Map(staging): {e:?}"))?;
+    let pitch = mapped.RowPitch as usize;
+    let base = mapped.pData as *const u8;
+    let mut out = Vec::with_capacity((TEX_W * TEX_H * 4) as usize);
+    for y in 0..TEX_H {
+        for x in 0..TEX_W {
+            let off = y as usize * pitch + x as usize * 4;
+            for k in 0..4 {
+                out.push(*base.add(off + k));
+            }
+        }
+    }
+    context.Unmap(&staging, 0);
+    Ok(out)
+}
+
+/// PR-2 sufficiency: one D3D11 device, an `ID3D11Texture2D` cleared to a known colour, sampled
+/// straight through as an SRV into a render target -- no bridge, no second device. Read back
+/// byte for byte (the assertion `interop-scaffold.md` §7 step 5 asks for).
+fn check_pr2(dxgi: Result<&DxgiResult, &String>) -> Result<String, String> {
+    println!();
+    println!("== PR-2 sufficiency: a same-device ID3D11Texture2D, no bridge ==");
+    let dxgi = dxgi.map_err(|e| format!("no DXGI baseline: {e}"))?;
+    let adapter = &dxgi.adapter;
+    let luid = luid_str(dxgi.device_luid);
+
+    unsafe {
+        let levels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
+        let mut dev: Option<ID3D11Device> = None;
+        let mut flevel = D3D_FEATURE_LEVEL(0);
+        let mut ctx: Option<ID3D11DeviceContext> = None;
+        D3D11CreateDevice(
+            adapter,
+            D3D_DRIVER_TYPE_UNKNOWN,
+            Default::default(),
+            D3D11_CREATE_DEVICE_FLAG(0),
+            Some(&levels),
+            D3D11_SDK_VERSION,
+            Some(&mut dev),
+            Some(&mut flevel),
+            Some(&mut ctx),
+        )
+        .map_err(|e| format!("D3D11CreateDevice: {e:?}"))?;
+        let device = dev.ok_or_else(|| "no D3D11 device".to_string())?;
+        let context = ctx.ok_or_else(|| "no D3D11 context".to_string())?;
+        println!("device  : one D3D11 device on luid {luid} — the same device, no bridge");
+
+        // 3. the producer's texture: B8G8R8A8_UNORM, cleared to a known colour, plus its SRV.
+        let src = d3d11_tex(
+            &device,
+            DXGI_FORMAT_B8G8R8A8_UNORM,
+            D3D11_BIND_RENDER_TARGET.0 | D3D11_BIND_SHADER_RESOURCE.0,
+            D3D11_USAGE_DEFAULT,
+            0,
+        )?;
+        let src_rtv = d3d11_rtv(&device, &src)?;
+        context.ClearRenderTargetView(&src_rtv, &PR2_RGBA);
+        let src_srv = d3d11_srv(&device, &src)?;
+        println!(
+            "surface : ID3D11Texture2D B8G8R8A8_UNORM {TEX_W}x{TEX_H}, cleared to RGBA {PR2_RGBA:?}, SRV made"
+        );
+
+        // The draw target, cleared to a different colour so the draw is observable.
+        let tgt = d3d11_tex(
+            &device,
+            DXGI_FORMAT_B8G8R8A8_UNORM,
+            D3D11_BIND_RENDER_TARGET.0,
+            D3D11_USAGE_DEFAULT,
+            0,
+        )?;
+        let tgt_rtv = d3d11_rtv(&device, &tgt)?;
+        context.ClearRenderTargetView(&tgt_rtv, &PR2_TARGET_CLEAR);
+
+        // 4. paint `surface(srv)`: a full-screen triangle whose PS samples the SRV.
+        let vs_blob = compile_hlsl(PR2_VS, "main", "vs_5_0")?;
+        let ps_blob = compile_hlsl(PR2_PS, "main", "ps_5_0")?;
+        let vs_bytes =
+            std::slice::from_raw_parts(vs_blob.GetBufferPointer() as *const u8, vs_blob.GetBufferSize());
+        let ps_bytes =
+            std::slice::from_raw_parts(ps_blob.GetBufferPointer() as *const u8, ps_blob.GetBufferSize());
+
+        let mut vs_opt: Option<ID3D11VertexShader> = None;
+        device
+            .CreateVertexShader(vs_bytes, None::<&ID3D11ClassLinkage>, Some(&mut vs_opt))
+            .map_err(|e| format!("CreateVertexShader: {e:?}"))?;
+        let vs = vs_opt.ok_or_else(|| "no vertex shader".to_string())?;
+        let mut ps_opt: Option<ID3D11PixelShader> = None;
+        device
+            .CreatePixelShader(ps_bytes, None::<&ID3D11ClassLinkage>, Some(&mut ps_opt))
+            .map_err(|e| format!("CreatePixelShader: {e:?}"))?;
+        let ps = ps_opt.ok_or_else(|| "no pixel shader".to_string())?;
+
+        // A null input layout: the VS takes only SV_VertexID.
+        let mut layout_opt: Option<ID3D11InputLayout> = None;
+        device
+            .CreateInputLayout(&[], vs_bytes, Some(&mut layout_opt))
+            .map_err(|e| format!("CreateInputLayout: {e:?}"))?;
+        let layout = layout_opt.ok_or_else(|| "no input layout".to_string())?;
+
+        let samp_desc = D3D11_SAMPLER_DESC {
+            Filter: D3D11_FILTER_MIN_MAG_MIP_POINT,
+            AddressU: D3D11_TEXTURE_ADDRESS_CLAMP,
+            AddressV: D3D11_TEXTURE_ADDRESS_CLAMP,
+            AddressW: D3D11_TEXTURE_ADDRESS_CLAMP,
+            MipLODBias: 0.0,
+            MaxAnisotropy: 1,
+            ComparisonFunc: D3D11_COMPARISON_NEVER,
+            BorderColor: [0.0; 4],
+            MinLOD: 0.0,
+            MaxLOD: f32::MAX,
+        };
+        let mut samp_opt: Option<ID3D11SamplerState> = None;
+        device
+            .CreateSamplerState(&samp_desc, Some(&mut samp_opt))
+            .map_err(|e| format!("CreateSamplerState: {e:?}"))?;
+        let sampler = samp_opt.ok_or_else(|| "no sampler".to_string())?;
+
+        context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        context.IASetInputLayout(&layout);
+        context.OMSetRenderTargets(Some(&[Some(tgt_rtv.clone())]), None::<&ID3D11DepthStencilView>);
+        context.RSSetViewports(Some(&[D3D11_VIEWPORT {
+            TopLeftX: 0.0,
+            TopLeftY: 0.0,
+            Width: TEX_W as f32,
+            Height: TEX_H as f32,
+            MinDepth: 0.0,
+            MaxDepth: 1.0,
+        }]));
+        context.VSSetShader(&vs, None);
+        context.PSSetShader(&ps, None);
+        context.PSSetShaderResources(0, Some(&[Some(src_srv.clone())]));
+        context.PSSetSamplers(0, Some(&[Some(sampler.clone())]));
+        context.Draw(3, 0);
+        println!("paint   : surface(srv) drawn into a {TEX_W}x{TEX_H} target (full-screen triangle)");
+
+        // 5. read back and assert byte for byte.
+        let src_px = d3d11_read_pixels(&device, &context, &src)?;
+        let tgt_px = d3d11_read_pixels(&device, &context, &tgt)?;
+        let total = (TEX_W * TEX_H) as usize;
+        let mut mismatches = 0usize;
+        let mut first_bad: Option<(usize, [u8; 4])> = None;
+        for i in 0..total {
+            let s = &src_px[i * 4..i * 4 + 4];
+            let t = &tgt_px[i * 4..i * 4 + 4];
+            if t != s || t != PR2_EXPECT_BGRA {
+                mismatches += 1;
+                if first_bad.is_none() {
+                    first_bad = Some((i, [t[0], t[1], t[2], t[3]]));
+                }
+            }
+        }
+        println!(
+            "readback: source first pixel {:?}, target first pixel {:?}; expected BGRA {PR2_EXPECT_BGRA:?}; {mismatches}/{total} off",
+            &src_px[0..4],
+            &tgt_px[0..4]
+        );
+        if let Some((i, px)) = first_bad {
+            println!("first mismatch at pixel {i}: {px:?}");
+        }
+
+        if mismatches == 0 {
+            println!(
+                "PR-2 sufficiency: PASS — the SRV round-tripped byte-exact through one device, no bridge"
+            );
+            Ok("byte-exact, no bridge".to_string())
+        } else {
+            Err(format!(
+                "{mismatches}/{total} pixels were not the source colour"
+            ))
+        }
     }
 }
 

@@ -298,9 +298,11 @@ Two things to carry into any hand-written Windows FFI (the `windows` crate gets 
 
 ## The packed probe — `script/interop-probe`
 
-The W5 checklist itself: **P6** (do DXGI and wgpu agree on one adapter LUID?) and **P5** (a D3D12 ->
-D3D11 shared-texture fence loop), using `wgpu` (DX12 backend only) plus raw D3D11/DXGI. It
-cross-compiles the same way as `d3dprobe`:
+The W5 checklist itself: **P6** (do DXGI and wgpu agree on one adapter LUID?), **P5** (a D3D12 ->
+D3D11 shared-texture fence loop), **P9** (lose the producer device while a surface is held, recover,
+re-negotiate), and the **PR-2 sufficiency test** (an `ID3D11Texture2D`, as an SRV, through one device,
+byte-exact) — using `wgpu` (DX12 backend only) plus raw D3D11/DXGI. It cross-compiles the same way as
+`d3dprobe`:
 
 ```sh
 export RUSTUP_HOME=…/projects/.rustup-home CARGO_HOME=…/projects/.cargo-home

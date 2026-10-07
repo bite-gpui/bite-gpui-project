@@ -349,12 +349,13 @@ Windows then BSODs at boot. The same disk booted with
 errors at all. So `run --no-gpu --gvt` now applies that CPU model automatically -- it is not
 optional, and it is exactly the string `gvt` prints.
 
-### The packed probe passes on the vGPU -- P6, P5 and P9 (2026-10-06/07)
+### The packed probe passes on the vGPU -- P6, P5, P9 and the PR-2 sufficiency test (2026-10-06/07)
 
 [`../script/interop-probe`](../script/interop-probe) is the packed W5 checklist: P6 asks whether DXGI
-and wgpu agree on one adapter LUID, P5 runs a D3D12 -> D3D11 shared-texture fence loop, and P9 loses
-the producer device while a surface is held, recovers, and re-negotiates. Run against the GVT-g
-adapter over SSH, all pass on **hardware**:
+and wgpu agree on one adapter LUID, P5 runs a D3D12 -> D3D11 shared-texture fence loop, P9 loses the
+producer device while a surface is held, recovers, and re-negotiates, and the PR-2 test paints an
+`ID3D11Texture2D`'s SRV through one device. Run against the GVT-g adapter over SSH, all pass on
+**hardware**:
 
     == P6 DXGI ==
     adapter 0: Intel(R) HD Graphics 520  [8086:1916]  luid 00000000:0000533C  128 MiB dedicated
@@ -367,19 +368,29 @@ adapter over SSH, all pass on **hardware**:
     D3D12 clear -> shared 64x64 R8G8B8A8 texture -> ID3D11Fence handle -> context4.Wait(fence, 1)
     P5 fence loop: PASS -- shared texture read back byte-exact on D3D11 (0/4096 mismatched)
     == P9 device loss ==
-    attach  : device A holds a shared surface on luid 00000000:000A5464; composite byte-exact
+    attach  : device A holds a shared surface on luid 00000000:00005359; composite byte-exact
     lose    : pnputil /restart-device <intel instance> -> "Device restarted successfully."
             : device A removal observed: 0x887A0005 (DXGI_ERROR_DEVICE_REMOVED)
-    recover : new producer device B on luid 00000000:00391894, removed-reason S_OK
+    recover : new producer device B on luid 00000000:00098A3D, removed-reason S_OK
     re-neg. : fresh handles on B; composite byte-exact
     P9 device loss: PASS
+    == PR-2 sufficiency ==
+    device  : one D3D11 device on luid 00000000:00098A3D — the same device, no bridge
+    surface : ID3D11Texture2D B8G8R8A8_UNORM 64x64 cleared to RGBA [0.125, 0.376, 0.753, 1.0], SRV made
+    paint   : surface(srv) drawn into a 64x64 target (full-screen triangle)
+    readback: source [192, 96, 32, 255] == target [192, 96, 32, 255] == expected BGRA; 0/4096 off
+    PR-2 sufficiency: PASS — byte-exact through one device, no bridge
 
 So P6's answer -- **DXGI and wgpu name the same adapter by the same LUID** -- is recorded on a *real*
 adapter, which is the datum that freezes `gpui-interop`'s `attach`/`Adapter` API
 ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4). P5's loop is byte-exact through the
 GPU-side `ID3D11Fence::Wait`. P9 stages a *real* device removal -- a PnP restart of the adapter --
-and the pool **tears down and re-negotiates on a fresh device without crashing**. The one staging it
-cannot use here is a driver timeout, for a structural reason:
+and the pool **tears down and re-negotiates on a fresh device without crashing**. The **PR-2
+sufficiency test** closes the fourth item: an `ID3D11Texture2D` cleared to a known colour, sampled
+through its SRV in one draw on **one device**, reads back byte-exact -- so PR 2 and the `d3d11_device()`
+accessor are sufficient for the same-device case
+([`interop-scaffold.md`](../spi/rendering/interop-scaffold.md) §7). The one staging P9 cannot use here
+is a driver timeout, for a structural reason:
 
 ### P9's real reset is not possible on a GVT-g guest (2026-10-07)
 
@@ -448,12 +459,12 @@ The environment works; it is not yet reusable. The gaps, in order:
   (which uses `--gvt last`, so it survives a reboot); `run` refuses to start a wrongly-configured
   guest instead of booting a silently different one. What persists across a reboot, and what does
   not, is tabulated in [`../script/README.md`](../script/README.md).
-- **Run the probe -- P6, P5 and P9 done.** [`../script/interop-probe`](../script/interop-probe) was
-  run against the adapter and **P6 (both gates), P5 and P9 pass** ("The packed probe passes" above),
-  so **P6's answer is recorded -- the datum that freezes `gpui-interop`'s API**
-  ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4). P9 stages a real device removal (a PnP
-  restart) and re-negotiates; only a driver *timeout* is unavailable here (see "P9's real reset is not
-  possible", above), which on real passthrough hardware would be the last staging to add.
+- **Run the probe -- all four packed items done.** [`../script/interop-probe`](../script/interop-probe)
+  was run against the adapter and **P6 (both gates), P5, P9 and the PR-2 sufficiency test pass** ("The
+  packed probe passes" above), so **P6's answer is recorded -- the datum that freezes `gpui-interop`'s
+  API** ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4). P9 stages a real device removal
+  (a PnP restart) and re-negotiates; only a driver *timeout* is unavailable here (see "P9's real reset
+  is not possible", above), which on real passthrough hardware would be the last staging to add.
 
 ### Boot performance -- measured, and the levers that did not help (2026-10-06)
 

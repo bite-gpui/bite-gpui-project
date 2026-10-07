@@ -162,6 +162,11 @@ Two ways to keep it building:
 record has been making. *This test is also what PR 2 should carry*, so upstream's reviewers see the
 feature being used.
 
+*Ran:* the D3D-level form of this test is `interop-probe --pr2`, and it **passes** on the Windows
+probe guest (2026-10-07): an `ID3D11Texture2D` (`B8G8R8A8_UNORM`) cleared to `[32, 96, 192, 255]`, its
+SRV drawn through a full-screen triangle on **one device**, read back byte-exact (0/4096). See
+[`../../issues/0009-windows-probe-vm.md`](../../issues/0009-windows-probe-vm.md).
+
 **`tests/bridge.rs` — the crate's own test.** `#[cfg(target_os = "windows")]`, gated on **P1** (route)
 and **P5** (fence): a second device renders into a shared handle, the bridge opens it, and the same
 rect assertion holds. Skipped with a logged warning where the route is unavailable — the pattern the
