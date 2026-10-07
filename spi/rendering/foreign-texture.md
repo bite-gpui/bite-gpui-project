@@ -76,12 +76,12 @@ Producer and consumer must be the **same device**, not merely the same API:
 | producer → consumer | payload | constraint |
 | --- | --- | --- |
 | wgpu → `WgpuRenderer` (Linux, and Windows with it installed) | `wgpu::TextureView` | the same `wgpu::Device`; wgpu validates and rejects a mismatch |
-| Direct3D 11 (Media Foundation, DXVA, a D3D11 engine) → `DirectXRenderer` (Windows default) | the `ID3D11Texture2D` itself, and no handle | the same `ID3D11Device` — the one [`producer-reach.md`](producer-reach.md) has the window lend — and Direct3D enforces it by name: the renderer's `CreateShaderResourceView` refuses a resource another device made |
+| Direct3D 11 (Media Foundation, DXVA, a D3D11 engine) → `DirectXRenderer` (Windows default) | the `ID3D11Texture2D` itself, and no handle | the same `ID3D11Device` — the one [`producer-reach.md`](producer-reach.md) has the renderer lend through the canvas — and Direct3D enforces it by name: the renderer's `CreateShaderResourceView` refuses a resource another device made |
 | a Metal producer, or a wgpu one — Linux's arms minus the slot — → GPUI's Metal renderer (macOS) | the raw `id<MTLTexture>` | the same GPU, and on macOS that is the same *object*: wgpu's adapter is the `MTLDevice` `MetalRenderer` created, pointer for pointer ([`../decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md)). The device is lent and the token comes from `MetalTextureExt`, which checks the declaration the sampler needs — but Metal is the one platform that cannot *enforce* the device half: a resource does not expose the device that made it, so a texture from another device composites rather than failing ([`producer-reach.md`](producer-reach.md) §7) |
-| wgpu (D3D12) → GPUI's `DirectXRenderer` (D3D11, Windows default) | *none, this milestone* | **out of scope** for a *wgpu* producer — a shared handle would bridge it as future work, so a window with one installed uses `WgpuRenderer` instead. A Direct3D 11 producer needs no bridge, and the second row is it |
+| a Direct3D 12 / `wgpu` producer → GPUI's `DirectXRenderer` (D3D11, Windows default) | `SharedDirectXSurface` — an NT handle (`CreateSharedHandle`) plus an optional `SharedDirectXFence` | **device-independent**: the renderer opens it at draw (`OpenSharedResource1` + SRV, `OpenSharedFence` + `Wait`, cached per handle), so the producer never needs the window's device. `DirectXSource::Shared` is the arm |
 
-The last row is the one that moved. It was *impossible*, on the reading that wgpu offers
-neither a shareable resource nor a way to adopt one; the second half was wrong, so the row is
+The last row landed. It was *impossible*, on the reading that wgpu offers
+neither a shareable resource nor a way to adopt one; the second half was wrong, so the row was
 reachable rather than closed. GPUI's Windows renderer is Direct3D 11
 (`crates/gpui_windows/src/directx_renderer.rs:2206`) while wgpu is Direct3D 12, and a
 D3D12 resource is invisible to a D3D11 device unless it was created shareable —
@@ -90,31 +90,35 @@ D3D12 resource is invisible to a D3D11 device unless it was created shareable �
 application allocated: `texture_from_raw` and `create_texture_from_hal` are public on every
 desktop backend (`wgpu-hal-29.0.4/src/dx12/device.rs:448`,
 `wgpu-29.0.4/src/api/device.rs:325`), and the whole loop is measured to work
-([`../decisions/shared-surface.md`](../../decisions/shared-surface.md)). What it costs is the
-bridge's synchronisation and a same-adapter requirement, so it is **future work this milestone
-unblocks** rather than part of this milestone: the same-device rows are what land.
+([`../decisions/shared-surface.md`](../../decisions/shared-surface.md)). So the producer half
+(`gpui_interop`) allocates the resource shareable and exports the NT handle, and the consumer half is
+the renderer's — `DirectXSource::Shared` carries it and `DirectXRenderer::surface_view` opens it —
+which is why the crate is producer-only on this path. What it costs is the bridge's synchronisation
+and a same-adapter requirement, which is why the same-device rows remain the default.
 
 Three consequences, each of which the drafts got wrong in the other direction:
 
 1. **The Windows arm of `ImportedTextureHandle` is removed.** Its
    `DirectX(*const c_void)` variant rested on a wgpu producer feeding GPUI's D3D11 renderer
    from its own device, which the device rule forbids. The same-device route needs no arm —
-   Windows matches Linux, with the `TextureView`. The shared-handle arm the future bridge would
-   want is recorded in
-   [`../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)
-   and measured in [`../decisions/shared-surface.md`](../../decisions/shared-surface.md).
+   Windows matches Linux, with the `TextureView`. The shared-handle arm the future bridge wanted has
+   since landed as `DirectXSource::Shared` (above), recorded in
+   [`../decisions/0006-renderer-owned-device.md`](../../decisions/0006-renderer-owned-device.md) and
+   measured in [`../decisions/shared-surface.md`](../../decisions/shared-surface.md).
 2. **The `PaintSurface` macOS field is the precedent, not the model.** A shareable resource —
    an `IOSurface`-backed `MTLTexture`, a DXGI shared NT handle, a dma-buf — must be chosen *at
    creation*, and wgpu offers no descriptor for any of them, so the application must allocate
    and adopt it: on Windows `texture_from_raw` over a shareable `ID3D12Resource`, and on macOS
-   a `MTLTexture` built with `objc2-metal`, because wgpu-hal names no `IOSurface`. That is the
-   future bridge's shape, not this path's.
-3. **Path A is the window owner's capability.** The device belongs to whoever called
-   `with_renderer_factory`, so a widget inside someone else's window cannot be a
-   producer. That is a boundary, not an accident: it is what makes the Windows answer a
-   configuration ("install `WgpuRenderer`") rather than a fork.
+   a `MTLTexture` built with `objc2-metal`, because wgpu-hal names no `IOSurface`. That is the shape
+   the `Shared` arm uses — the producer allocates shareable and the renderer opens it — rather than a
+   separate path.
+3. **Path A's same-device arms are the window owner's capability.** The device belongs to whoever
+   called `with_renderer_factory`, so a widget inside someone else's window cannot make a texture on
+   it — the `Shared` arm is the way round that, since it needs no window device. That is a boundary,
+   not an accident: it is what makes the Windows answer a configuration ("install `WgpuRenderer`")
+   for the same-device route rather than a fork.
 
-The whole of it — the constraint, the Windows configuration, and the future bridge — is
+The whole of it — the constraint, the Windows configuration, and the shared arm — is
 [`../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md),
 with the measurement in [`../decisions/shared-surface.md`](../../decisions/shared-surface.md).
 
@@ -301,9 +305,9 @@ order and the texture is complete by the time the composite samples it. No semap
 `MTLSharedEvent`, no keyed mutex — the synchronisation the cross-device drafts specified
 is the cost of a second device, and there is no second device
 ([`../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)).
-The cross-device case that 0002 defers as future work would need exactly that handshake, and
-the shared-handle arm in §2 is where it would be carried; what it costs is measured in
-[`../decisions/shared-surface.md`](../../decisions/shared-surface.md).
+The cross-device case that 0002 deferred is now the shared-handle arm in §2 (`DirectXSource::Shared`),
+where the renderer does exactly that handshake — the fence wait — rather than the producer; what it
+costs is measured in [`../decisions/shared-surface.md`](../../decisions/shared-surface.md).
 
 What that asks of the application is a *when*, not a *what*: **the submission has to
 happen before the frame's.** The natural place is the paint callback, which runs while the
@@ -323,7 +327,7 @@ shares the encoder itself.
 | --- | --- |
 | `WgpuRenderer` | **built** on the canonical ref, three rows that run locally only. The arm is a batch of its own rather than `PrimitiveBatch::Surfaces` — that one's items are YCbCr video with a `CVPixelBuffer` behind them — and its fragment re-encodes, because the view is sRGB and the target is not |
 | `MetalRenderer` | **built** beside it: `draw_imported_textures` beside `draw_surfaces`, which stays the YCbCr path. Its fragment re-encodes through `linear_to_srgb_exact`, because the ≈2.2 approximation that file otherwise uses is not reversible on a producer's bytes (§4). Two rows run on `macos-14` |
-| `DirectXRenderer` | **built** on the canonical ref, three rows on CI; its `draw_surfaces` (`crates/gpui_windows/src/directx_renderer.rs:852`) used to return an unsupported error. Its view is the texture's non-sRGB counterpart where wgpu's is sRGB, so there is no transfer function to cancel: this shader file has only `linear_to_srgb`'s ≈2.2 approximation, which would not cancel one exactly |
+| `DirectXRenderer` | **built** on the canonical ref, three rows on CI; its `draw_surfaces` (`crates/gpui_windows/src/directx_renderer.rs:852`) used to return an unsupported error. Its view is the texture's non-sRGB counterpart where wgpu's is sRGB, so there is no transfer function to cancel: this shader file has only `linear_to_srgb`'s ≈2.2 approximation, which would not cancel one exactly. It also owns the consumer half of `DirectXSource::Shared` — `OpenSharedResource1`, the SRV and the `ID3D11Fence` wait, cached per handle |
 
 Two things the arms share and one they do not. Each reuses the quads' instance record and vertex
 entry point — `CustomRenderPrimitive::to_quad_record` is the engine's encode into it — so the
@@ -339,11 +343,11 @@ of `draw_surfaces` — so there is no second pass and no intermediate target.
 
 ## 8. Open
 
-- **How a producer reaches the device — closed.** `Window::device_any` and a token builder on each of
-  the three arms are built, and [`0004`](../../decisions/0004-producer-device-rendezvous.md) is the
-  decision; what is left of it is one producer route that still needs a measurement — Windows's Tier
-  2 bridge — beside macOS's, which the producer probe answered,
-  [`producer-reach.md`](producer-reach.md) §7.
+- **How a producer reaches the device — closed.** The renderer owns its device (`GpuRenderer`) and the
+  canvas lends it (`GpuCanvasContext::device::<R>()`), with a token builder on each of the three arms,
+  per [`0006`](../../decisions/0006-renderer-owned-device.md); and Windows's shared-handle route has
+  now landed as `DirectXSource::Shared`, so the Tier 2 bridge that used to be pending is the
+  renderer's consumer half. What is left is [`producer-reach.md`](producer-reach.md) §7.
 - **The erasure vs a cfg-gated `wgpu` in the engine** (§3). Recommendation: erasure, and
   it is the same argument the target's typing rests on, applied from the other side.
 - **Which sampler slot, and whether the payload should carry it.** The drafts say
@@ -353,7 +357,7 @@ of `draw_surfaces` — so there is no second pass and no intermediate target.
   only pass the flag down. Whether the *application* or the renderer owns the convention
   is unsettled — the drafts hand it to the application, which means every producer has to
   know GPUI's UV direction.
-- **Metal's producer half — closed.** `MetalRenderer` lends its device (`device_any`) and
+- **Metal's producer half — closed.** `MetalRenderer` lends its device (`device::<MetalRenderer>()`) and
   `MetalTextureExt` builds the token from a texture on it, validating the sRGB declaration and
   `ShaderRead` as the wgpu and Direct3D extensions validate theirs. What the arm does not have is
   Direct3D's enforcement of the same-device rule: a Metal resource does not expose the device that

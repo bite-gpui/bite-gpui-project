@@ -5,8 +5,8 @@
   quickly; it will move to its own home once its shape is settled. That home is issue
   [`0006`](../../issues/0006-surface-interop.md), and the workstreams and probes it rests on are
   [`surface-plan.md`](surface-plan.md) W5–W6 and P1–P6.
-- **Assumes:** the surface element is in the facade (`surface()`), and a window lends its renderer's
-  device. **Both are on the upstream path** (§1), and that is what decides this crate's shape.
+- **Assumes:** the surface element is in the facade (`surface()`), and the renderer owns the device the
+  canvas lends. **Both are on the upstream path** (§1), and that is what decides this crate's shape.
 - **Not a seam:** it replaces no `SceneRenderer` and decorates no `FramePipeline` — it is the
   "crate that is neither" ([`../../architecture/extension-tiers.md`](../../architecture/extension-tiers.md)).
 - **A working name.** `gpui-interop` is a placeholder; the crate's real name is part of question 1 of
@@ -22,17 +22,18 @@ layer of ours:
 
 - **It depends on the upstreamed API, not on a fork layer.** Its inputs are `surface()`
   (`crates/gpui_authoring/src/elements/surface.rs:35`), the payload enum
-  (`crates/gpui_engine/src/scene.rs`), and the answer to
-  `device_any` (`crates/gpui_authoring/src/window.rs:3031`) — the shapes that go upstream. It must
+  (`crates/gpui_engine/src/scene.rs`), and the renderer-owned device the canvas lends
+  ([`GpuRenderer` / `GpuCanvasContext::device::<R>()`](../../decisions/0006-renderer-owned-device.md))
+  — the shapes that go upstream. It must
   **not** touch the fork-only `CustomRenderPrimitive` route
   (`crates/gpui_engine/src/custom_render.rs:41`), which the unification supersedes: a dependency on it
   would strand the crate the moment that layer is replayed away.
-- **The device accessor is part of the same upstream push.** A crate that must allocate an
-  `ID3D11ShaderResourceView` on GPUI's device has to *reach* that device, so the typed spelling of
-  `device_any` — `DirectXWindowExt::d3d11_device()`, per
-  [`0004`](../../decisions/0004-producer-device-rendezvous.md) — is a core addition, not the crate's.
-  If only the element is upstreamed and the accessor is not, the crate cannot be built against
-  upstream at all; the two travel together, and the plan should open them together.
+- **The device accessor is part of the same upstream push.** A crate that must match a foreign device
+  to GPUI's renderer has to *reach* that renderer's device, so the fork's `GpuRenderer` and the
+  canvas's `device::<R>()` ([`0006`](../../decisions/0006-renderer-owned-device.md)) are a core
+  addition, not the crate's. If only the element is upstreamed and the accessor is not, the crate
+  cannot be built against upstream at all; the two travel together, and the plan should open them
+  together.
 - **The payload types are upstream surface.** The crate names `ID3D11ShaderResourceView`, a
   `wgpu::TextureView`, a raw `id<MTLTexture>` and a dma-buf fd; the *element* must accept them. That
   is the commitment `0004` records under "what would reopen this", and it is why the crate cannot
@@ -58,7 +59,7 @@ interchange in a platform's clothes: match the adapter, move a handle, order the
 | module | job | platform |
 | --- | --- | --- |
 | `adapter` | match a foreign device to the window's renderer before anything is shared | all |
-| `windows` | Direct3D 12 → Direct3D 11 shared NT handle — allocate shareable, `CreateSharedHandle`, `OpenSharedResource1`, SRV — and the `ID3D12Fence`↔`ID3D11Fence` bridge | windows |
+| `windows` | **producer half only** of the Direct3D 12 → Direct3D 11 path — allocate shareable, `CreateSharedHandle`, and signal the fence; the renderer owns the consumer half (`OpenSharedResource1`, the SRV, and the fence wait) | windows |
 | `macos` | build an `MTLTexture` over an `IOSurface` with `objc2-metal`, adopt it into wgpu, order with `MTLSharedEvent` | macos |
 | `linux` | dma-buf alloc/import (fd + fourcc + modifier) via `VK_KHR_external_memory_fd` or `EGL_LINUX_DMA_BUF_EXT`, ordered by a dma-fence | linux |
 | `guest` | headless GPUI on a worker thread, handing a frame to a foreign loop | all |
@@ -77,7 +78,7 @@ failed match. That is part of why P6 runs before §4's shape is frozen.
 ## 4. Public surface (a sketch)
 
 ```rust
-pub fn attach(window: &gpui::Window) -> Result<Interop, Unavailable>;
+pub fn attach<D: 'static>(device: Option<D>) -> Result<Interop, Unavailable>;
 
 pub struct Interop { .. }
 pub struct Adapter { .. }
@@ -136,6 +137,10 @@ the pool may cache neither the adapter nor a LUID across the loss.
 
 - **No renderer arm.** It produces a `SurfaceSource`; `draw_surfaces` samples it, and that is
   upstream core, not this crate.
+- **No consumer half on the Direct3D path.** For a Windows shared surface the renderer owns
+  `OpenSharedResource1`, the SRV and the fence wait (`DirectXSource::Shared`); the crate only
+  allocates, exports the handle and signals. `OpenedSurface`, `open` and `wait_gpu` moved into the
+  renderer, so the crate is producer-only there.
 - **No seam, no pipeline.** It is reached by the application, not installed by it.
 - **No same-device helper.** That case needs no handle; a helper would only hide that it does not.
 - **No readback.** The CPU case is `read_pixels`, upstream.
@@ -153,8 +158,8 @@ scaffold — layout, dependencies, and the two tests — is [`interop-scaffold.m
 
 ## 7. What would reopen it
 
-- **Upstream taking the element but not the accessor.** Then the crate cannot reach the device and
-  would need a fork shim — which breaks the posture in §1 and should send the accessor upstream
-  instead, not patch around it.
+- **Upstream taking the element but not the device accessor.** Then the crate cannot reach the
+  renderer's device and would need a fork shim — which breaks the posture in §1 and should send the
+  accessor upstream instead, not patch around it.
 - **wgpu gaining shareable creation.** The `windows` and `macos` modules collapse from a handshake to
   a descriptor, and most of W5 with them.

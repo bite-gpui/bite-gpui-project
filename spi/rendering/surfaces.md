@@ -55,15 +55,26 @@ pub enum SurfaceSource {
 pub enum DirectXSource {
     Texture(ID3D11Texture2D),          // on the window renderer's device; GPUI makes the view
     View(ID3D11ShaderResourceView),    // the producer made it
+    Shared(SharedDirectXSurface),      // an NT handle the renderer opens — device-independent
 }
 ```
 
-The Windows arm carries **both** payloads, and the reason is the same one that gave `attach` a
-default *and* an escape (`P6`): the common case should be a one-liner, and the escape exists for when
-the other side cannot be trusted to derive the same answer. A **texture** belongs to the window
-renderer's own device, and the renderer makes the view — uniform with macOS, where `CoreVideo` is
-likewise a *resource* and the renderer wraps it in an `MTLTexture`. A **view** is made by the
-producer, which is then the authority on its own format, plane and mip interpretation.
+The Windows arm carries **three** payloads, and the split is by device. `Texture` and `View` are the
+same-device pair, and the reason for both is the one that gave `attach` a default *and* an escape
+(`P6`): the common case should be a one-liner, and the escape exists for when the other side cannot
+be trusted to derive the same answer. A **texture** belongs to the window renderer's own device, and
+the renderer makes the view — uniform with macOS, where `CoreVideo` is likewise a *resource* and the
+renderer wraps it in an `MTLTexture`. A **view** is made by the producer, which is then the authority
+on its own format, plane and mip interpretation. Both are *device-bound*, which is why they cannot be
+built before paint.
+
+`Shared` is the third, and the device-independent one. It carries `texture: HANDLE` (from
+`CreateSharedHandle`), an optional `fence: SharedDirectXFence { handle, value }`, and the
+`width`/`height` the element needs before the renderer has opened it. The renderer resolves it at draw
+— `OpenSharedResource1` + `CreateShaderResourceView`, `OpenSharedFence` +
+`ID3D11DeviceContext4::Wait`, cached per handle with the surface-view cache's patience/device-loss
+rule — so the producer never needs the window's device. That makes `Shared` the Windows sibling of
+`CoreVideo` and `DmaBuf`: **a token the renderer resolves**.
 
 The seam carries the **payload**, not a view, so the choice of arm reaches `draw_surfaces` rather than
 being resolved in the element. **The texture arm is not free**: a view is still required to *sample*,

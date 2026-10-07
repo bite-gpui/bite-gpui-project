@@ -82,14 +82,16 @@ published surface, sitting entirely above the facade. `gpui-interop` (a working 
 it matches a `wgpu` adapter to the window's device, translates a shared OS handle into one GPUI's
 renderer can bind, and bridges the fences. None of that is a `SceneRenderer`, a `FramePipeline`, or
 any other seam; it builds on two published things and adds nothing to core — `surface()`, the element
-an application hands a buffer to, and the typed answer to `device_any`
-([`../decisions/0004-producer-device-rendezvous.md`](../decisions/0004-producer-device-rendezvous.md)).
+an application hands a buffer to, and the renderer's device the canvas lends (`GpuRenderer` /
+`GpuCanvasContext::device::<R>()`)
+([`../decisions/0006-renderer-owned-device.md`](../decisions/0006-renderer-owned-device.md)).
 The design and the probes that gate it are [`../spi/rendering/surfaces.md`](../spi/rendering/surfaces.md)
 and [`../spi/rendering/surface-plan.md`](../spi/rendering/surface-plan.md).
 
 What it commits to is smaller than a swap and different from a wrap: it freezes no trait and decorates
 no frame, but it does depend on the *published payload types* a token is built from — the commitment
-`0004` names under "what would reopen this". That is the price of a crate that must name
+[`0006`](../decisions/0006-renderer-owned-device.md) carries forward under "what would reopen this".
+That is the price of a crate that must name
 `ID3D11ShaderResourceView` and a `wgpu` adapter in the same function.
 
 ## Where the crates sit
@@ -100,7 +102,7 @@ no frame, but it does depend on the *published payload types* a token is built f
 | `bite-gp-morphorm` | swap | replaces `LayoutEngine` |
 | `bite-gp-pass` | wrap | throttles the frame pipeline by a rate policy and keeps a ledger of what its passes cost; behind a `puffin` feature, also emits one profiler scope per pass |
 | `ThrottledPipeline`, `InstrumentedPipeline` | wrap | the facade's own two decorators (in-tree, `gpui_runtime`) |
-| `gpui-interop` (planned) | neither — a consumer | matches a `wgpu` adapter to the window's device, translates a shared OS handle, and bridges fences; builds on `surface()` and `device_any`, adds nothing to core |
+| `gpui-interop` (planned) | neither — a consumer | matches a `wgpu` adapter to the window's device, translates a shared OS handle, and bridges fences; builds on `surface()` and the canvas-lent device, adds nothing to core |
 
 `decisions/0001-no-third-swap.md` is a decision about the **swap** tier only: it says no
 third *swap* ships, and it is not a statement about wraps. A wrap is a different

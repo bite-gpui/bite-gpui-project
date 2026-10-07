@@ -30,9 +30,9 @@ downstream crate's scaffold in [`../spi/rendering/interop-scaffold.md`](../spi/r
 ## What is already built
 
 The offscreen contract — `PixelBuffer`, and `render_scene` split from `read_pixels` — is W1 and is
-built; the three renderer arms, `device_any` and the runnable demo are on the canonical ref. What the
-unification adds is the *entry point* (W2–W4) and the *bridge* (W5–W6), not the engine. So the two
-upstream PRs are additive, and nothing here blocks a release of the current line.
+built; the three renderer arms, the canvas device door (`device::<R>()`), and the runnable demo are on
+the canonical ref. What the unification adds is the *entry point* (W2–W4) and the *bridge* (W5–W6), not
+the engine. So the two upstream PRs are additive, and nothing here blocks a release of the current line.
 
 ## The questions to settle
 

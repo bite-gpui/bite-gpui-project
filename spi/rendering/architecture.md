@@ -30,7 +30,7 @@
   |  gpui_authoring                                                          |
   |    elements::surface        -> inserts a PaintSurface primitive          |
   |    elements::gpu_canvas     -> GpuCanvasContext (a slice of Window)      |
-  |    Window::device_any       -> PlatformWindow::gpu_window()              |
+  |    device::<R>() / try_device::<R>() -> R::Device  (the producer door)  |
   +---------------------------------------------------------------------------+
         |
         v
@@ -39,13 +39,13 @@
   |    scene::Scene { surfaces: Vec<PaintSurface> }                          |
   |    scene::SurfaceSource { CoreVideo | DirectX | DmaBuf }   (cfg-gated)   |
   |    SceneRenderer::draw_surfaces(&[PaintSurface])                         |
+  |    GpuRenderer::device() -> Option<Self::Device>   (owns the device)     |
   +---------------------------------------------------------------------------+
         |
         v
   +---------------------------------------------------------------------------+
   |  gpui_platform                                                           |
-  |    PlatformWindow   the window surface                                   |
-  |    GpuWindow        the GPU decorator over it (device access)            |
+  |    PlatformWindow   the window surface   (no GPU accessor)               |
   |    PlatformRenderer the renderer seam                                    |
   +---------------------------------------------------------------------------+
         |
@@ -79,7 +79,7 @@ A producer reaches the scene through one of two elements, both in `gpui_authorin
   |  GpuCanvasContext   a slice of Window:                        |
   |    paint_surface(impl Into<SurfaceSource>)   -> PaintSurface   |
   |    paint_texture(handle, radii, opacity, flip_v)              |
-  |    bounds()  device_any()  cx()                               |
+  |    bounds()  device::<R>()  try_device::<R>()  cx()              |
   +---------------------------------------------------------------+
         |
         +--- the *only* place raw GPU import is reachable: a bare   |
@@ -98,7 +98,7 @@ sibling that contributes nothing here.
   SurfaceSource                            one value, three cfg-gated payloads
   +----------------------------------------------------------------------+
   |  CoreVideo(CVPixelBuffer)     macOS: an IOSurface-backed buffer       |
-  |  DirectX(DirectXSource)       Windows: Texture(..) | View(..)         |
+  |  DirectX(DirectXSource)       Windows: Texture | View | Shared         |
   |  DmaBuf(DmaBufHandle)         Linux: fd + fourcc + modifier + planes  |
   +----------------------------------------------------------------------+
         |
@@ -106,46 +106,53 @@ sibling that contributes nothing here.
         v
   SceneRenderer::draw_surfaces   one arm per backend:
   +----------------------------------------------------------------------+
-  |  gpui_windows  Direct3D 11: an SRV; the `Texture` arm makes the view  |
+  |  gpui_windows  Direct3D 11: an SRV; `Shared` opens the NT handle     |
   |  gpui_wgpu     wgpu: dma-buf imported by hand (ash) / view           |
   |  gpui_apple    Metal: a CVMetalTextureCache -> MTLTexture per plane   |
   +----------------------------------------------------------------------+
 ```
 
-The `DirectXSource` pair is the ergonomic/escape shape: the **texture** arm hands the
-resource and the renderer makes the view; the **view** arm is for a producer that is the
-authority on its own format and mip interpretation.
+The `DirectXSource` trio spans the device boundary. `Texture` and `View` are **device-bound**:
+the texture arm hands the resource and the renderer makes the view, the view arm is for a producer
+that is the authority on its own format and mip interpretation, and both must be made on the window
+renderer's device — which is why they cannot be built before paint and belong inside a `gpu_canvas`
+callback. `Shared` is the **device-independent** arm: an NT handle (plus an optional shared fence)
+the renderer opens, views and waits on at draw, so the producer never needs the window's device. It
+joins CoreVideo and dma-buf as **a token the renderer resolves**, and it is what makes `surface()`
+work on Windows.
 
-## 4. The platform seam, and the decorator
+## 4. The platform seam, and the renderer-owned device
 
-`gpui_platform` names no graphics type. A backend window lends its GPU capabilities
-through a **decorator**, not by widening the general trait:
+`gpui_platform` names no graphics type. The **renderer owns its device**, and a trait beside
+the seam — not the window — is the door:
 
 ```
-  +---------------------------------------------+
-  |  PlatformWindow        the window            |
-  |    ... layout, input, presentation ...       |
-  |    gpu_window() -> Option<&dyn GpuWindow>    |   <-- the only GPU door
-  +---------------------------------------------+
+  +--------------------------------------------------+
+  |  GpuRenderer : SceneRenderer        (gpui_engine)|
+  |    type Device                                    |
+  |    device() -> Option<Self::Device>               |
+  +--------------------------------------------------+
+                 ^  implemented by the renderers that have a device
                  |
-                 v
-  +---------------------------------------------+
-  |  GpuWindow             the decorator         |
-  |    device_any() -> Option<Rc<dyn Any>>       |
-  +---------------------------------------------+
-                 ^  implemented by exactly the backends that have a device
-                 |
-     gpui_windows   gpui_macos   gpui_linux (wayland, x11)
-     (D3D11 device) (MTLDevice)  (wgpu context slot)
+     gpui_windows     gpui_apple        gpui_wgpu
+     (ID3D11Device)   (metal::Device)   (Arc<Device>, Arc<Queue>)
+     and the headless renderers beside each
+
+     renderers with no device — the authoring TestRenderer,
+     the Linux headless discard HeadlessRenderer — do not
+     implement it: absence, not a fake device.
 ```
 
-`Window::device_any` reads it; `GpuCanvasContext::device_any` reads that. A backend that
-has no device keeps the defaults and answers nothing, and a *new* GPU operation lands on
-`GpuWindow` with a default so only the backends that support it change.
+`GpuCanvasContext::device::<R>()` reaches it, and its fallible twin `try_device::<R>()` is
+for a producer that degrades. Both borrow the window's renderer scoped
+(`PlatformWindow::with_renderer`) and clone the device out, so the handle is owned and may
+outlive the call. Naming `R` *is* the assertion: `device::<R>()` panics only when the
+window's renderer is not `R`, and `try_device::<R>()` folds the wrong-renderer case together
+with a renderer that has no device. The window has no GPU accessor at all.
 
-The renderer seam is parallel but separate: `PlatformRenderer::device_any` is what the
-renderer's own host holds, and the renderer's `draw_surfaces` is where the payload is
-actually consumed.
+The renderer seam is parallel but separate: the renderer's `draw_surfaces` is where the
+payload is actually consumed, and `GpuRenderer` is what the canvas downcasts through to hand
+a producer the device.
 
 ## 5. The cross-device arm: `gpui_interop`
 
@@ -160,10 +167,10 @@ through the downstream crate:
         v
   +--------------------------------------------------------------+
   |  gpui_interop                                                 |
-  |    attach(window) -> Interop                                  |
+  |    attach(device) -> Interop     (the canvas-lent device)     |
   |    Interop::adapter() -> Adapter                              |
   |    Adapter::wgpu()      a wgpu device on the window's adapter |
-  |    SharedSurface / OpenedSurface / Fence   (Direct3D 12 -> 11)|
+  |    SharedSurface / Fence   (Direct3D 12 producer half)        |
   +--------------------------------------------------------------+
         |
         |  the opened view becomes SurfaceSource::DirectX(DirectXSource::View)
@@ -182,9 +189,9 @@ queues*.
 | the renderer seam (`SceneRenderer`, `PlatformRenderer`, factory) | `gpui_platform`, `gpui_engine` | fork-carried; not yet proposed |
 | `PaintSurface` + `draw_surfaces` | `gpui_engine`, each backend | proposed as PR 2 (Windows arm) |
 | `surface()` element | `gpui_authoring` | proposed as PR 2 |
-| `SurfaceSource::DirectX(DirectXSource)` (texture **and** view) | `gpui_engine` | the fork is *richer* than PR 2's bare SRV — see [`upstream-prs.md`](upstream-prs.md) §7 |
+| `SurfaceSource::DirectX(DirectXSource)` (texture, view **and** shared) | `gpui_engine` | the fork is *richer* than PR 2's bare SRV — see [`upstream-prs.md`](upstream-prs.md) §7 |
 | `gpu_canvas` + `GpuCanvasContext` | `gpui_authoring` | fork-carried |
-| the `GpuWindow` decorator | `gpui_platform` | fork-carried |
+| the renderer-owned device (`GpuRenderer`) and its canvas door (`device::<R>()`) | `gpui_engine`, `gpui_authoring` | fork-carried |
 | `gpui_interop` (adapter match, handle/fence transport) | its own crate | downstream, never a PR — [`interop-crate.md`](interop-crate.md) |
 | the dma-buf (Linux) and CoreVideo (macOS) arms | backends | the Linux arm is PR-adjacent; see [`milestones.md`](milestones.md) |
 
@@ -201,7 +208,7 @@ fork's build against that plan is §7 there.
         |
         *  ... branch bite_v1.23.1-pre-interop (this slice) ...
         |     + surface payload texture/view   + gpui_interop
-        |     + gpu_canvas -> GpuCanvasContext + GpuWindow decorator
+        |     + gpu_canvas -> GpuCanvasContext + GpuRenderer (renderer-owned device)
         |
         v
   (not merged)                       merge is a separate CI-verified step:

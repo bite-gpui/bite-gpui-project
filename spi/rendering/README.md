@@ -27,7 +27,7 @@ its own folder, because it is a surface an application meets rather than part of
 
 | chapter | subject |
 | --- | --- |
-| [`architecture.md`](architecture.md) | **start here** — the map: the layer stack, the two authoring entry points (`surface()`, `gpu_canvas`/`GpuCanvasContext`), the payload and the renderer seam, the `GpuWindow` decorator, the cross-device arm, and what this branch adds on top of upstream |
+| [`architecture.md`](architecture.md) | **start here** — the map: the layer stack, the two authoring entry points (`surface()`, `gpu_canvas`/`GpuCanvasContext`), the payload and the renderer seam, the renderer-owned device (`GpuRenderer` / `device::<R>()`), the cross-device arm, and what this branch adds on top of upstream |
 | [`renderer-seam.md`](renderer-seam.md) | the seam: `PlatformRenderer`, the typed target, the factory, recovery, and the implementation order. `SceneRenderer` itself is unchanged |
 | [`foreign-texture.md`](foreign-texture.md) | Path A: importing a texture produced outside GPUI, the erasure, the colour-space invariant, and what each platform can actually do |
 | [`inline-commands.md`](inline-commands.md) | Path B: drawing into the window's own pass, the pipeline-state isolation matrix, and the coordinate bridge |
@@ -94,8 +94,8 @@ as `gpui::…` — the wgpu one through the platform crate, the Direct3D one not
 installed `WgpuRenderer` — and implements the offscreen contract, which Direct3D was the last to do.
 
 A runnable demo ties the two halves together: `cargo run -p gpui --example imported_texture` asks
-the window for its device, refills a texture on it every frame, hands the renderer a token from a
-paint callback, and paints an ordinary `div()` over the composite. Its producer differs per platform,
+the canvas for the renderer's device, refills a texture on it every frame, hands the renderer a token
+from a paint callback, and paints an ordinary `div()` over the composite. Its producer differs per platform,
 because the renderer does — wgpu on Linux and macOS, Direct3D 11 on Windows.
 
 What that still does not add up to is Path A being *finished*, and

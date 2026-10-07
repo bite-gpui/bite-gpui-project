@@ -79,3 +79,20 @@ macOS surface test.
 
 macOS's existing `draw_surfaces` is a YCbCr video path drawn by one renderer. This is the RGBA
 counterpart and does not touch it.
+
+## Fork divergence (the fork is a reference, not the proposal)
+
+The body above is upstream's PR and is left as the ask. The fork implements the same capability with
+two differences, recorded here so the replay is not a surprise and so the divergence is deliberate:
+
+- **The producer's device door.** The fork replaced `DirectXWindowExt::d3d11_device()` with
+  `GpuRenderer` plus `GpuCanvasContext::device::<R>()` / `try_device::<R>()`, and deleted
+  `DirectXWindowExt` ([`0006`](../../decisions/0006-renderer-owned-device.md)). The *capability* is
+  unchanged — a producer can obtain the renderer's device — and the window-extension spelling is the
+  fork-specific part; this body keeps the spelling upstream proposed
+  ([`upstream-prs.md`](upstream-prs.md) §8).
+- **The `Shared` arm.** The fork adds `DirectXSource::Shared(SharedDirectXSurface)`, a
+  device-independent NT handle the renderer resolves, so the renderer owns the consumer half of
+  cross-device sharing (`OpenSharedResource1` + SRV, `OpenSharedFence` + `Wait`, cached). The body's
+  "no cross-device handles or fences" stands for *this* PR; the shared arm is the fork's additional
+  capability for that case, not a change to what this PR seeks.

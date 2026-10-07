@@ -45,7 +45,7 @@ P5 fence loop: PASS — shared texture read back byte-exact on D3D11 (adapter lu
 **A shared fence opens and orders** → the pool orders on a fence; `submit` is a signal and the consumer
 a wait, and the crate needs no host-side lock
 ([`../spi/rendering/probe-p5-fence-loop.md`](../spi/rendering/probe-p5-fence-loop.md) §5's first
-outcome). `gpui-interop`'s Windows module (`SharedSurface`, `OpenedSurface`, `Fence`) is built on it.
+outcome). `gpui-interop`'s Windows module (`SharedSurface`, `Fence`) is built on it, and its consumer half — the open, the view and the wait — is the renderer's.
 
 ## 4. What is not measured
 

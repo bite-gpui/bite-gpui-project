@@ -190,3 +190,19 @@ unavailable — the pattern the wgpu rows already use.
 - **No same-device helper.** The same-device case needs none — the sufficiency test is the exception,
   and it is a test.
 - **No readback.** The CPU path is `read_pixels`, upstream.
+
+## Fork divergence (as built)
+
+The scaffold above is the proposal. The fork's built crate differs in one place that matters to this
+document, and the sufficiency test is unaffected in spirit:
+
+- **The crate is producer-only on the Direct3D path.** `OpenedSurface`, `open` and `wait_gpu` moved
+  into the renderer: `DirectXRenderer::surface_view` owns `OpenSharedResource1`, the SRV,
+  `OpenSharedFence` and the `ID3D11DeviceContext4::Wait` (cached per handle), and the crate only
+  allocates, exports the handle and signals — `DirectXSource::Shared` carries it
+  ([`0006`](../../decisions/0006-renderer-owned-device.md), [`interop-crate.md`](interop-crate.md) §5).
+- **The device door is the renderer, not the window.** Where §1 and §7 write
+  `DirectXWindowExt::d3d11_device()` / `window.d3d11_device()`, the fork reaches the device through
+  `GpuRenderer` plus `GpuCanvasContext::device::<R>()` ([`0006`](../../decisions/0006-renderer-owned-device.md)).
+  The PR-2 sufficiency test is the same test — a same-device SRV through `surface()` — and is
+  unaffected in spirit; only the call that obtains the device changes spelling.

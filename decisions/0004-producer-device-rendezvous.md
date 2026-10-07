@@ -1,3 +1,5 @@
+> **Superseded by [`0006`](0006-renderer-owned-device.md) — the producer reaches the device through the renderer, not the window.**
+
 # 0004 — How a producer reaches the renderer's device
 
 - **Decided:** 2026-09-29

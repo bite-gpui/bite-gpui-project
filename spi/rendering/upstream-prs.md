@@ -13,8 +13,9 @@
 - **The fork's payload is richer than PR 2's.** Where this document describes upstream's PR — a bare
   `ID3D11ShaderResourceView` Windows variant — the fork builds
   `SurfaceSource::DirectX(DirectXSource)`, whose `DirectXSource` is `Texture` (the renderer makes the
-  view) or `View` (the producer made it) — [`surfaces.md`](surfaces.md) §1. The bare SRV is what the
-  PR proper proposes.
+  view), `View` (the producer made it) or `Shared` (a device-independent NT handle the renderer
+  resolves) — [`surfaces.md`](surfaces.md) §1. The bare SRV is what the PR proper proposes; §8 records
+  what of the fork is upstreamable capability and what is its own organization.
 
 ## 1. What upstream has already said, and what it settles
 
@@ -92,6 +93,12 @@ take, and it removes one of the cheapest reasons to fork — the one this whole 
    is part of this PR and not a follow-up ([`surfaces.md`](surfaces.md) §5,
    [`0004`](../../decisions/0004-producer-device-rendezvous.md)).
 
+**Note — the fork diverges from PR 2's producer route.** PR 2 names
+`DirectXWindowExt::d3d11_device()` as the producer's door; the fork replaced it with `GpuRenderer`
+plus `GpuCanvasContext::device::<R>()` / `try_device::<R>()`, and deleted `DirectXWindowExt`
+([`0006`](../../decisions/0006-renderer-owned-device.md)). The PR proper still proposes the
+window-extension spelling; the fork's route is a typed downcast to the renderer, not a window method.
+
 **What it must not carry.** No NT-handle export/import, no cross-API fences, no `wgpu`, no Direct3D 12
 — all of that is the downstream bridge ([`interop-crate.md`](interop-crate.md)) and the Discussion
 declines it in core. **No YCbCr**: ship RGBA/BGRA, and a format arm is a later, additive pass
@@ -128,7 +135,7 @@ not because it is cleared.
 
 | capability | where | why not upstream |
 | --- | --- | --- |
-| the cross-device bridge, per OS transport: Windows NT-handle export/import (D3D12/`wgpu` → D3D11) and `ID3D12Fence`↔`ID3D11Fence`; macOS `IOSurface` adoption and `MTLSharedEvent`; Linux dma-buf and a dma-fence | `gpui-interop` | it would put `wgpu`, Direct3D 12 and an OS transport in core, which the Discussion declines |
+| the cross-device *producer* half, per OS transport: allocate shareable, export the NT handle / `IOSurface` / dma-buf, and signal the fence (Windows `ID3D12Fence`→`ID3D11Fence`) | `gpui-interop` | it would put `wgpu`, Direct3D 12 and the allocation/export in core, which the Discussion declines. Its *consumer* half — the renderer opening a handle it is given — is the upstreamable `DirectXSource::Shared` capability (§3, §8) |
 | adapter matching — a LUID match on Windows, a caller-supplied device elsewhere | `gpui-interop` | a producer-side concern; Windows-only in mechanism, and P6 decides whether it is even reliable |
 | the Linux `DmaBuf` surface arm (W3) | the fork | the macOS arm is upstream's and PR 2 covers Windows; P3 cleared it |
 | **Path B — the inline callback primitive** | the fork (W7) | the Discussion: *"i don't think we'd want this upstream either"* |
@@ -167,3 +174,32 @@ them; none overturns the order in §6.
    [`0006`](../../issues/0006-surface-interop.md) question 1) can now be settled from a working
    crate, and the "new repository" recommendation in [`interop-crate.md`](interop-crate.md) §6
    should be re-read in that light.
+
+## 8. Upstream the capability, not the fork's organization
+
+The maintainer's posture for this pass: **upstream as much of the rendering slice as possible, but not
+the exact slice organization.** The fork is a working reference, not the target layout, so a PR body
+proposes the *capability* — the payload arm, the renderer method, the device route — and leaves the
+fork's crate and type organization out of the ask. What that splits into:
+
+- **The producer's device door is a capability; its fork spelling is not.** The fork reaches the
+  device through `GpuRenderer` plus `GpuCanvasContext::device::<R>()` / `try_device::<R>()`, and has
+  deleted `DirectXWindowExt` ([`0006`](../../decisions/0006-renderer-owned-device.md)); PR 2's body
+  names `DirectXWindowExt::d3d11_device()` (§3's note, kept). The capability is "a producer can
+  obtain the renderer's device"; whether that is a window extension or a downcast to the renderer is
+  the part upstream may organize differently.
+- **The `DirectXSource::Shared` arm is the upstreamable capability for the cross-device Windows
+  case.** The renderer owns the consumer half — `OpenSharedResource1`, the SRV, `OpenSharedFence` and
+  `ID3D11DeviceContext4::Wait`, cached per handle — so a producer exports an NT handle and does nothing
+  device-specific. That is the same shape as macOS's `CoreVideo` and Linux's dma-buf: a
+  device-independent token the renderer resolves, and it is what makes `surface()` work for a
+  cross-device producer. Propose the arm and the renderer-owned resolution; do not propose
+  `gpui_interop`, the `SharedDirectXSurface` field layout, or the cache as upstream surface.
+- **Fork-specific framing stays ours.** Path B, the guest runner, adapter matching, 11on12 and the
+  interop crate's posture are fork or downstream, not the PR (§5); the superseded
+  `CustomRenderPrimitive` route ([`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md))
+  is not an ask either.
+
+In one line: each PR proposes the smallest core change that unblocks the capability, and the fork's
+organization — the exact crate split, type names and caches — is the reference implementation, not the
+proposal.

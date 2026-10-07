@@ -135,9 +135,10 @@ gpu_canvas(|canvas| {
 })
 ```
 
-The context carries what a producer needs besides the two paints: `bounds()`, `device_any()` for the
-renderer's device a texture has to be made on, and `cx()`. Styling and interactivity are the
-`Div`'s, so
+The context carries what a producer needs besides the two paints: `bounds()`, `device::<R>()` /
+`try_device::<R>()` for the renderer's device a same-device texture has to be made on, and `cx()`.
+`device::<R>()` panics only when the window's renderer is not `R` — naming `R` *is* the assertion —
+and `try_device::<R>()` is the fallible twin. Styling and interactivity are the `Div`'s, so
 
 ```rust
 gpu_canvas(|canvas| canvas.paint_surface(source))
