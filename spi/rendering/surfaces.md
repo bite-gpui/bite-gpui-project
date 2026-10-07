@@ -8,7 +8,8 @@
 - **Assumes:** [`renderer-seam.md`](renderer-seam.md) — a renderer is installable at all — and
   [`producer-reach.md`](producer-reach.md) — how a producer gets the device.
 - **Supersedes by name:** [`foreign-texture.md`](foreign-texture.md)'s *second primitive* and its
-  `paint_imported_texture` call. The three arms, the colour-space invariant and the rendezvous
+  `paint_imported_texture` call — now crate-internal, reached through
+  `GpuCanvasContext::paint_texture`. The three arms, the colour-space invariant and the rendezvous
   survive the retarget; only the entry point and the enum change.
 - **Target crates:** `gpui_engine` (the primitive and its payload enum), `gpui_authoring` (the
   element), and every renderer: `gpui_windows`, `gpui_apple`, `gpui_wgpu`/`gpui_linux`; the
@@ -19,8 +20,8 @@
 
 `PaintSurface` already exists — a variant of the scene's primitive enum
 (`crates/gpui_engine/src/scene.rs:238`, struct at `:784`), a `Surface` element and its `surface()`
-constructor (`crates/gpui_authoring/src/elements/surface.rs:27`, `:35`), the window call it goes
-through on macOS (`crates/gpui_authoring/src/window/mac.rs:17`) and a `draw_surfaces` on every
+constructor (`crates/gpui_authoring/src/elements/surface.rs:27`, `:35`), the `GpuCanvasContext` it
+is pushed through (`crates/gpui_authoring/src/elements/gpu_canvas.rs`) and a `draw_surfaces` on every
 renderer (`crates/gpui_windows/src/directx_renderer.rs:852`,
 `crates/gpui_apple/src/metal_renderer.rs:1156`, and wgpu's at
 `crates/gpui_wgpu/src/wgpu_renderer.rs:1698`). It was macOS-only before the arms below landed:
@@ -205,7 +206,8 @@ planned in [`interop-crate.md`](interop-crate.md).
   encoding (`crates/gpui_engine/src/custom_render.rs:101`); the Direct3D arm's sampler and SRV path
   (`crates/gpui_windows/src/directx_renderer.rs:862`, `create_imported_texture_view` at `:1787`); and `device_any`.
 - **Retargeted:** `CustomRenderPrimitive::Texture` → `PaintSurface`; `paint_imported_texture`
-  (`window.rs:5000`) → `surface()`; the token builders (`ImportedTextureExt`, `DirectXTextureExt`,
+  (`window.rs:5000`; now `pub(crate)`, reached through `GpuCanvasContext::paint_texture`) →
+  `surface()`; the token builders (`ImportedTextureExt`, `DirectXTextureExt`,
   `MetalTextureExt`) → `From<…> for SurfaceSource`; `draw_custom` → `draw_surfaces`.
 - **Superseded:** the second primitive, the erased `ImportedTextureHandle`
   (`crates/gpui_engine/src/custom_render.rs:14`), and `Primitive::Custom`'s `Texture` arm; `CustomRenderPrimitive` keeps

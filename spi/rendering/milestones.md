@@ -82,7 +82,8 @@ surface an application meets; 0005 changes only its Path A arm — it produces a
 pushes it through `surface()` rather than a second primitive, and its Path B arm is unchanged. With
 M1 built, the payload its callback returns is one an application can construct, which is what makes
 the canvas a capability rather than a demonstration. Built in #9 (macOS/Windows), with the same-device
-arm (`on_render_texture` → `paint_imported_texture`) added for Linux/macOS after it.
+arm (`GpuCanvasContext::paint_texture` → the crate-internal `paint_imported_texture`) added for
+Linux/macOS after it.
 
 **M4 — Path B.** [`inline-commands.md`](inline-commands.md). Unstarted. It draws into the window's
 own pass, not a buffer, so 0005 leaves it alone; it needs no device export and is not behind M1.

@@ -1,13 +1,17 @@
 # `GpuCanvas`: the authoring surface
 
 - **Status:** built. `GpuCanvas` is implemented and the demo composites through it on all three
-  platforms: `on_render_surface` carries a `SurfaceSource` on macOS/Windows, and `on_render_texture`
-  carries a same-device `ImportedTextureHandle` on Linux/macOS. Path B (`Inline`) is still unbuilt
-  (M4). The split into two callbacks — rather than the §3 `GpuRenderMode` enum — is the actual shape;
-  `Inline` stays deferred.
+  platforms: `gpu_canvas(callback)` runs the callback at paint time with a `GpuCanvasContext` — the
+  slice of `Window` that can import, and the only place raw GPU import is reachable — whose
+  `paint_surface(impl Into<SurfaceSource>)` carries a `SurfaceSource` (CoreVideo on macOS, a Direct3D
+  texture/view on Windows, a dma-buf on Linux) and whose `paint_texture(handle, corner_radii,
+  opacity, flip_v)` carries a same-device `ImportedTextureHandle` on Linux/macOS. Path B (`Inline`) is
+  still unbuilt (M4). The single callback — rather than the §3 `GpuRenderMode` enum — is the actual
+  shape; `Inline` stays deferred.
 - **Assumes:** [`foreign-texture.md`](../rendering/foreign-texture.md) and
-  [`inline-commands.md`](../rendering/inline-commands.md) — the primitive and the two `Window` hooks
-  it is pushed through — and, under them, [`renderer-seam.md`](../rendering/renderer-seam.md).
+  [`inline-commands.md`](../rendering/inline-commands.md) — the primitive and the two
+  `GpuCanvasContext` hooks it is pushed through (`paint_surface`, `paint_texture`) — and, under them,
+  [`renderer-seam.md`](../rendering/renderer-seam.md).
 - **Target crates:** `gpui_authoring` (the element and its builder), re-exported by the
   `gpui` facade. It reads the scene primitive, so it also touches `gpui_engine`.
 - **What it is:** the end-user surface. The seam's primitive is a scene type; the person
@@ -61,8 +65,8 @@ and on `div`**, not as a hand-written `Element`.
 
 ## 3. The design: compose a `div()`, delegate, then paint
 
-*This section is the design sketch. The built element takes the two-callback shape the Status names
-— `on_render_surface` for Path A and `on_render_texture` for the same-device arm — rather than the
+*This section is the design sketch. The built element takes a single `gpu_canvas(content)` callback —
+a `GpuCanvasContext` whose `paint_surface`/`paint_texture` are the two arms — rather than the
 `GpuRenderMode` enum below.*
 
 `GpuCanvas` holds a `Div`, forwards the traits that make it behave like any other box,
@@ -108,31 +112,38 @@ delegation is the design.
 
 ## 4. The public API
 
-*This is the sketch's API. The built element is constructed with `gpu_canvas()`; `flip_y`,
-`corner_radii` and `on_render_inline` are not on the built builder.*
+*This is the built API. `gpu_canvas(content)` takes one `FnOnce` and runs it at paint time with a
+`GpuCanvasContext`; `flip_y`, `corner_radii` and `on_render_inline` are not on the built builder.*
 
 ```rust
-use gpui::{GpuCanvas, px};
+use gpui::gpu_canvas;
 
-GpuCanvas::new()
-    .size_full()            // Styled, delegated
-    .rounded_xl()
-    .flip_y(true)           // whether the producer's UVs are inverted
-    .on_render_texture(move |bounds, window, cx| {
-        // Path A: an offscreen VRAM surface — wgpu passes, a decoder, a camera
-        engine.render_frame(bounds.size).to_imported_handle()
-    })
+gpu_canvas(|canvas| {
+    // Path A: an offscreen VRAM surface — wgpu passes, a decoder, a camera
+    canvas.paint_surface(engine.render_frame(canvas.bounds().size));
+})
 ```
 
-and the inline alternative on the same builder:
+The same-device arm is the other method, beside it:
 
 ```rust
-GpuCanvas::new()
+use gpui::gpu_canvas;
+
+gpu_canvas(|canvas| {
+    // A texture made on the window renderer's own device.
+    canvas.paint_texture(handle, corner_radii, opacity, flip_v);
+})
+```
+
+The context carries what a producer needs besides the two paints: `bounds()`, `device_any()` for the
+renderer's device a texture has to be made on, and `cx()`. Styling and interactivity are the
+`Div`'s, so
+
+```rust
+gpu_canvas(|canvas| canvas.paint_surface(source))
     .size_full()
-    .on_render_inline(move |bounds, draw| {
-        // Path B: commands execute in GPUI's own pass
-        my_vector_map.draw_tiles(draw.encoder(), bounds);
-    })
+    .rounded_xl()
+    .id("map")
 ```
 
 `on_click` and `on_hover` come from `StatefulInteractiveElement`
@@ -151,8 +162,9 @@ no counterpart in this fork:
   (`crates/gpui_authoring/src/element.rs:164`, `:180`).
 - **Painting is a `Window` capability, not a `cx` one.** `paint_quad`
   (`crates/gpui_authoring/src/window.rs:5032`) and `paint_image` (`:5423`) both insert
-  into the frame's scene, so the hooks are `window.paint_imported_texture` and
-  `window.paint_with_callback`, beside them in the same phase. The drafts' separate
+  into the frame's scene, and the surface hooks sit beside them in the same phase —
+  `GpuCanvasContext::paint_surface`/`paint_texture` for a canvas, and the crate-internal
+  `Window::paint_imported_texture` under them. The drafts' separate
   `register_foreign_texture` step between them is gone — it existed to name the texture for
   a registry, and there is no registry
   ([`foreign-texture.md`](../rendering/foreign-texture.md) §3).
@@ -163,10 +175,10 @@ no counterpart in this fork:
 
 ## 6. Where it lives, and what it does not change
 
-`GpuCanvas` and `GpuRenderMode` belong in `gpui_authoring` beside `canvas`, re-exported
-by the `gpui` facade, so a consumer writes `use gpui::GpuCanvas`. It adds no seam and
+`GpuCanvas` and `GpuCanvasContext` belong in `gpui_authoring` beside `canvas`, re-exported
+by the `gpui` facade, so a consumer writes `use gpui::gpu_canvas`. It adds no seam and
 changes no existing trait: it is a component built from `div`, `canvas`'s pattern, and
-the two `Window` hooks the render extension adds. The renderer it draws through is the
+the two `GpuCanvasContext` hooks the render extension adds. The renderer it draws through is the
 one [`renderer-seam.md`](../rendering/renderer-seam.md) makes installable, and `GpuCanvas` neither
 chooses it nor knows its name — which is why a canvas cannot be used at all unless the
 window's renderer implements the path it asks for.

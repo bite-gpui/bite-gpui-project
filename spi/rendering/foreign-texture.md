@@ -47,7 +47,8 @@ its own batch (`crates/gpui_engine/src/scene.rs:508`) and its own accumulation l
 (`crates/gpui_engine/src/scene.rs:50`, pushed at `:134`) — and when this path was built it was
 **macOS-only video**. Its only payload was a `CVPixelBuffer`, behind `#[cfg(target_os = "macos")]`
 (`crates/gpui_engine/src/scene.rs:784`); its only producer was
-`MacWindowExt::paint_surface` (`crates/gpui_authoring/src/window/mac.rs:21`); it was drawn by
+`MacWindowExt::paint_surface` (`crates/gpui_authoring/src/window/mac.rs:21`), the per-platform
+hooks since collapsed into `GpuCanvasContext::paint_surface`; it was drawn by
 **one** renderer rather than two — DirectX's `draw_surfaces` returned an explicit unsupported
 error (`crates/gpui_windows/src/directx_renderer.rs:852`) and wgpu's arm was `{}` under the
 comment that surfaces "are macOS-only for video playback and are not implemented by the WGPU
@@ -140,11 +141,12 @@ draft wrote `register_foreign_texture(handle) -> ForeignTextureId` and then a pr
 naming the id. That shape is borrowed from the atlas flow, where it is right because the
 *engine owns the texture* and the scene can only name it. Here the engine owns nothing —
 the application allocated the texture on the renderer's device and keeps it — so there is
-nothing to register it into. The handle rides in the primitive, and one `window.` call
-pushes it:
+nothing to register it into. The handle rides in the primitive, and one call on the canvas's
+context pushes it — `Window::paint_imported_texture` is `pub(crate)` now, so a consumer reaches it
+only through `GpuCanvasContext::paint_texture`:
 
 ```rust
-window.paint_imported_texture(handle, bounds, radii, opacity, flip_v);
+canvas.paint_texture(handle, corner_radii, opacity, flip_v);
 ```
 
 Three consequences, each a removal:
@@ -160,15 +162,15 @@ Three consequences, each a removal:
   inside wgpu's own storage rather than by reporting a mismatch this side can name, which is
   what [`verification.md`](verification.md) §1's device row actually measures.
 
-The surface an application author meets does not change: `GpuCanvas` is the user API
-([`gpu-canvas.md`](../authoring/gpu-canvas.md)) and the call above is internal to it. What changes is
-what a third-party element or renderer author touches, and those names are worth fixing
+The surface an application author meets is `gpu_canvas`'s callback: `GpuCanvasContext` is the user
+API ([`gpu-canvas.md`](../authoring/gpu-canvas.md)) and the call above is the one it makes. What
+changes is what a third-party element or renderer author touches, and those names are worth fixing
 once, here:
 
 | the drafts | this design | why |
 | --- | --- | --- |
 | `ForeignTextureHandle` | `ImportedTextureHandle` | "foreign" asserts the one thing the device rule forbids; what is imported is the producer's work, not a foreign device |
-| `register_foreign_texture(handle) -> ForeignTextureId` | `paint_imported_texture(handle, …)`, no id | above |
+| `register_foreign_texture(handle) -> ForeignTextureId` | `GpuCanvasContext::paint_texture(handle, …)`, no id | above |
 | `ForeignTextureExt::to_foreign_handle` | `ImportedTextureExt::to_imported_handle` | the same adjective; it stays an extension trait in `gpui_wgpu`, because that is the only place a HAL API is named |
 | `CustomRenderPrimitive::Texture` | unchanged | it is a texture; the payload is what is imported |
 
@@ -282,8 +284,9 @@ renderer, so the payload is the cloned `TextureView`.
 reference implementation created a second device (`wgpu::Instance::default()`,
 `request_adapter`, `request_device`) and handed over a view from it. That fails wgpu's
 device check. The device to render on is the one the window's renderer was built with,
-which the factory has: `GpuContext = Rc<RefCell<Option<WgpuContext>>>`
-(`crates/gpui_wgpu/src/wgpu_renderer.rs:173`), whose `WgpuContext` exposes
+which the factory has: `WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>`
+(`crates/gpui_wgpu/src/wgpu_renderer.rs:173`; the canonical ref still spells the alias
+`GpuContext`), whose `WgpuContext` exposes
 `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
 (`crates/gpui_wgpu/src/wgpu_context.rs:14`). Two notes for whoever writes the guide: the
 slot is `None` until the first renderer initialises it, and `Rc<RefCell<…>>` is `!Send`,

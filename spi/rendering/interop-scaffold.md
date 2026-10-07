@@ -149,11 +149,13 @@ it building before that lands upstream:
 - **(a) Build against the branch.** Point the `gpui` dependency at the W2 branch (the fork's, then
   upstream's). This is the faithful one and the one the sufficiency test wants.
 - **(b) A `legacy-primitive` shim.** A feature that routes the same-device hand-off through the fork's
-  *current* second primitive — `paint_imported_texture` (`crates/gpui_authoring/src/window.rs:5000`)
-  and `CustomRenderPrimitive::Texture` (`crates/gpui_engine/src/custom_render.rs:41`) — so the device
-  accessor (`device_any`, `crates/gpui_authoring/src/window.rs:3031`) can be smoke-tested *today*,
-  before W2. It is deleted the moment (a) is available; it exists so the crate is not blocked on a
-  branch that is not merged.
+  *current* second primitive — `CustomRenderPrimitive::Texture`
+  (`crates/gpui_engine/src/custom_render.rs:41`), pushed by `Window::paint_imported_texture`
+  (`crates/gpui_authoring/src/window.rs:5000`; `pub(crate)` now, so a shim outside the fork needs a
+  `pub` door first, or reaches it through `GpuCanvasContext::paint_texture`) — so the device accessor
+  (`device_any`, `crates/gpui_authoring/src/window.rs:3031`) can be smoke-tested *today*, before W2.
+  It is deleted the moment (a) is available; it exists so the crate is not blocked on a branch that
+  is not merged.
 
 ## 7. The two tests
 

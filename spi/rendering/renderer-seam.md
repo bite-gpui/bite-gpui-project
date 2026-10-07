@@ -342,7 +342,7 @@ resize or a device loss. Two consequences:
   `device_lost()` on x11 (`crates/gpui_linux/src/linux/x11/window.rs:1782`, `:1785`) and
   wayland (`crates/gpui_linux/src/linux/wayland/window.rs:1971`, `:1974`). The subtle
   part is that windows share one GPU context
-  (`GpuContext = Rc<RefCell<Option<WgpuContext>>>`,
+  (`WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>`,
   `crates/gpui_wgpu/src/wgpu_renderer.rs:173`): the first window to notice rebuilds it
   with `WgpuContext::new_rejecting_software`
   (`crates/gpui_wgpu/src/wgpu_context.rs:140`) and the rest adopt what it left. The same

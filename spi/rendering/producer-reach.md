@@ -36,7 +36,7 @@ of the primitive, so no chapter about the primitive answers it.
 | step | where | state |
 | --- | --- | --- |
 | the primitive, the token, the encoder both shaders read | `crates/gpui_engine/src/custom_render.rs` | built, the canonical ref |
-| the window call | `Window::paint_imported_texture`, `crates/gpui_authoring/src/window.rs` | built, the canonical ref |
+| the window call | `Window::paint_imported_texture` (crate-internal), reached through `GpuCanvasContext::paint_texture`, `crates/gpui_authoring/src/window.rs` | built, the canonical ref |
 | the arm, per renderer | wgpu, Direct3D, Metal | built, all three: Direct3D's rows and Metal's run on CI, wgpu's only where the machine has an adapter |
 | the producer's reach | `Window::device_any` and the per-backend token builder | built, all three; what each platform still lacks is §7, and it is not the same gap anywhere |
 
@@ -50,8 +50,8 @@ rule, and they serve different producers:
 | **gpui → app** | gpui creates the device; the application asks for it and renders a texture on it | built — `Window::device_any` hands the renderer's device, the gpui→app half of [0002](../../decisions/0002-render-extension-device-model.md)'s "one slot, and it works both ways" |
 | **app → gpui** | the application creates the device and installs a renderer that adopts it | wgpu only, and only through a factory |
 
-`GpuContext` is a shared `Rc` rather than a field for the second reason:
-`GpuContext = Rc<RefCell<Option<WgpuContext>>>` (`crates/gpui_wgpu/src/wgpu_renderer.rs:173`),
+`WgpuContextSlot` is a shared `Rc` rather than a field for the second reason:
+`WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>` (`crates/gpui_wgpu/src/wgpu_renderer.rs:173`),
 whose `WgpuContext` exposes `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
 (`crates/gpui_wgpu/src/wgpu_context.rs:14`). An application that owns the slot and returns
 `WgpuRenderer::new(context, …)` from its own factory ends up holding the device the renderer
@@ -68,7 +68,7 @@ that was handed nothing still reads `device` and `queue` out of the same place.
 
 | renderer | device it lends | token builder an application can name | tested |
 | --- | --- | --- | --- |
-| `WgpuRenderer` | the shared `GpuContext` slot — both `device` and `queue` | `gpui::ImportedTextureExt` — `gpui_wgpu`'s trait, re-exported by the platform crate the way the other two are — on a `wgpu::TextureView`, which checks the view samples as sRGB and the texture is a `TEXTURE_BINDING` | 3 rows, run locally only |
+| `WgpuRenderer` | the shared `WgpuContextSlot` — both `device` and `queue` | `gpui::ImportedTextureExt` — `gpui_wgpu`'s trait, re-exported by the platform crate the way the other two are — on a `wgpu::TextureView`, which checks the view samples as sRGB and the texture is a `TEXTURE_BINDING` | 3 rows, run locally only |
 | `MetalRenderer` | its `MTLDevice` | `gpui::MetalTextureExt` on a `metal::TextureRef`, which checks the declaration is sRGB and the usage includes `ShaderRead` | 2 rows, `macos-14` |
 | `DirectXRenderer` | its `ID3D11Device` | `gpui::DirectXTextureExt` on an `ID3D11Texture2D`, which checks `B8G8R8A8` and `SHADER_RESOURCE` | 3 rows, `windows-latest` |
 
@@ -129,7 +129,7 @@ anchor the drafts did not have: the accessor hangs on the **window**.
 The two shapes this chapter used to weigh are the record's rejected alternatives: an accessor on
 `PlatformRenderer` reached through `with_renderer` costs an upcast and a userland downcast, so the
 typed part of the API is a convention rather than a signature; and generalising each platform's
-device bundle to the `GpuContext` shape needs a slot type per platform and still requires the
+device bundle to the `WgpuContextSlot` shape needs a slot type per platform and still requires the
 application to install a renderer, which is the *other* direction.
 
 ## 6. The tier this leaves on Windows
