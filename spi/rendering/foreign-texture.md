@@ -29,7 +29,7 @@ PCIe into system memory, and no second window.
 
 The important finding is that this is **not a new primitive**. `PaintSurface`
 (`crates/gpui_engine/src/scene.rs:784`) is already "content produced outside GPUI,
-composited into the window":
+composited into the window" — at that ref its payload was the single field below:
 
 ```rust
 #[derive(Clone, Debug)]
@@ -59,12 +59,12 @@ Linux arms have since landed ([`surfaces.md`](surfaces.md) §1).
 
 So the proposal **reuses that variant's machinery — its batch, its ordering, its content-mask
 handling — and not its drawing.** An imported texture is RGBA, and no fragment path in the
-tree samples one: the sprite and path fragments sample the atlas, and `fs_surface` is the only
-one that samples a texture the atlas does not own. What has to be written is therefore a
+tree then sampled one: the sprite and path fragments sample the atlas, and `fs_surface` was the only
+one that sampled a texture the atlas does not own. What had to be written was therefore a
 fragment path and a pipeline, in two renderers, which is what
 [`renderer-seam.md`](renderer-seam.md) §6's budget means by "a real arm". `PaintSurface` also
-supplies two things the drafts omitted — the precedent for a backend payload (`image_buffer`
-is a `#[cfg]` field with a `#[cfg]` dependency, not a foreign type in the engine), and the
+supplied two things the drafts omitted — the precedent for a backend payload (`image_buffer`
+was a `#[cfg]` field with a `#[cfg]` dependency, not a foreign type in the engine), and the
 `order` and `content_mask` fields a primitive needs to sit correctly in the batch list.
 
 ## 2. The device constraint

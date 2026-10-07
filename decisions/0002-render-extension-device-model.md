@@ -23,9 +23,9 @@ GPU resources:
 1. **Path A and Path B are window-owner capabilities.** The device belongs to whoever
    built the window's renderer, so a widget inside someone else's window cannot be a
    producer. This is a boundary of the design, not an accident of it.
-2. **On Windows both paths require `gpui_wgpu::WgpuRenderer`**, installed through the
-   renderer factory. The default `DirectXRenderer` supports neither, and it says so rather
-   than succeeding silently: `draw_surfaces` returns an explicit unsupported error
+2. **On Windows both paths require `gpui_wgpu::WgpuRenderer` for a `wgpu` producer**, installed
+   through the renderer factory. The default `DirectXRenderer` supported neither, and it said so
+   rather than succeeding silently: `draw_surfaces` returned an explicit unsupported error
    (`crates/gpui_windows/src/directx_renderer.rs:852`). Corrected 2026-09-29 for a Direct3D 11
    producer — see the second revision below.
 3. **Sharing a resource across devices is out of scope for this milestone.** No `IOSurface`

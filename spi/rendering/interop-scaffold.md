@@ -21,6 +21,8 @@ does the job; if it does not, the PR is not yet the feature upstream agreed to t
 
 ## 2. Home and workspace
 
+The crate's manifest, as proposed:
+
 ```toml
 # Cargo.toml
 [package]
@@ -48,6 +50,14 @@ wgpu = { workspace = true, optional = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 wgpu = { workspace = true, optional = true }
 ```
+
+**As built** (`crates/gpui_interop/Cargo.toml`), the manifest differs: the package is
+`gpui_interop`; `gpui_util` is not a dependency (the `Size`/`DevicePixels` helpers are re-exported
+by `gpui`); `objc2-metal` is not there yet, because the macOS module is unbuilt; and `anyhow` is a
+Windows dev-dependency beside `gpui_windows` rather than a plain dependency, while the Windows
+`windows` feature set adds `Win32_Graphics_Direct3D12` for the shared-handle and shared-fence calls.
+The dev-dependency is what lets the crate's test build GPUI's platform and reach the renderer
+through the public seams.
 
 **The one dependency rule**, from [`interop-crate.md`](interop-crate.md) §1: it depends on `gpui` and
 the platform graphics crates, **never on `gpui_engine`** — the fork-only layer that the upstreaming

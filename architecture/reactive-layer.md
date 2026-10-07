@@ -131,7 +131,7 @@ flowchart TD
     build --> scene
 ```
 
-On a hit the builder is never called: `reuse_prepaint` (`window.rs:4271`) replays the
+On a hit the builder is never called: `reuse_prepaint` (`window.rs:4294`) replays the
 previous frame's prepaint range, and `extend_accessed` (`entity_map.rs:180`) re-registers
 the entities the cached subtree had read, so what the window depends on stays accurate
 without re-running anything.

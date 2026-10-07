@@ -65,7 +65,7 @@ window wants from a renderer is a property any *onscreen* renderer has.
 | method | asked by |
 | --- | --- |
 | `draw`, `sprite_atlas` | all (the trait) |
-| `update_drawable_size` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1330`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:1505`, web `crates/gpui_web/src/window.rs:988`, macos `crates/gpui_macos/src/window.rs:3123` |
+| `update_drawable_size` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1330`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:1505`, web `crates/gpui_web/src/window.rs:988`, macos `crates/gpui_macos/src/window.rs:3124` |
 | `update_transparency` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1387`, macos `crates/gpui_macos/src/window.rs:1880` |
 | `set_subpixel_layout` | x11 `crates/gpui_linux/src/linux/x11/window.rs:794`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:671` |
 | `max_texture_size` | x11 `crates/gpui_linux/src/linux/x11/window.rs:798`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:614` |

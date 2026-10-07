@@ -61,6 +61,10 @@ and on `div`**, not as a hand-written `Element`.
 
 ## 3. The design: compose a `div()`, delegate, then paint
 
+*This section is the design sketch. The built element takes the two-callback shape the Status names
+— `on_render_surface` for Path A and `on_render_texture` for the same-device arm — rather than the
+`GpuRenderMode` enum below.*
+
 `GpuCanvas` holds a `Div`, forwards the traits that make it behave like any other box,
 and pushes the primitive after the box has painted:
 
@@ -103,6 +107,9 @@ methods to the inner `Div`, with `RequestLayoutState` and `PrepaintState` bound 
 delegation is the design.
 
 ## 4. The public API
+
+*This is the sketch's API. The built element is constructed with `gpu_canvas()`; `flip_y`,
+`corner_radii` and `on_render_inline` are not on the built builder.*
 
 ```rust
 use gpui::{GpuCanvas, px};

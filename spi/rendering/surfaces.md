@@ -36,8 +36,9 @@ knows — `surface()`. [`0005`](../../decisions/0005-external-rendering-unifies-
 records the route we built instead (`CustomRenderPrimitive::Texture`,
 `crates/gpui_engine/src/custom_render.rs:41`) and why it is superseded.
 
-The payload becomes a **typed, cfg-gated enum**, the shape `PaintSurface` already has — its
-`#[cfg]` `image_buffer` field (`crates/gpui_engine/src/scene.rs:784`) is the precedent, not a compromise:
+The payload is a **typed, cfg-gated enum** — the shape `PaintSurface` already carries in its
+`source: SurfaceSource` field (`crates/gpui_engine/src/scene.rs:784`); the `#[cfg]`-gated payload it
+replaced was the precedent, not a compromise:
 
 ```rust
 pub enum SurfaceSource {

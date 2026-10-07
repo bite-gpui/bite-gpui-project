@@ -159,7 +159,7 @@ Box::new(move |event| {
 ```
 
 `WindowHost` would call `flush` where it already has a per-frame hook —
-`should_render_frame` (`crates/gpui_authoring/src/window.rs:1343`) is the
+`should_render_frame` (`crates/gpui_authoring/src/window.rs:1354`) is the
 narrowest existing one.
 
 ## 4. Semantics the sketch leaves open
