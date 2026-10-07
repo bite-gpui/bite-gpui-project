@@ -7,10 +7,13 @@
   [`#64849`](https://github.com/zed-industries/zed/discussions/64849) — *"i would not have any problem
   with upstreaming support for that since it should be straightforward"*, and *"i would strongly lean
   towards surface sharing here"*.
-- **Built in the fork:** `crates/gpui_authoring/src/elements/surface.rs:13` (`SurfaceSource`), `:99`
-  (the `corner_radii` stub); `crates/gpui_engine/src/scene.rs:784` (`PaintSurface`);
-  `crates/gpui_windows/src/directx_renderer.rs:852` (`draw_surfaces`) and `:862` (the arm it
-  takes over from); `crates/gpui_authoring/src/window.rs:3031` (the device accessor, `device_any`).
+- **Built in the fork:** `crates/gpui_engine/src/scene.rs` (`SurfaceSource`, the `DirectXSource`
+  texture/view pair, and `PaintSurface`); `crates/gpui_authoring/src/elements/surface.rs:99` (the
+  `corner_radii` stub); `crates/gpui_windows/src/directx_renderer.rs:852` (`draw_surfaces`) and
+  `:862` (the arm it takes over from); `crates/gpui_authoring/src/window.rs:3031` (the device
+  accessor, `device_any`). The same-device arm runs in the examples
+  (`crates/gpui/examples/surface.rs`, `crates/gpui/examples/imported_texture.rs`); the cross-device
+  arm is downstream in `crates/gpui_interop` ([`interop-crate.md`](interop-crate.md)).
 - **The fork's payload is richer than this body.** The body below is upstream's PR, carrying a bare
   `ID3D11ShaderResourceView`; the fork builds `SurfaceSource::DirectX(DirectXSource)`, whose
   `DirectXSource` is `Texture(ID3D11Texture2D)` (the renderer makes the view) or

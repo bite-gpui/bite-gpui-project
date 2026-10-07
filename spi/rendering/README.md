@@ -35,7 +35,7 @@ its own folder, because it is a surface an application meets rather than part of
 | [`surfaces.md`](surfaces.md) | **the design of record for external pixels** — the unification under `PaintSurface`/`surface()`, the IOSurface/DXGI/dma-buf trinity, host and guest modes, and the interop boundary |
 | [`surface-plan.md`](surface-plan.md) | the implementation plan for `surfaces.md`, and the probes each stage is gated on |
 | [`interop-crate.md`](interop-crate.md) | the plan for the downstream `gpui-interop` crate — its posture under the upstreaming, its modules, and its public surface |
-| [`probe-p1-reverse-bridge.md`](probe-p1-reverse-bridge.md) | the specification of the probe that gates the interop crate's Windows module |
+| [`probe-p1-reverse-bridge.md`](probe-p1-reverse-bridge.md) | the probe that gates W6's reverse route — a Direct3D 11 producer into a `wgpu` consumer (Host Mode's direction is already measured) |
 | [`probe-p2-macos-adoption.md`](probe-p2-macos-adoption.md) | the probe that gates its macOS module — adopting an `IOSurface` into wgpu |
 | [`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md) | the probe that gates the Linux surface arm — importing a dma-buf |
 | [`probe-p5-fence-loop.md`](probe-p5-fence-loop.md) | the probe that gates W5's ordering — a shared fence across two devices |
@@ -92,9 +92,9 @@ renderer samples an RGBA foreign texture, lends its device, has a token builder 
 as `gpui::…` — the wgpu one through the platform crate, the Direct3D one not at all when the window
 installed `WgpuRenderer` — and implements the offscreen contract, which Direct3D was the last to do.
 
-A runnable demo ties the two halves together: `cargo run -p gpui --example path_a` asks the window
-for its device, refills a texture on it every frame, hands the renderer a token from a paint
-callback, and paints an ordinary `div()` over the composite. Its producer differs per platform,
+A runnable demo ties the two halves together: `cargo run -p gpui --example imported_texture` asks
+the window for its device, refills a texture on it every frame, hands the renderer a token from a
+paint callback, and paints an ordinary `div()` over the composite. Its producer differs per platform,
 because the renderer does — wgpu on Linux and macOS, Direct3D 11 on Windows.
 
 What that still does not add up to is Path A being *finished*, and

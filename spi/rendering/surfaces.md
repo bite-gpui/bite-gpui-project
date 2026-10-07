@@ -24,7 +24,7 @@ through on macOS (`crates/gpui_authoring/src/window/mac.rs:17`) and a `draw_surf
 renderer (`crates/gpui_windows/src/directx_renderer.rs:852`,
 `crates/gpui_apple/src/metal_renderer.rs:1156`, and wgpu's at
 `crates/gpui_wgpu/src/wgpu_renderer.rs:1698`). It was macOS-only before the arms below landed:
-`SurfaceSource` (`crates/gpui_authoring/src/elements/surface.rs:13`) now carries the
+`SurfaceSource` (`crates/gpui_engine/src/scene.rs`, imported by the element) now carries the
 `CoreVideo`/`DirectX`/`DmaBuf` variants, and every renderer implements `draw_surfaces`.
 
 **External pixels therefore extend this, rather than adding a second primitive.** The reason is not

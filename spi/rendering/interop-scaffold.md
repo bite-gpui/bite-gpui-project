@@ -71,12 +71,12 @@ gpui-interop/
   src/
     gpui_interop.rs   // the lib root: Interop, attach(), Unavailable (the `[lib] path`)
     adapter.rs        // match a foreign device to the window's renderer (P6)
-    windows.rs        // D3D12 -> D3D11 NT handle, and the fence bridge (P1, P5)
+    windows.rs        // D3D12 -> D3D11 NT handle, and the fence bridge (P5, P6)
     macos.rs          // an MTLTexture over an IOSurface, adopted into wgpu (P2)
     linux.rs          // dma-buf import (P3)
-    guest.rs          // the headless worker-thread runner (P7)
+    guest.rs          // the headless worker-thread runner (P1, P7)
   tests/
-    cross_device_surface.rs   // the crate's own test — P1/P5/P6-gated
+    cross_device_surface.rs   // the crate's own test — P5-gated
 ```
 
 ## 4. Public surface (expanded from [`interop-crate.md`](interop-crate.md) §4)
@@ -132,10 +132,10 @@ Three things to hold to, all from the design: **`attach` is fallible and `Adapte
 | module | types | gate |
 | --- | --- | --- |
 | `adapter` | `Adapter` — the LUID match on Windows, a caller-supplied device (or `None`) elsewhere | **P6** (run first) |
-| `windows` | `SharedSurface` (D3D12 allocate → `CreateSharedHandle` → `OpenSharedResource1` → SRV), `Fence` (`ID3D12Fence`↔`ID3D11Fence`) | **P1**, **P5** |
+| `windows` | `SharedSurface` (D3D12 allocate → `CreateSharedHandle` → `OpenSharedResource1` → SRV), `Fence` (`ID3D12Fence`↔`ID3D11Fence`) | **P5**, **P6** (P9 for the pool) |
 | `macos` | `AdoptedSurface` (an `MTLTexture` over an `IOSurface` built with `objc2-metal`, adopted into wgpu) | **P2** |
 | `linux` | `DmaBufSurface` (fd + fourcc + modifier → `VkImage`) | **P3** |
-| `guest` | `Guest` (a headless worker thread; a `Frame` out) | **P7** |
+| `guest` | `Guest` (a headless worker thread; a `Frame` out) | **P1**, **P7** |
 
 Every module is written only if its probe passes; that is the whole reason the probes come first
 ([`surface-plan.md`](surface-plan.md) §2).
@@ -176,9 +176,10 @@ SRV drawn through a full-screen triangle on **one device**, read back byte-exact
 [`../../issues/0009-windows-probe-vm.md`](../../issues/0009-windows-probe-vm.md).
 
 **`tests/cross_device_surface.rs` — the crate's own test.** `#[cfg(target_os = "windows")]`, gated
-on **P1** (route) and **P5** (fence): a second device renders into a shared handle, the bridge opens
-it, and the same rect assertion holds. Skipped with a logged warning where the route is unavailable
-— the pattern the wgpu rows already use.
+on **P5** (the shared handle and the fence) — **not** **P1**, which is the reverse direction and
+gates the guest runner, not this module: a second device renders into a shared handle, the bridge
+opens it, and the same rect assertion holds. Skipped with a logged warning where the route is
+unavailable — the pattern the wgpu rows already use.
 
 ## 8. What the scaffold does not include
 

@@ -21,7 +21,8 @@ That fact fixes this crate's posture, and it is the reason the crate is *downstr
 layer of ours:
 
 - **It depends on the upstreamed API, not on a fork layer.** Its inputs are `surface()`
-  (`crates/gpui_authoring/src/elements/surface.rs:35`), the payload enum (`:13`), and the answer to
+  (`crates/gpui_authoring/src/elements/surface.rs:35`), the payload enum
+  (`crates/gpui_engine/src/scene.rs`), and the answer to
   `device_any` (`crates/gpui_authoring/src/window.rs:3031`) — the shapes that go upstream. It must
   **not** touch the fork-only `CustomRenderPrimitive` route
   (`crates/gpui_engine/src/custom_render.rs:41`), which the unification supersedes: a dependency on it

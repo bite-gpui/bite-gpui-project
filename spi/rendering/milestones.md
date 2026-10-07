@@ -40,7 +40,7 @@ canonical ref carries Path A.
 | the Direct3D arm and its CI job | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 3 rows on `windows-latest`, WARP |
 | the producer's reach: `Window::device_any`, and a token builder on each of the three arms (`ImportedTextureExt`, `DirectXTextureExt`, `MetalTextureExt`) | [`producer-reach.md`](producer-reach.md) | the canonical ref | the Direct3D and Metal rows take their device through the accessor — the route an application has — instead of the renderer's own field |
 | the macOS producer route, measured rather than built: wgpu's adapter *is* the `MetalRenderer`'s own `MTLDevice`, so a wgpu producer there needs a power preference and no handover | [`producer-reach.md`](producer-reach.md) §7 | the canonical ref | the probe's printout, [`../decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md) |
-| the runnable demo: `cargo run -p gpui --example path_a`, a producer per platform, composited under a plain `div()` | [`foreign-texture.md`](foreign-texture.md) §3 | `crates/gpui/examples/path_a.rs`, the canonical ref | compiles for the host, `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`; running it needs a display |
+| the runnable demo: `cargo run -p gpui --example imported_texture`, a producer per platform, composited under a plain `div()` | [`foreign-texture.md`](foreign-texture.md) §3 | `crates/gpui/examples/imported_texture.rs`, the canonical ref (which carries it as `path_a.rs`) | compiles for the host, `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`; running it needs a display |
 
 ## 3. The gaps beside the reach
 

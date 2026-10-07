@@ -14,9 +14,9 @@
   who wants a map inside a `div()` should never meet the `Element` trait, and this is the
   shape that keeps them from meeting it.
 - **The hand-rolled version exists**, which is what makes the element the next step rather than a
-  hypothesis: `crates/gpui/examples/path_a.rs` on the canonical ref does by hand what §3
-  describes — compose a `div()`, paint an imported texture, let an ordinary box over it — so what
-  `GpuCanvas` adds is the spelling, not a capability.
+  hypothesis: `crates/gpui/examples/imported_texture.rs` — `path_a.rs` on the canonical ref — does
+  by hand what §3 describes — compose a `div()`, paint an imported texture, let an ordinary box
+  over it — so what `GpuCanvas` adds is the spelling, not a capability.
 - **Amended by [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md):** the
   Path A arm here retargets onto `surface()` — the canvas produces a `SurfaceSource` and pushes it
   through the existing element, rather than a second primitive. `GpuCanvas` stays the authoring

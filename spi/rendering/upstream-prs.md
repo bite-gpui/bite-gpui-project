@@ -78,7 +78,7 @@ take, and it removes one of the cheapest reasons to fork — the one this whole 
 **Scope — three parts, all core.**
 
 1. **The element's payload becomes cross-platform.** `SurfaceSource`
-   (`crates/gpui_authoring/src/elements/surface.rs:13`) grows a Windows variant carrying an
+   (`crates/gpui_engine/src/scene.rs`) grows a Windows variant carrying an
    `ID3D11ShaderResourceView`; `PaintSurface` (`crates/gpui_engine/src/scene.rs:784`) stops being
    `#[cfg(macos)]`-only in a way that leaves the element unusable elsewhere, and gains the
    `corner_radii` the element already stubs (`crates/gpui_authoring/src/elements/surface.rs:99`).
@@ -142,3 +142,28 @@ not because it is cleared.
    set, because it *removes* a fork reason rather than adding a capability.
 3. **PR 3 last, maybe after its own discussion.**
 4. **Path B never** — it is ours to carry, and now we know upstream does not want it.
+
+## 7. What the fork's build says back to this plan
+
+The fork has carried the work further than §2–§5 assume. Three things are worth reading against
+them; none overturns the order in §6.
+
+1. **PR 2 can be opened now.** The Windows arm is built — [`surfaces.md`](surfaces.md) §1's
+   `SurfaceSource`, the `Surface` element, `draw_surfaces` on all three renderers, and a runnable
+   example — so the body is already the shape it would propose. Opening it while the code is fresh
+   is cheaper than replaying it onto a branch that has moved.
+2. **The payload is the one place PR 2 and the fork differ, and it is a judgement call.** §3 and
+   [`pr-2-windows-paint-surface.md`](pr-2-windows-paint-surface.md) propose a bare
+   `ID3D11ShaderResourceView`, and the note above records that the fork builds
+   `SurfaceSource::DirectX(DirectXSource)` — a texture (the renderer makes the view) or a view the
+   producer made. **Recommendation:** propose the pair rather than the bare SRV. It is small, it is
+   what makes Windows symmetric with macOS's resource-based `CoreVideo` arm, and it is what the
+   fork's element and examples already take — so a bare-SRV merge would leave the fork replaying a
+   second shape on top of the one it built. If upstream prefers the minimal arm, keep the bare SRV
+   *knowingly* and record the divergence here rather than discover it at replay.
+3. **The downstream crate is real now.** `gpui_interop` exists provisionally in the fork
+   (`crates/gpui_interop`), with the Windows transport built and a cross-device test on CI
+   (`windows-interop`). §5 is unchanged — the bridge stays downstream — but the crate's home (issue
+   [`0006`](../../issues/0006-surface-interop.md) question 1) can now be settled from a working
+   crate, and the "new repository" recommendation in [`interop-crate.md`](interop-crate.md) §6
+   should be re-read in that light.
