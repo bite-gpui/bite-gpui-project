@@ -27,6 +27,7 @@ its own folder, because it is a surface an application meets rather than part of
 
 | chapter | subject |
 | --- | --- |
+| [`architecture.md`](architecture.md) | **start here** — the map: the layer stack, the two authoring entry points (`surface()`, `gpu_canvas`/`GpuCanvasContext`), the payload and the renderer seam, the `GpuWindow` decorator, the cross-device arm, and what this branch adds on top of upstream |
 | [`renderer-seam.md`](renderer-seam.md) | the seam: `PlatformRenderer`, the typed target, the factory, recovery, and the implementation order. `SceneRenderer` itself is unchanged |
 | [`foreign-texture.md`](foreign-texture.md) | Path A: importing a texture produced outside GPUI, the erasure, the colour-space invariant, and what each platform can actually do |
 | [`inline-commands.md`](inline-commands.md) | Path B: drawing into the window's own pass, the pipeline-state isolation matrix, and the coordinate bridge |
