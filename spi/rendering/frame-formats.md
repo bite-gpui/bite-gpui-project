@@ -128,6 +128,7 @@ SurfaceFormatKind   // the choice: an enum, one variant per format of §3, each 
 YuvColorSpace       // { matrix, range } — present today; primaries/transfer when HDR lands
 ChromaReconstruction // the producer's hint — present today
 modifier            // the DRM tiling code — present today
+release             // the descriptor a consumer signals when it is done — present today
 ChromaSiting        // co-sited | left | top-left — specified, not implemented
 ```
 

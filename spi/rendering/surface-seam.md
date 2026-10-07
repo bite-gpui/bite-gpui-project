@@ -67,7 +67,8 @@ Stuff the *renderer* must act on, and only that:
 - the DRM modifier (tiling/compression);
 - the colour transform — matrix and range now, primaries and transfer function if HDR is ever a
   target, chroma siting if co-sited sampling is ever wrong for a real producer;
-- the fences — the acquire fence now, the release fence when the producer starts recycling.
+- the fences — the acquire fence a consumer waits on, and the release descriptor it signals back; both
+  are on the handle now, and together they are the handshake a recycling producer needs.
 
 When that list is exhausted the interface is **done**, because DRM/VA-API's format space is finite.
 Everything that remains open-ended after that is the producer's, forever.
