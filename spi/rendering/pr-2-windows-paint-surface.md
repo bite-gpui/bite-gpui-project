@@ -9,8 +9,12 @@
   towards surface sharing here"*.
 - **Built in the fork:** `crates/gpui_authoring/src/elements/surface.rs:13` (`SurfaceSource`), `:99`
   (the `corner_radii` stub); `crates/gpui_engine/src/scene.rs:784` (`PaintSurface`);
-  `crates/gpui_windows/src/directx_renderer.rs:852` (the `draw_surfaces` stub) and `:862` (the arm it
+  `crates/gpui_windows/src/directx_renderer.rs:852` (`draw_surfaces`) and `:862` (the arm it
   takes over from); `crates/gpui_authoring/src/window.rs:3031` (the device accessor, `device_any`).
+- **The fork's payload is richer than this body.** The body below is upstream's PR, carrying a bare
+  `ID3D11ShaderResourceView`; the fork builds `SurfaceSource::DirectX(DirectXSource)`, whose
+  `DirectXSource` is `Texture(ID3D11Texture2D)` (the renderer makes the view) or
+  `View(ID3D11ShaderResourceView)` (the producer made it) — [`surfaces.md`](surfaces.md) §1.
 
 ## Title
 

@@ -21,7 +21,7 @@
   Path A arm here retargets onto `surface()` — the canvas produces a `SurfaceSource` and pushes it
   through the existing element, rather than a second primitive. `GpuCanvas` stays the authoring
   surface and its Path B arm is unchanged, and it is the fallback home for the one case the unified
-  `SurfaceHandle` leaves open — a same-device texture on macOS and Linux (0005 §"What the design does
+  `SurfaceSource` leaves open — a same-device texture on macOS and Linux (0005 §"What the design does
   not settle").
 
 ## 1. The cost it absorbs

@@ -10,6 +10,11 @@
   sharing, and declines a Direct3D 12 backend, an external-device mode, and the callback primitive.
 - **Two PRs are core, and a third is a proposal.** PR 1 is hygiene and independent; PR 2 is the one
   upstream said it would take; PR 3 is the guest-mode ask, which may want its own discussion first.
+- **The fork's payload is richer than PR 2's.** Where this document describes upstream's PR — a bare
+  `ID3D11ShaderResourceView` Windows variant — the fork builds
+  `SurfaceSource::DirectX(DirectXSource)`, whose `DirectXSource` is `Texture` (the renderer makes the
+  view) or `View` (the producer made it) — [`surfaces.md`](surfaces.md) §1. The bare SRV is what the
+  PR proper proposes.
 
 ## 1. What upstream has already said, and what it settles
 

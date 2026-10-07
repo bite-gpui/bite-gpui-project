@@ -54,8 +54,8 @@ backend said otherwise:
   (`crates/gpui_windows/src/directx_renderer.rs:34`).
 - Its `draw_surfaces` was **a no-op**: it returned `Ok(())` without drawing when the list was
   non-empty, and the seam made it return an explicit unsupported error instead
-  (`crates/gpui_windows/src/directx_renderer.rs:852`). `PaintSurface` carries no Windows
-  payload (`crates/gpui_engine/src/scene.rs:784`), so Windows has no foreign-surface path at
+  (`crates/gpui_windows/src/directx_renderer.rs:852`). `PaintSurface` carried no Windows
+  payload (`crates/gpui_engine/src/scene.rs:784`), so Windows had no foreign-surface path at
   all.
 
 So the prior was Outcome B — and it was not a setback, because the renderer factory is

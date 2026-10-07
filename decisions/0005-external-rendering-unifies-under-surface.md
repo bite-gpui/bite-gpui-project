@@ -25,9 +25,10 @@ no second scene primitive.** Five consequences:
    (`crates/gpui_authoring/src/elements/surface.rs:27`, `:35`), `SurfaceSource`
    (`:13`), `MacWindowExt::paint_surface` (`crates/gpui_authoring/src/window/mac.rs:17`) and each
    renderer's `draw_surfaces` (`crates/gpui_windows/src/directx_renderer.rs:852`) are the seam. They
-   are **extended, not replaced**. The element is macOS-only today only because `SurfaceSource` has
-   one variant and `draw_surfaces` is a stub off macOS.
-2. **The surface payload is a typed, cfg-gated enum.** `SurfaceSource`/`SurfaceHandle` grows a
+   are **extended, not replaced**. The element was macOS-only when this was decided, because
+   `SurfaceSource` had one variant and `draw_surfaces` was a stub off macOS; it now carries the
+   `CoreVideo`/`DirectX`/`DmaBuf` variants and every renderer implements `draw_surfaces`.
+2. **The surface payload is a typed, cfg-gated enum.** `SurfaceSource` grows a
    Windows arm and a Linux arm (a dma-buf handle), exactly as `PaintSurface`'s existing `#[cfg]` field
    does today. The Windows arm carries either the texture (the renderer makes the view) or a view the
    producer made (`DirectXSource`) — the ergonomic default and its escape, and the shape that makes
@@ -95,7 +96,7 @@ not merge. Recorded so the re-litigation is not paid twice.
 
 ## What the design does not settle
 
-- **A same-device texture on macOS and Linux has no natural `SurfaceHandle` variant.** On Windows the
+- **A same-device texture on macOS and Linux has no natural `SurfaceSource` variant.** On Windows the
   SRV covers it, but `CoreVideo` needs an *IOSurface* and `DmaBuf` needs a *dma-buf*, and neither is
   what a `wgpu::TextureView` or a raw `id<MTLTexture>` is. Either the enum grows a same-backend arm
   per platform (which leans back toward the erased payload) or the same-device case keeps a path of

@@ -1,8 +1,10 @@
 # The interop crate: `gpui-interop`
 
-- **Status:** proposed — a plan for the downstream crate [`surfaces.md`](surfaces.md) §5 names. No
-  crate exists yet; its home is issue [`0006`](../../issues/0006-surface-interop.md), and the
-  workstreams and probes it rests on are [`surface-plan.md`](surface-plan.md) W5–W6 and P1–P6.
+- **Status:** proposed — a plan for the downstream crate [`surfaces.md`](surfaces.md) §5 names. A
+  provisional crate is being built **in the fork** (`crates/gpui_interop`), so it can iterate
+  quickly; it will move to its own home once its shape is settled. That home is issue
+  [`0006`](../../issues/0006-surface-interop.md), and the workstreams and probes it rests on are
+  [`surface-plan.md`](surface-plan.md) W5–W6 and P1–P6.
 - **Assumes:** the surface element is in the facade (`surface()`), and a window lends its renderer's
   device. **Both are on the upstream path** (§1), and that is what decides this crate's shape.
 - **Not a seam:** it replaces no `SceneRenderer` and decorates no `FramePipeline` — it is the

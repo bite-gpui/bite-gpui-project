@@ -4,7 +4,7 @@
   2026 *External Surfaces, Platform Interop, and Headless Rendering in GPUI* design record turned
   into a chapter and reconciled with what is built, per
   [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md). The arms it adds
-  (Windows, Linux) are not implemented; the machinery it re-homes is.
+  (Windows, Linux) are built in the fork, not yet upstream; the machinery it re-homes is.
 - **Assumes:** [`renderer-seam.md`](renderer-seam.md) — a renderer is installable at all — and
   [`producer-reach.md`](producer-reach.md) — how a producer gets the device.
 - **Supersedes by name:** [`foreign-texture.md`](foreign-texture.md)'s *second primitive* and its
@@ -22,9 +22,10 @@
 constructor (`crates/gpui_authoring/src/elements/surface.rs:27`, `:35`), the window call it goes
 through on macOS (`crates/gpui_authoring/src/window/mac.rs:17`) and a `draw_surfaces` on every
 renderer (`crates/gpui_windows/src/directx_renderer.rs:852`,
-`crates/gpui_apple/src/metal_renderer.rs:1156`, and wgpu's empty arm at
-`crates/gpui_wgpu/src/wgpu_renderer.rs:1698`). It is macOS-only today because `SurfaceSource` has
-one variant (`crates/gpui_authoring/src/elements/surface.rs:13`) and `draw_surfaces` bails off macOS.
+`crates/gpui_apple/src/metal_renderer.rs:1156`, and wgpu's at
+`crates/gpui_wgpu/src/wgpu_renderer.rs:1698`). It was macOS-only before the arms below landed:
+`SurfaceSource` (`crates/gpui_authoring/src/elements/surface.rs:13`) now carries the
+`CoreVideo`/`DirectX`/`DmaBuf` variants, and every renderer implements `draw_surfaces`.
 
 **External pixels therefore extend this, rather than adding a second primitive.** The reason is not
 taste: a same-device texture is the *zero-copy, single-device special case* of surface interchange.
@@ -201,7 +202,7 @@ planned in [`interop-crate.md`](interop-crate.md).
 - **Kept verbatim:** `PixelBuffer` and the `render_scene`/`read_pixels` split
   (`crates/gpui_engine/src/renderer.rs:19`, `:102`, `:110`) — the record's upstream PR 1, already built; the quad-record
   encoding (`crates/gpui_engine/src/custom_render.rs:101`); the Direct3D arm's sampler and SRV path
-  (`crates/gpui_windows/src/directx_renderer.rs:862`, `create_imported_texture_view` at `:1700`); and `device_any`.
+  (`crates/gpui_windows/src/directx_renderer.rs:862`, `create_imported_texture_view` at `:1787`); and `device_any`.
 - **Retargeted:** `CustomRenderPrimitive::Texture` → `PaintSurface`; `paint_imported_texture`
   (`window.rs:5000`) → `surface()`; the token builders (`ImportedTextureExt`, `DirectXTextureExt`,
   `MetalTextureExt`) → `From<…> for SurfaceSource`; `draw_custom` → `draw_surfaces`.

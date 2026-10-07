@@ -102,7 +102,7 @@ What that still does not add up to is Path A being *finished*, and
 [0002](../../decisions/0002-render-extension-device-model.md)'s deferred tier, which needs a
 measurement before it needs code — and the same-device rule's enforcement on macOS, which no code can
 supply at all. The macOS producer route was a third, and it is measured now. `GpuCanvas` is
-unwritten too, and [`inline-commands.md`](inline-commands.md) is still nothing but a proposal.
+written now, and [`inline-commands.md`](inline-commands.md) is still nothing but a proposal.
 
 The offscreen mode is the change with reach beyond Path A — `PixelBuffer` is the contract's pixel
 type now, and rendering is separate from reading back — so [`verification.md`](verification.md) §2
@@ -119,12 +119,11 @@ The ordered plan is [`milestones.md`](milestones.md): what is built and where, w
 what order, and the gates a resumer runs. It is there rather than here because the list below had
 grown past what an index should carry, and two copies of a plan are two copies to keep in step.
 
-In one line, the order is: **`GpuCanvas`**, the surface an application meets — the three arms, the
-three producers and the demo are level, so what is left beside them is the canvas itself; then Path
-B, which is independent of all of it; then a third-party renderer; then the cross-API bridge — which
+In one line, the order is: **Path B**, which is independent of all of it; then a third-party
+renderer; then the cross-API bridge — which
 [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) schedules downstream
 rather than deferring, and puts the unified `surface()` arm ahead of it. The producer's reach, the
-three arms and the macOS probe are done, and are no longer on the list.
+three arms, `GpuCanvas` and the macOS probe are done, and are no longer on the list.
 
 The list this section used to hold is closed. The citations were re-pointed to the merged ref — the
 merge moved lines in every file the chapters cite, and §3's Windows rows and §5.2 took real
@@ -261,7 +260,7 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
 
 - **The handle's erasure vs a cfg-gated `wgpu` in `gpui_engine` — closed by
   [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md).** The unified
-  `SurfaceHandle` follows `PaintSurface`'s existing shape — a cfg'd variant with a cfg'd dependency,
+  `SurfaceSource` follows `PaintSurface`'s existing shape — a cfg'd variant with a cfg'd dependency,
   as macOS's `CVPixelBuffer` already is — so the erasure this bullet recommended is withdrawn.
 - **The native hooks' shape.** Should hold: the extension-trait form in
   [`renderer-seam.md`](renderer-seam.md). What would reopen it is in that document.

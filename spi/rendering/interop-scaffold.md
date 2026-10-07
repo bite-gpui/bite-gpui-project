@@ -59,17 +59,14 @@ makes disappear.
 gpui-interop/
   Cargo.toml
   src/
-    lib.rs        // Interop, Adapter, SurfacePool, Frame, attach(), Unavailable
-    adapter.rs    // match a foreign device to the window's renderer (P6)
-    windows.rs    // D3D12 -> D3D11 NT handle, and the fence bridge (P1, P5)
-    macos.rs      // an MTLTexture over an IOSurface, adopted into wgpu (P2)
-    linux.rs      // dma-buf import (P3)
-    guest.rs      // the headless worker-thread runner (P7)
+    gpui_interop.rs   // the lib root: Interop, attach(), Unavailable (the `[lib] path`)
+    adapter.rs        // match a foreign device to the window's renderer (P6)
+    windows.rs        // D3D12 -> D3D11 NT handle, and the fence bridge (P1, P5)
+    macos.rs          // an MTLTexture over an IOSurface, adopted into wgpu (P2)
+    linux.rs          // dma-buf import (P3)
+    guest.rs          // the headless worker-thread runner (P7)
   tests/
-    same_device.rs   // the PR-2 sufficiency test — no bridge, runs today
-    bridge.rs        // #[cfg(windows)] the cross-device test — P1/P5/P6-gated
-  examples/
-    viewport.rs      // a foreign frame in a GPUI window, end to end
+    cross_device_surface.rs   // the crate's own test — P1/P5/P6-gated
 ```
 
 ## 4. Public surface (expanded from [`interop-crate.md`](interop-crate.md) §4)
@@ -135,8 +132,9 @@ Every module is written only if its probe passes; that is the whole reason the p
 
 ## 6. Building before the PR lands
 
-The crate calls `surface(srv)`, which does not exist until the fork's W2 retarget or upstream's PR 2.
-Two ways to keep it building:
+The crate calls `surface(srv)`, which the fork's facade now provides: `surface()` takes anything
+`Into<SurfaceSource>`, and a Windows `ID3D11ShaderResourceView` converts into one. Two ways to keep
+it building before that lands upstream:
 
 - **(a) Build against the branch.** Point the `gpui` dependency at the W2 branch (the fork's, then
   upstream's). This is the faithful one and the one the sufficiency test wants.
@@ -149,7 +147,7 @@ Two ways to keep it building:
 
 ## 7. The two tests
 
-**`tests/same_device.rs` — the PR-2 sufficiency test.** No bridge, no second device.
+**The PR-2 sufficiency test.** No bridge, no second device.
 
 1. Open a window (the fork's test harness on `windows-latest`, or a real one).
 2. `let device = window.d3d11_device().ok_or(Unavailable::NoDevice)?;` — the accessor PR 2 adds.
@@ -167,10 +165,10 @@ probe guest (2026-10-07): an `ID3D11Texture2D` (`B8G8R8A8_UNORM`) cleared to `[3
 SRV drawn through a full-screen triangle on **one device**, read back byte-exact (0/4096). See
 [`../../issues/0009-windows-probe-vm.md`](../../issues/0009-windows-probe-vm.md).
 
-**`tests/bridge.rs` — the crate's own test.** `#[cfg(target_os = "windows")]`, gated on **P1** (route)
-and **P5** (fence): a second device renders into a shared handle, the bridge opens it, and the same
-rect assertion holds. Skipped with a logged warning where the route is unavailable — the pattern the
-wgpu rows already use.
+**`tests/cross_device_surface.rs` — the crate's own test.** `#[cfg(target_os = "windows")]`, gated
+on **P1** (route) and **P5** (fence): a second device renders into a shared handle, the bridge opens
+it, and the same rect assertion holds. Skipped with a logged warning where the route is unavailable
+— the pattern the wgpu rows already use.
 
 ## 8. What the scaffold does not include
 

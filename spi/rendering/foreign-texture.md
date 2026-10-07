@@ -44,17 +44,18 @@ pub struct PaintSurface {
 
 It is a variant of the scene's primitive enum (`crates/gpui_engine/src/scene.rs:238`), with
 its own batch (`crates/gpui_engine/src/scene.rs:508`) and its own accumulation list
-(`crates/gpui_engine/src/scene.rs:50`, pushed at `:134`) — and it is **macOS-only video**.
-Its only payload is a `CVPixelBuffer`, behind `#[cfg(target_os = "macos")]`
-(`crates/gpui_engine/src/scene.rs:784`); its only producer is
-`MacWindowExt::paint_surface` (`crates/gpui_authoring/src/window/mac.rs:21`); it is drawn by
-**one** renderer rather than two — DirectX's `draw_surfaces` returns an explicit unsupported
-error (`crates/gpui_windows/src/directx_renderer.rs:852`) and wgpu's arm is `{}` under the
+(`crates/gpui_engine/src/scene.rs:50`, pushed at `:134`) — and when this path was built it was
+**macOS-only video**. Its only payload was a `CVPixelBuffer`, behind `#[cfg(target_os = "macos")]`
+(`crates/gpui_engine/src/scene.rs:784`); its only producer was
+`MacWindowExt::paint_surface` (`crates/gpui_authoring/src/window/mac.rs:21`); it was drawn by
+**one** renderer rather than two — DirectX's `draw_surfaces` returned an explicit unsupported
+error (`crates/gpui_windows/src/directx_renderer.rs:852`) and wgpu's arm was `{}` under the
 comment that surfaces "are macOS-only for video playback and are not implemented by the WGPU
-renderer" (`crates/gpui_wgpu/src/wgpu_renderer.rs:1872`) — and that one renders **YCbCr**,
+renderer" (`crates/gpui_wgpu/src/wgpu_renderer.rs:1872`) — and that one rendered **YCbCr**,
 not RGBA: Metal's `surface_fragment` returns `ycbcrToRGBTransform * ycbcr`
 (`crates/gpui_apple/src/shaders.metal:885`), and wgpu's `fs_surface` does the same over two
-planes, `t_y` and `t_cb_cr` (`crates/gpui_wgpu/src/shaders.wgsl:1390`).
+planes, `t_y` and `t_cb_cr` (`crates/gpui_wgpu/src/shaders.wgsl:1390`). The surface's Windows and
+Linux arms have since landed ([`surfaces.md`](surfaces.md) §1).
 
 So the proposal **reuses that variant's machinery — its batch, its ordering, its content-mask
 handling — and not its drawing.** An imported texture is RGBA, and no fragment path in the
