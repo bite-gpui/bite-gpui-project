@@ -89,7 +89,7 @@ tear down, re-discover, re-negotiate, and tell the application. Three things it 
 - **A driver *timeout* (TDR).** Structural: it wedges the host GPU on GVT-g (above). The remaining
   staging for a host with a real passed-through GPU.
 - **GPUI's own renderer path.** The probe stages the loss at the D3D level, not through
-  `PlatformRenderer::device_lost` → `recover`, so the seam's recovery — the reworded row
+  `PlatformRenderer::device_lost` → `recover`, so the seam's recovery — the row
   [`../spi/rendering/verification.md`](../spi/rendering/verification.md) §1 carries — is asserted
   separately, and was not what this run measured.
 - **The one-sided case.** P9 §2 notes the producer's device may survive a reset of GPUI's; the probe
