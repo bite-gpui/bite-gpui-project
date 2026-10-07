@@ -28,9 +28,12 @@ no second scene primitive.** Five consequences:
    are **extended, not replaced**. The element is macOS-only today only because `SurfaceSource` has
    one variant and `draw_surfaces` is a stub off macOS.
 2. **The surface payload is a typed, cfg-gated enum.** `SurfaceSource`/`SurfaceHandle` grows a
-   Windows arm (`ID3D11ShaderResourceView`) and a Linux arm (a dma-buf handle), exactly as
-   `PaintSurface`'s existing `#[cfg]` field does today. `PaintSurface` also gains `corner_radii`,
-   which the element already stubs as a `TODO` (`crates/gpui_authoring/src/elements/surface.rs:99`), plus the `opacity` and
+   Windows arm and a Linux arm (a dma-buf handle), exactly as `PaintSurface`'s existing `#[cfg]` field
+   does today. The Windows arm carries either the texture (the renderer makes the view) or a view the
+   producer made (`DirectXSource`) — the ergonomic default and its escape, and the shape that makes
+   Windows symmetric with macOS, whose `CoreVideo` arm is likewise a *resource*. `PaintSurface` also
+   gains `corner_radii`, which the element already stubs as a `TODO`
+   (`crates/gpui_authoring/src/elements/surface.rs:99`), plus the `opacity` and
    `flip_v` our primitive carries.
 3. **dma-buf is a Surface transport, not a texture.** It is Linux's sibling of `IOSurface` and the
    DXGI shared NT handle: a kernel-level, cross-process, cross-API buffer handshake, imported into

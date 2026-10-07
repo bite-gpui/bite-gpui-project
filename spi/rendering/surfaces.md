@@ -43,11 +43,30 @@ pub enum SurfaceSource {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     CoreVideo(CVPixelBuffer),          // IOSurface-backed
     #[cfg(target_os = "windows")]
-    DirectX(ID3D11ShaderResourceView), // same-device texture, or an opened NT handle
+    DirectX(DirectXSource),            // the texture, or a view the producer made
     #[cfg(target_os = "linux")]
     DmaBuf(DmaBufHandle),              // fd + fourcc + modifier + stride
 }
+
+#[cfg(target_os = "windows")]
+pub enum DirectXSource {
+    Texture(ID3D11Texture2D),          // on the window renderer's device; GPUI makes the view
+    View(ID3D11ShaderResourceView),    // the producer made it
+}
 ```
+
+The Windows arm carries **both** payloads, and the reason is the same one that gave `attach` a
+default *and* an escape (`P6`): the common case should be a one-liner, and the escape exists for when
+the other side cannot be trusted to derive the same answer. A **texture** belongs to the window
+renderer's own device, and the renderer makes the view — uniform with macOS, where `CoreVideo` is
+likewise a *resource* and the renderer wraps it in an `MTLTexture`. A **view** is made by the
+producer, which is then the authority on its own format, plane and mip interpretation.
+
+The seam carries the **payload**, not a view, so the choice of arm reaches `draw_surfaces` rather than
+being resolved in the element. **The texture arm is not free**: a view is still required to *sample*,
+so the renderer must keep it in a cache keyed by the texture (invalidated with the device) or pay a
+descriptor per frame. That is the whole of what the arm buys — ergonomics and macOS symmetry, not
+speed.
 
 `PaintSurface` also gains `corner_radii` — the element already stubs it
 (`crates/gpui_authoring/src/elements/surface.rs:99`) — and the `opacity` and `flip_v` our primitive carried. **Its `bounds`
