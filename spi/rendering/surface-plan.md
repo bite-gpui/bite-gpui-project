@@ -141,7 +141,8 @@ fence and texture view the producer holds becomes invalid. *Harness:* drop GPUI'
 (`PlatformRenderer::device_lost` → `recover`) while the producer holds a surface, then re-attach.
 *Pass:* the bridge tears down and re-negotiates without crashing the host process. *This is a W5
 acceptance case, not only a probe.* The full specification is
-[`probe-p9-device-loss.md`](probe-p9-device-loss.md).
+[`probe-p9-device-loss.md`](probe-p9-device-loss.md). **Ran and passed** on the Windows guest — see
+[`../../decisions/windows-device-loss-probe.md`](../../decisions/windows-device-loss-probe.md).
 
 ## 3. The order
 

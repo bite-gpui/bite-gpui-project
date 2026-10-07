@@ -121,7 +121,10 @@ Three shapes are the point, and each follows from a decision already taken:
 unplug, a DPI change or a GPU timeout (TDR), and GPUI recreates its device; every handle, fence and
 view the pool holds is then a dangling reference. The pool must observe the renderer's `device_lost` →
 `recover` and re-negotiate — the acceptance case [`surface-plan.md`](surface-plan.md) §2 P9 names —
-rather than leave the application holding a surface the window can no longer sample.
+rather than leave the application holding a surface the window can no longer sample. P9 ran and
+passed ([evidence](../../decisions/windows-device-loss-probe.md)); it adds that the re-negotiation
+must **re-enumerate** — a device loss recreates the adapter instance and the LUID changes with it, so
+the pool may cache neither the adapter nor a LUID across the loss.
 
 ## 5. What it does not do
 

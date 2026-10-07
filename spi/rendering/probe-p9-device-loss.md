@@ -1,6 +1,8 @@
 # P9: device loss and re-negotiation
 
-- **Status:** proposed — **not run.** Gates W5, and is a W5 **acceptance case** as much as a probe
+- **Status:** **run — PASS** (2026-10-07), on the Windows probe guest with a real GVT-g adapter;
+  recorded in [`../../decisions/windows-device-loss-probe.md`](../../decisions/windows-device-loss-probe.md).
+  Gates W5, and is a W5 **acceptance case** as much as a probe
   ([`surface-plan.md`](surface-plan.md) W5, [`interop-crate.md`](interop-crate.md) §4).
 - **Question:** when GPUI's renderer loses and recreates its device, can the interop pool tear down and
   re-negotiate without crashing the host process — and does the application need to be told?
@@ -33,6 +35,11 @@ a laptop lid, in production.
 holds a surface. **Record which**: a simulated reset is weaker evidence than a driver reset, and the
 distinction belongs in the printout.
 
+**Ran as:** a real **device removal** — a PnP restart of the adapter (`pnputil /restart-device`), which
+stops and re-adds the driver. A *timeout* is not achievable on a GVT-g guest: GVT-g runs the guest's
+work on the host GPU, so a hung dispatch wedges the host engine; see
+[`../../decisions/windows-device-loss-probe.md`](../../decisions/windows-device-loss-probe.md) §1.
+
 ## 4. The probes
 
 1. **Attach and composite.** A producer pool holds a surface, and a frame with it composites.
@@ -52,6 +59,11 @@ distinction belongs in the printout.
 - **The pool cannot observe it** → the API must expose a device-lost event the application subscribes
   to, and document that any `SurfaceSource` held across the loss is **invalid** — the honest contract
   when the handle cannot survive.
+
+**Answered: the first, with a caveat the run exposed — the re-negotiation must *re-enumerate*.** The
+pool cannot reuse the adapter it held (a PnP restart recreates the instance, and the LUID changes with
+it), and a held `SurfaceSource` does not survive the loss, so the application must be told. The full
+result is [`../../decisions/windows-device-loss-probe.md`](../../decisions/windows-device-loss-probe.md).
 
 ## 6. Hazards it must not mistake for an answer
 
