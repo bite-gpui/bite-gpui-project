@@ -32,7 +32,7 @@ and maps 1:1 to a native format per platform. The dimensions are the *design*; t
 | plane layout | `planar` (separate Y/Cb/Cr), `semi-planar` (Y + interleaved CbCr), `packed` (interleaved luma+chroma in one plane) |
 | channel order | `CbCr`, `CrCb` (only meaningful for semi-planar and packed) |
 | sample depth | `8`, `10`, `12`, `16` |
-| container | `8-bit`, `16-bit MSB-aligned`, `16-bit LSB-aligned`, `32-bit packed` |
+| container | `U8` (one byte), `U16` (a 16-bit word; a narrower sample in its **high** bits), `U32Packed` |
 | range | `Full`, `Limited` |
 | matrix | `BT.601`, `BT.709`, `BT.2020-NCL` |
 | primaries / transfer | `BT.709`/`sRGB`, `BT.2020`/`PQ`, `BT.2020`/`HLG` — **specified, not implemented**; only HDR needs them |
@@ -115,16 +115,25 @@ lower priority than any of the four.
 
 ## 5. The engine model
 
-The Linux handle expresses this as a flat enum — today `DmaBufFormat::{ Bgra8, Rgba8, Nv12 }` — that
-grows to the curated set above, plus the decorators it already carries:
+The engine holds two types. [`SurfaceFormat`] is the *dimensions* — one private field per dimension in
+§2, with public readers — and it is built nowhere but its own module, so a `SurfaceFormat` always
+describes a shape that exists. [`SurfaceFormatKind`] is an **enum that chooses among pre-constructed
+`SurfaceFormat`s**: each variant names one format of §3 and carries the shape it is, and the named
+constructors on it (`nv12()`, `p010()`, …) are the only ways a producer makes one.
 
 ```text
-SurfaceFormat   // the curated enum: which of §3 this buffer is
-ColorSpace      // { matrix, range } — present today; primaries/transfer when HDR lands
-ChromaSiting    // co-sited | left | top-left — specified, not implemented
-alpha           // none | straight | premultiplied
-modifier        // the DRM tiling code — present today
+SurfaceFormatKind   // the choice: an enum, one variant per format of §3, each carrying a SurfaceFormat
+  └ SurfaceFormat   // the dimensions: model · subsampling · layout · order · depth · container · alpha
+                      // (private fields and private constructors; public readers, plane_count, is_yuv)
+YuvColorSpace       // { matrix, range } — present today; primaries/transfer when HDR lands
+ChromaReconstruction // the producer's hint — present today
+modifier            // the DRM tiling code — present today
+ChromaSiting        // co-sited | left | top-left — specified, not implemented
 ```
+
+The enum is the choice because this vocabulary is closed: a format it does not contain cannot be named,
+and a renderer that matches on it gets the compiler's help. The struct is the dimensions because they
+are what a renderer *reads* — a `VkFormat` is `rgb_order` at `depth`, and nothing about it needs a name.
 
 A `planar` format is many views of one image (as `NV12` is two views of one image today); a `packed`
 format is one plane decoded in the fragment, because no GPU samples it natively. Neither is a new
@@ -155,7 +164,8 @@ the native mapping, no for the vocabulary**: the same enum, three tables.
 | `Nv12` | built (one multi-planar image, two plane views, matrix in the shader) |
 | colour space: matrix + range | built (declared by the producer, honoured by the renderer) |
 | chroma reconstruction hint | built |
-| everything else in §3 | **specified here, not built** — the vocabulary is total before the code |
+| the rest of the planar/semi-planar YCbCr set above | **curated and named, dropped by the importer** — the vocabulary is total before the code |
+| packed YCbCr (`YuYv`, `Y210`) and sub-byte packed RGB (`Rgb565`, `A2R10G10B10`) | **curated in §3 but not modelled** — neither fits the dimensions honestly yet (see below), so neither is a `SurfaceFormatKind` |
 
 ## 8. Hazards this must not mistake for detail
 
@@ -167,7 +177,8 @@ the native mapping, no for the vocabulary**: the same enum, three tables.
   independent facts nor a different format: the modifier is a *layout* decorator, and the fourcc is
   the *format*. Conflating them is how a vendor-tiled variant (`NV15`) becomes a mystery.
 - **Packed formats are decoded, not sampled.** No GPU samples `YUYV` natively; it is one plane and a
-  fragment that unpacks it, which is a new fragment — not a new entry in a table.
+  fragment that unpacks it, which is a new fragment — not a new entry in a table. And their component
+  *interleave* is a dimension §2 does not have, which is why they are named here but not yet modelled.
 - **Legacy is still real.** 4:1:1 (`DV`) and `YV12` exist in the wild; they are curated, and they are
   not free.
 - **Siting is usually unrecorded.** Most streams name no chroma siting, so "co-sited" is a default the
