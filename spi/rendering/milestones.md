@@ -127,6 +127,7 @@ triggers and every job is skipped, because they are gated on the repository owne
 | `macos` | the Metal backend compiles | the HLSL equivalent: `xcrun metal` runs in a build script, and a build script runs for the **host** |
 | `windows` | the Direct3D backend compiles in release | release is the profile whose build script compiles the HLSL with `fxc`, and whose Rust includes the resulting byte arrays — so the release-only arms are compiled here and nowhere else |
 | `windows-path-a` | the Direct3D arm's three rows | they need a device and a swap chain; a hosted runner has WARP, which is why a pass says "mechanically possible on one adapter" |
+| `windows-interop` | the cross-device arm — a Direct3D 12 producer's shared texture, composited through the Direct3D 11 renderer | it needs a device and a shared handle; the same WARP caveat as `windows-path-a`, one device boundary further out. Debug is enough here, because `gpui_interop`'s test adds no HLSL of its own |
 | `macos-path-a` | the Metal arm's two rows | they need a Metal device, and a hosted runner's is real rather than emulated — the presentation probe records `Apple Paravirtual device`. Debug is enough here, because `gpui_apple`'s build script compiles the shaders in every profile |
 | `tests` | the engine's and authoring's rows | they need no display and no GPU |
 
