@@ -46,6 +46,7 @@ its own folder, because it is a surface an application meets rather than part of
 | [`probe-p9-device-loss.md`](probe-p9-device-loss.md) | the probe that gates W5's device-loss contract |
 | [`probe-p4-video-formats.md`](probe-p4-video-formats.md) | the inventory behind the additive YCbCr pass — what decoders actually emit |
 | [`probe-p7-guest-thread.md`](probe-p7-guest-thread.md) | the probe that gates W6 — the offscreen contract across the worker-thread boundary |
+| [`player.md`](player.md) | the runnable player end of the surface path — the release invariant that keeps biting, what the decoder had to add (containers, plain-baseline H.264), the two upstream bugs it found, and where a frame's time goes |
 | [`upstream-prs.md`](upstream-prs.md) | the PRs to open upstream, what each carries, and what stays downstream — read with the upstream Discussion |
 | [`pr-1-pixel-buffer.md`](pr-1-pixel-buffer.md) | the ready-to-open body for PR 1 — the render/readback split |
 | [`pr-2-windows-paint-surface.md`](pr-2-windows-paint-surface.md) | the ready-to-open body for PR 2 — `paint_surface` on Windows |
