@@ -1,8 +1,11 @@
 # The Linux hatch: an exported dma-buf, ordered by a dma-fence
 
-- **Status:** sketch — the `linux` module is a doc-only stub ([`interop-crate.md`](interop-crate.md)
-  §3), and P3 gates it ([`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md)). It is the Linux
-  mirror of what `windows.rs` already builds, written down so the two stay symmetrical.
+- **Status:** partly built — the **linear, single-plane slice** is in `gpui_interop`'s `linux`
+  module (`SharedBuffer`: allocate a shareable `BGRA8`/`RGBA8` image, export it with
+  `vkGetMemoryFdKHR`, and hand back a `DmaBufHandle`; a Linux unit test allocates one on a real
+  device). Tiled modifiers, multi-plane formats and the acquire fence are the next slice, gated on P3
+  ([`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md)). The rest of this document is the shape
+  they converge on.
 - **Companion:** [`producer-seam.md`](producer-seam.md) §5, the two ways a producer gets a dma-buf;
   [`surface-seam.md`](surface-seam.md), the total buffer description and the fences on the handle;
   [`player.md`](player.md) §2, the release invariant a recycling producer keeps.
