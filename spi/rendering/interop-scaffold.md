@@ -60,13 +60,19 @@ The dev-dependency is what lets the crate's test build GPUI's platform and reach
 through the public seams.
 
 **The Linux example, as built.** `examples/interop_linux.rs` is the crate's purpose shown rather than
-stated: a window whose two tiles are the hatch's own `SharedBuffer`s, exported as dma-bufs and
-composited by the renderer with no CPU copy. It is built only with an `example` feature, which is what
+stated: two of the hatch's `SharedBuffer`s — shareable Vulkan images — exported as dma-bufs and
+composited by a window, with no CPU copy. It is built only with an `example` feature, which is what
 turns on the facade's `platform` bundle (a window needs it) and the `wgpu` bridge — a **feature** and
 not a dev-dependency's own `features`, because a dev-dependency's features apply to every test build:
 with the split, `cargo test` compiles only headless `gpui` and needs no system graphics libraries, for
 a crate whose own code uses none of them. `gpui_wgpu` (which the example names to reach the renderer's
 device) stays a plain dev-dependency.
+
+**The Linux read-back test, as built.** `tests/linux_dmabuf_readback.rs` closes the gap the unit tests
+leave — they prove the exported *descriptor*, this proves the renderer can sample the image. It is
+behind its own `readback-test` feature (the platform bundle and `gpui/test-support`'s headless harness),
+so the ordinary `cargo test` builds neither it nor the example. It covers a **linear** buffer; the
+**tiled** arm wedges the device and is open ([`interop-linux.md`](interop-linux.md) §9).
 
 **The one dependency rule**, from [`interop-crate.md`](interop-crate.md) §1: it depends on `gpui` and
 the platform graphics crates, **never on `gpui_engine`** — the fork-only layer that the upstreaming
@@ -86,6 +92,7 @@ gpui-interop/
     guest.rs          // the headless worker-thread runner (P1, P7)
   tests/
     cross_device_surface.rs   // the crate's own test — P5-gated
+    linux_dmabuf_readback.rs  // the hatch composited and read back — opt-in (`readback-test`)
   examples/
     interop_linux.rs  // the Linux dma-buf path in a window — the crate's point, shown
 ```

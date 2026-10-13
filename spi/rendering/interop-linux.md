@@ -6,8 +6,10 @@
   landed too: `Adapter::gpu_device` makes a second logical device on the renderer's own
   `vk::PhysicalDevice`, so an export lands on the GPU the window draws on rather than whichever node
   `GpuDevice::open` finds. `crates/gpui_interop/examples/interop_linux.rs` composes the whole path into
-  a window. P3 ([`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md)) is the consumer-side import it
-  pairs with.
+  a window, and `crates/gpui_interop/tests/linux_dmabuf_readback.rs` (behind the `readback-test`
+  feature) composites a **linear** buffer through the renderer and reads it back byte for byte. The
+  **tiled** arm does not pass yet — §9. P3
+  ([`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md)) is the consumer-side import it pairs with.
 - **Companion:** [`producer-seam.md`](producer-seam.md) §5, the two ways a producer gets a dma-buf;
   [`surface-seam.md`](surface-seam.md), the total buffer description and the fences on the handle;
   [`player.md`](player.md) §2, the release invariant a recycling producer keeps.
@@ -134,3 +136,33 @@ which of the two devices the tiles were built on.
   which costs the colour it was tiling for — `gpui_va` already warns on the linear case, and the hatch
   needs the same warning.
 - **P3 failing.** Then there is no Linux arm to give this to, and the module stays a stub.
+
+## 9. Open: a tiled export wedges the renderer
+
+The read-back test (`crates/gpui_interop/tests/linux_dmabuf_readback.rs`) composites a buffer through
+the headless `wgpu` renderer and reads the pixel back. A **linear** buffer round-trips byte for byte. A
+**tiled** one — created with `VkImageDrmFormatModifierListCreateInfoEXT` and reported by the layout
+`vkGetImageSubresourceLayout` hands back for its memory plane, §5 — does not: sampling it wedges the
+device, and the read-back never completes.
+
+```text
+Failed to wait for headless rendering: The requested Wait timed out before the submission was completed.
+... GPU device was lost during headless rendering
+```
+
+It is the **modifier**, not the second surface: one tiled buffer alone hangs, two linear buffers in the
+same frame are fine (1.2 s), and it hangs on the adapter's device and on `GpuDevice::open`'s alike. The
+test therefore covers the linear arm and leaves the tiled one out until this is understood — a test
+that wedges the GPU is not one to commit.
+
+What that makes worth checking, in the order it is cheapest to rule out:
+
+- **the plane layout the handle reports.** The buffer is created with the *list* create info, so the
+driver owns the layout, and the stride/offset come back from `vkGetImageSubresourceLayout` — but the
+consumer builds its own image over the same fd from those same numbers, so a mismatch here would put
+the two images in different layouts over one allocation.
+- **whether the consumer's import already works for a tiled buffer from elsewhere.** `gpui_va`'s
+`Y_TILED` decoded frames composite in a real window, so the renderer's tiled import is not in question
+on its own — which points at what this hatch's tiled image has that a decoder's does not.
+- **the layout the buffer is left in.** `clear` ends in `VK_IMAGE_LAYOUT_GENERAL` (§4); the linear arm is
+happy with that, so it is not sufficient on its own, but a tiled image may not be.
