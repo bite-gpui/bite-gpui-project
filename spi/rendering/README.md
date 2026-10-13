@@ -36,6 +36,8 @@ its own folder, because it is a surface an application meets rather than part of
 | [`surfaces.md`](surfaces.md) | **the design of record for external pixels** — the unification under `PaintSurface`/`surface()`, the IOSurface/DXGI/dma-buf trinity, host and guest modes, and the interop boundary |
 | [`surface-plan.md`](surface-plan.md) | the implementation plan for `surfaces.md`, and the probes each stage is gated on |
 | [`interop-crate.md`](interop-crate.md) | the plan for the downstream `gpui-interop` crate — its posture under the upstreaming, its modules, and its public surface |
+| [`interop-linux.md`](interop-linux.md) | the Linux hatch: the producer half of a shared dma-buf — the payload, the Vulkan specifics, and how a producer that is not VA-API exports its own |
+| [`guest-platform.md`](guest-platform.md) | the guest's `Platform`: headless GPUI on a worker thread a host drives — the slots the seam already has, the `Send + Sync` handle, and the demand it must honour |
 | [`surface-seam.md`](surface-seam.md) | the rule: the engine owns a *total* pixel description, and a producer resolves every video-domain unknown before the buffer crosses |
 | [`producer-seam.md`](producer-seam.md) | the seam's other half: `SurfaceProducer`, the internal producer trait — why it is neither `gpui-interop`'s nor an SPI, where the video shapes stay, and the two ways a producer gets a dma-buf |
 | [`surface-input.md`](surface-input.md) | input over a surface: the shim that translates and injects, the bubbling model and gesture capture, and why pass-through is a producer callback |
