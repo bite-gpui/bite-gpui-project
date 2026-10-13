@@ -132,9 +132,8 @@ which of the two devices the tiles were built on.
 
 - **`wgpu` gaining shareable creation.** Then §5 collapses from a handshake to a descriptor, and the
   module shrinks the way [`interop-crate.md`](interop-crate.md) §7 says the Windows one would.
-- **A cross-vendor modifier that is not importable.** The hatch must then fall back to a linear buffer,
-  which costs the colour it was tiling for — `gpui_va` already warns on the linear case, and the hatch
-  needs the same warning.
+- **A cross-vendor modifier that is not importable.** The hatch falls back to a linear buffer and warns,
+  which costs the colour it was tiling for — the same warning `gpui_va` gives on the linear case.
 - **P3 failing.** Then there is no Linux arm to give this to, and the module stays a stub.
 
 ## 9. The read-back test, and the two things it caught
@@ -167,4 +166,7 @@ The corollary is worth stating plainly, because it is the sharp edge of §6: **`
 sound on a device the consumer shares.** `Adapter::gpu_device` gives that by construction;
 `GpuDevice::open` — the no-renderer fallback — does not, and a producer that opens its own device and
 asks for `Tiled` can export a modifier the renderer will refuse. Handing it the renderer's device is
-the whole point of the adapter step, and the failure it prevents is silent until the frame is sampled.
+the whole point of the adapter step, so the hatch enforces it rather than documenting it: `Tiled` is
+honoured only on a device `Adapter::gpu_device` lent, and a producer-opened one — or one that offers no
+importable modifier — exports linear with a warning. Wedging the renderer is not a failure a library
+should leave to a doc comment, and a silently mistiled buffer is worse than a slow one.
