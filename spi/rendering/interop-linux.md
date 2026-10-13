@@ -1,11 +1,13 @@
 # The Linux hatch: an exported dma-buf, ordered by a dma-fence
 
-- **Status:** built, except the device match — `gpui_interop`'s `linux` module exports a shareable
-  `BGRA8`/`RGBA8` or two-plane `NV12` image, linear or on a driver-tiled modifier the renderer can
-  import, and a `Fence` that hands over the acquire `sync_file`; Linux unit tests allocate each on a
-  real device. What remains is §6's adapter step — the hatch opens its own device today rather than
-  being lent the renderer's node. P3 ([`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md)) is the
-  consumer-side import it pairs with.
+- **Status:** built — `gpui_interop`'s `linux` module exports a shareable `BGRA8`/`RGBA8` or two-plane
+  `NV12` image, linear or on a driver-tiled modifier the renderer can import, and a `Fence` that hands
+  over the acquire `sync_file`; Linux unit tests allocate each on a real device. §6's adapter step
+  landed too: `Adapter::gpu_device` makes a second logical device on the renderer's own
+  `vk::PhysicalDevice`, so an export lands on the GPU the window draws on rather than whichever node
+  `GpuDevice::open` finds. `crates/gpui_interop/examples/interop_linux.rs` composes the whole path into
+  a window. P3 ([`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md)) is the consumer-side import it
+  pairs with.
 - **Companion:** [`producer-seam.md`](producer-seam.md) §5, the two ways a producer gets a dma-buf;
   [`surface-seam.md`](surface-seam.md), the total buffer description and the fences on the handle;
   [`player.md`](player.md) §2, the release invariant a recycling producer keeps.
@@ -98,9 +100,25 @@ on Windows. The list is short and unforgiving:
 ## 6. Matching the adapter, which is not a LUID
 
 [`interop-crate.md`](interop-crate.md) §3 is explicit that `attach` must not become LUID-shaped: on
-Windows a match is a LUID; on macOS there is nothing to match; **on Linux it is device-node selection**.
-So the hatch must be handed a device on the renderer's node — or told which node to open — rather than
-guessing, and the `Adapter` module owes Linux a `None`-or-device answer, not a failed match.
+Windows a match is a LUID; on macOS there is nothing to match; **on Linux it is the renderer's own
+physical device**. So the hatch must be handed a device on the renderer's node — or told which node to
+open — rather than guessing, and the `Adapter` module owes Linux a `None`-or-device answer, not a failed
+match.
+
+**Built, and the honest answer turned out to be the renderer's `VkPhysicalDevice`.** The window's
+renderer is `gpui_wgpu::WgpuRenderer`, whose `GpuRenderer::Device` is a `(wgpu::Device, wgpu::Queue)`.
+`Adapter::gpu_device` reads that device's HAL Vulkan instance and physical device
+(`as_hal::<wgpu::hal::vulkan::Api>()` → `shared_instance().raw_instance()` + `raw_physical_device()`),
+and `GpuDevice::on(instance, physical)` makes a **second logical device** on them. That is the Linux
+counterpart of the Windows LUID match, and it comes with the same separation the Direct3D arm gets from
+D3D12-versus-D3D11 for free: a second device means the producer's queue never races the renderer's. The
+instance is the renderer's, so `GpuDevice` tracks whether it owns the instance and destroys only its
+own; `GpuDevice::open` stays the fallback for a renderer that lends no device, or is not wgpu.
+
+The example, `crates/gpui_interop/examples/interop_linux.rs`, is the four lines end to end —
+`attach(gpu.try_device::<WgpuRenderer>())` → `.adapter().gpu_device()` → `SharedBuffer::new` +
+`clear` → `gpu.paint_surface(buffer.handle())` — with the fallback spelled out, so the header can report
+which of the two devices the tiles were built on.
 
 ## 7. What it does not do
 

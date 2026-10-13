@@ -136,7 +136,7 @@ not because it is cleared.
 | capability | where | why not upstream |
 | --- | --- | --- |
 | the cross-device *producer* half, per OS transport: allocate shareable, export the NT handle / `IOSurface` / dma-buf, and signal the fence (Windows `ID3D12Fence`→`ID3D11Fence`) | `gpui-interop` | it would put `wgpu`, Direct3D 12 and the allocation/export in core, which the Discussion declines. Its *consumer* half — the renderer opening a handle it is given — is the upstreamable `DirectXSource::Shared` capability (§3, §8) |
-| adapter matching — a LUID match on Windows, a caller-supplied device elsewhere | `gpui-interop` | a producer-side concern; Windows-only in mechanism, and P6 decides whether it is even reliable |
+| adapter matching — a LUID match on Windows, the renderer's device on Linux, nothing to match on macOS | `gpui-interop` | a producer-side concern; per-platform in mechanism, and P6 decides whether it is even reliable |
 | the Linux `DmaBuf` surface arm (W3) | the fork | the macOS arm is upstream's and PR 2 covers Windows; P3 cleared it |
 | **Path B — the inline callback primitive** | the fork (W7) | the Discussion: *"i don't think we'd want this upstream either"* |
 | 11on12 backbuffer injection | the fork | *"trivial to add that in your fork"* |

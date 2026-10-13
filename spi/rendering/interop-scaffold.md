@@ -59,6 +59,15 @@ Windows dev-dependency beside `gpui_windows` rather than a plain dependency, whi
 The dev-dependency is what lets the crate's test build GPUI's platform and reach the renderer
 through the public seams.
 
+**The Linux example, as built.** `examples/interop_linux.rs` is the crate's purpose shown rather than
+stated: a window whose two tiles are the hatch's own `SharedBuffer`s, exported as dma-bufs and
+composited by the renderer with no CPU copy. It is built only with an `example` feature, which is what
+turns on the facade's `platform` bundle (a window needs it) and the `wgpu` bridge — a **feature** and
+not a dev-dependency's own `features`, because a dev-dependency's features apply to every test build:
+with the split, `cargo test` compiles only headless `gpui` and needs no system graphics libraries, for
+a crate whose own code uses none of them. `gpui_wgpu` (which the example names to reach the renderer's
+device) stays a plain dev-dependency.
+
 **The one dependency rule**, from [`interop-crate.md`](interop-crate.md) §1: it depends on `gpui` and
 the platform graphics crates, **never on `gpui_engine`** — the fork-only layer that the upstreaming
 makes disappear.
@@ -77,6 +86,8 @@ gpui-interop/
     guest.rs          // the headless worker-thread runner (P1, P7)
   tests/
     cross_device_surface.rs   // the crate's own test — P5-gated
+  examples/
+    interop_linux.rs  // the Linux dma-buf path in a window — the crate's point, shown
 ```
 
 ## 4. Public surface (expanded from [`interop-crate.md`](interop-crate.md) §4)
@@ -131,7 +142,7 @@ Three things to hold to, all from the design: **`attach` is fallible and `Adapte
 
 | module | types | gate |
 | --- | --- | --- |
-| `adapter` | `Adapter` — the LUID match on Windows, a caller-supplied device (or `None`) elsewhere | **P6** (run first) |
+| `adapter` | `Adapter` — a LUID match on Windows, `gpu_device` on Linux, a caller-supplied device (or `None`) on macOS | **P6** (run first) |
 | `windows` | `SharedSurface` (D3D12 allocate → `CreateSharedHandle` → `OpenSharedResource1` → SRV), `Fence` (`ID3D12Fence`↔`ID3D11Fence`) | **P5**, **P6** (P9 for the pool) |
 | `macos` | `AdoptedSurface` (an `MTLTexture` over an `IOSurface` built with `objc2-metal`, adopted into wgpu) | **P2** |
 | `linux` | `DmaBufSurface` (fd + fourcc + modifier → `VkImage`) | **P3** |
