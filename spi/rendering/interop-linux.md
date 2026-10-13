@@ -7,8 +7,8 @@
   `vk::PhysicalDevice`, so an export lands on the GPU the window draws on rather than whichever node
   `GpuDevice::open` finds. `crates/gpui_interop/examples/interop_linux.rs` composes the whole path into
   a window, and `crates/gpui_interop/tests/linux_dmabuf_readback.rs` (behind the `readback-test`
-  feature) composites a **linear** buffer through the renderer and reads it back byte for byte. The
-  **tiled** arm does not pass yet — §9. P3
+  feature) composites a **linear** and a **tiled** buffer through the renderer and reads both back byte
+  for byte — §9 is what that turned up. P3
   ([`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md)) is the consumer-side import it pairs with.
 - **Companion:** [`producer-seam.md`](producer-seam.md) §5, the two ways a producer gets a dma-buf;
   [`surface-seam.md`](surface-seam.md), the total buffer description and the fences on the handle;
@@ -137,32 +137,34 @@ which of the two devices the tiles were built on.
   needs the same warning.
 - **P3 failing.** Then there is no Linux arm to give this to, and the module stays a stub.
 
-## 9. Open: a tiled export wedges the renderer
+## 9. The read-back test, and the two things it caught
 
-The read-back test (`crates/gpui_interop/tests/linux_dmabuf_readback.rs`) composites a buffer through
-the headless `wgpu` renderer and reads the pixel back. A **linear** buffer round-trips byte for byte. A
-**tiled** one — created with `VkImageDrmFormatModifierListCreateInfoEXT` and reported by the layout
-`vkGetImageSubresourceLayout` hands back for its memory plane, §5 — does not: sampling it wedges the
-device, and the read-back never completes.
+The read-back test (`crates/gpui_interop/tests/linux_dmabuf_readback.rs`) composites a linear and a
+tiled buffer through the headless `wgpu` renderer and reads each pixel back. Getting both arms green
+caught two faults, neither in the renderer.
 
-```text
-Failed to wait for headless rendering: The requested Wait timed out before the submission was completed.
-... GPU device was lost during headless rendering
-```
+**The export needed a dedicated allocation.** `SharedBuffer::new` allocated with
+`VkExportMemoryAllocateInfo` alone. On NVIDIA a *linear* dma-buf exported that way never finished being
+sampled: the consumer's submission timed out — `Failed to wait for headless rendering: The requested
+Wait timed out before the submission was completed.` — while the same buffer exported from Intel was
+fine, which is why it went unnoticed. `VkMemoryDedicatedAllocateInfo` fixes it, and it is what the two
+other dma-buf paths here already allocate with: `gpui_wgpu`'s importer and `gpui_va`'s tiled fill.
 
-It is the **modifier**, not the second surface: one tiled buffer alone hangs, two linear buffers in the
-same frame are fine (1.2 s), and it hangs on the adapter's device and on `GpuDevice::open`'s alike. The
-test therefore covers the linear arm and leaves the tiled one out until this is understood — a test
-that wedges the GPU is not one to commit.
+**A modifier is portable only within a vendor.** The test's first form built its buffers with
+`GpuDevice::open`, which picks its own GPU, while the headless renderer picks its own as well — and
+with no compositor to match, its sort falls through to "discrete first". On the two-GPU machine this
+ran on (Intel HD 520 + NVIDIA 930M) that exported an Intel `Y_TILED` (`0x100000000000001`) buffer for
+an NVIDIA renderer, which cannot import it. The modifier list is the *device's* — NVIDIA offers only
+its own `0x0300000004fe01x` block, Intel only `0x10000000000000x`, llvmpipe only `LINEAR` — so a buffer
+built from one device's list and consumed on another's has no modifier in common. Routing both ends
+through `Adapter::gpu_device` (§6) removes it: the producer's device is on the renderer's
+`vk::PhysicalDevice`, so the modifier is picked from the list of the GPU that will sample it.
 
-What that makes worth checking, in the order it is cheapest to rule out:
+Both arms now pass on both devices, with no environment pinning: `LINEAR` everywhere, `Y_TILED` on
+Intel and `0x0300000004fe015` on NVIDIA.
 
-- **the plane layout the handle reports.** The buffer is created with the *list* create info, so the
-driver owns the layout, and the stride/offset come back from `vkGetImageSubresourceLayout` — but the
-consumer builds its own image over the same fd from those same numbers, so a mismatch here would put
-the two images in different layouts over one allocation.
-- **whether the consumer's import already works for a tiled buffer from elsewhere.** `gpui_va`'s
-`Y_TILED` decoded frames composite in a real window, so the renderer's tiled import is not in question
-on its own — which points at what this hatch's tiled image has that a decoder's does not.
-- **the layout the buffer is left in.** `clear` ends in `VK_IMAGE_LAYOUT_GENERAL` (§4); the linear arm is
-happy with that, so it is not sufficient on its own, but a tiled image may not be.
+The corollary is worth stating plainly, because it is the sharp edge of §6: **`Tiling::Tiled` is only
+sound on a device the consumer shares.** `Adapter::gpu_device` gives that by construction;
+`GpuDevice::open` — the no-renderer fallback — does not, and a producer that opens its own device and
+asks for `Tiled` can export a modifier the renderer will refuse. Handing it the renderer's device is
+the whole point of the adapter step, and the failure it prevents is silent until the frame is sampled.

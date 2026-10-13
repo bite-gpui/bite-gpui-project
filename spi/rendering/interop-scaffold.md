@@ -69,10 +69,12 @@ a crate whose own code uses none of them. `gpui_wgpu` (which the example names t
 device) stays a plain dev-dependency.
 
 **The Linux read-back test, as built.** `tests/linux_dmabuf_readback.rs` closes the gap the unit tests
-leave — they prove the exported *descriptor*, this proves the renderer can sample the image. It is
-behind its own `readback-test` feature (the platform bundle and `gpui/test-support`'s headless harness),
-so the ordinary `cargo test` builds neither it nor the example. It covers a **linear** buffer; the
-**tiled** arm wedges the device and is open ([`interop-linux.md`](interop-linux.md) §9).
+leave — they prove the exported *descriptor*, this proves the renderer can sample the image. It builds
+its buffers on the renderer's own device through `Adapter::gpu_device`, so the modifier it picks is one
+the consumer's GPU advertises, and both tilings round-trip byte for byte. It is behind its own
+`readback-test` feature (the platform bundle, `gpui/test-support`'s headless harness, and the `wgpu`
+bridge), so the ordinary `cargo test` builds neither it nor the example.
+[`interop-linux.md`](interop-linux.md) §9 has the two faults that getting both arms green caught.
 
 **The one dependency rule**, from [`interop-crate.md`](interop-crate.md) §1: it depends on `gpui` and
 the platform graphics crates, **never on `gpui_engine`** — the fork-only layer that the upstreaming
