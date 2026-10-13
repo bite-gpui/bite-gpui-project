@@ -37,6 +37,8 @@ its own folder, because it is a surface an application meets rather than part of
 | [`surface-plan.md`](surface-plan.md) | the implementation plan for `surfaces.md`, and the probes each stage is gated on |
 | [`interop-crate.md`](interop-crate.md) | the plan for the downstream `gpui-interop` crate — its posture under the upstreaming, its modules, and its public surface |
 | [`surface-seam.md`](surface-seam.md) | the rule: the engine owns a *total* pixel description, and a producer resolves every video-domain unknown before the buffer crosses |
+| [`producer-seam.md`](producer-seam.md) | the seam's other half: `SurfaceProducer`, the internal producer trait — why it is neither `gpui-interop`'s nor an SPI, where the video shapes stay, and the two ways a producer gets a dma-buf |
+| [`surface-input.md`](surface-input.md) | input over a surface: the shim that translates and injects, the bubbling model and gesture capture, and why pass-through is a producer callback |
 | [`frame-formats.md`](frame-formats.md) | the comprehensive video frame-format vocabulary — the dimensions, the formats video needs, the cross-platform mapping, and what is built |
 | [`probe-p1-reverse-bridge.md`](probe-p1-reverse-bridge.md) | the probe that gates W6's reverse route — a Direct3D 11 producer into a `wgpu` consumer (Host Mode's direction is already measured) |
 | [`probe-p2-macos-adoption.md`](probe-p2-macos-adoption.md) | the probe that gates its macOS module — adopting an `IOSurface` into wgpu |
