@@ -5,10 +5,11 @@
   — surface-local **physical** pixels and the scale factor they were computed with, in the crate's own
   vocabulary, so the producer names no `gpui` type — and founds the gesture on the engine's own *drag*,
   so a drag keeps arriving once the pointer has left the surface's bounds.
-  `crates/gpui_interop/examples/interop_cube_drag.rs` is a foreign viewport with GPUI chrome over it — a
-  panel of text and a bar of buttons — and `crates/gpui_interop/tests/surface_input.rs` (behind the
-  `input-test` feature) drives real simulated input through the engine's own dispatch and checks both the
-  adaptation and the layering. §8 has what building it found. Not built: the **answer** (§2/§4 — the
+  `crates/gpui_interop/examples/interop_cube_drag.rs` is a foreign viewport with GPUI on *both* sides of
+  it — button-shaped tiles the transparent frame shows through and the cube clips, and, over the
+  surface, a panel of text and a bar of buttons — and `crates/gpui_interop/tests/surface_input.rs`
+  (behind the `input-test` feature) drives real simulated input through the engine's own dispatch and
+  checks both the adaptation and the layering. §8 has what building it found. Not built: the **answer** (§2/§4 — the
   engine has no decline signal for a producer to pass an event under its rectangle), scroll, key and
   pinch, the guest platform (§5), and the pointer lock a 3D *camera* wants — which is not the gateway's
   to give at all ([`../input/pointer-lock.md`](../input/pointer-lock.md)).
