@@ -9,10 +9,14 @@
   it — button-shaped tiles the transparent frame shows through and the cube clips, and, over the
   surface, a panel of text and a bar of buttons — and `crates/gpui_interop/tests/surface_input.rs`
   (behind the `input-test` feature) drives real simulated input through the engine's own dispatch and
-  checks both the adaptation and the layering. §8 has what building it found. Not built: the **answer** (§2/§4 — the
-  engine has no decline signal for a producer to pass an event under its rectangle), scroll, key and
-  pinch, the guest platform (§5), and the pointer lock a 3D *camera* wants — which is not the gateway's
-  to give at all ([`../input/pointer-lock.md`](../input/pointer-lock.md)).
+  checks both the adaptation and the layering. §8 has what building it found. The engine's half of the
+  **answer** (§2/§4) has since landed: `GpuCanvas::occlude_where` lets a canvas claim the pointer only
+  where its content is, so the tiles under the transparent frame take hover and clicks in the gaps —
+  `Cube::covers` is the oracle. Not built: the gateway's per-event *pass* (a producer that declines an
+  event its own element still receives — §4), the canvas's decline resolved at the event's position
+  rather than a frame behind it (§7), scroll, key and pinch, the guest platform (§5), and the pointer lock
+  a 3D *camera* wants — which is not the gateway's to give at all
+  ([`../input/pointer-lock.md`](../input/pointer-lock.md)).
 - **Companion:** [`producer-seam.md`](producer-seam.md), the seam and why picking is the producer's;
   [`interop-crate.md`](interop-crate.md) §1/§2, the crate that already names `gpui` and so can adapt
   its events; [`player.md`](player.md) §6, the wedge a mis-honoured demand sets;
@@ -95,6 +99,27 @@ hitbox:
 The gateway carries the answer; it does not make the decision. The producer picks its own scene, and the
 engine relays.
 
+**The engine's half is built, and it lands as a hit-test input rather than a gateway answer.**
+`GpuCanvas::occlude_where` (`crates/gpui_authoring/src/elements/gpu_canvas.rs`) hands the canvas a
+predicate over its own frame — `0..1` across its bounds, origin top-left, the frame the composited surface
+is indexed by — and the canvas resolves it once a frame: where the predicate says content is, the canvas
+holds the pointer the way `occlude` does (`HitboxBehavior::BlockMouse`); where it says there is none, the
+canvas is an ordinary box and hit-testing carries on to whatever is drawn behind it. `Cube::covers` in
+`interop_cube_drag` is the oracle — the cube's eight corners projected into that same frame.
+
+Three things fall out of *where* it is resolved, and they are the design:
+
+- **At prepaint, from the pointer the frame was laid out against.** A frame's hitboxes are built once, in
+  prepaint, and `hit_test` reads their behavior, so the predicate sees the *previous* frame's pointer —
+  one event of lag, which converges because the gateway refreshes on every move and the next event (the
+  click that follows a move) is hit-tested against the frame the move drew.
+- **The engine learns only block-or-normal.** *How* the producer knows — projection math, a cached
+  readback, a G-buffer — never reaches the engine. CPU picking and G-buffer picking need no engine API;
+  one predicate covers both ([`producer-seam.md`](producer-seam.md) §6).
+- **Where it declines, the canvas is an ordinary box, not an absent one.** Its own listeners still fire
+  there. The engine decides who *may* see the event; whether the producer *wants* it is still the
+  producer's call, so §2's *pass* does not come for free — see §8.
+
 ## 5. The reverse direction: a guest platform
 
 Guest Mode ([`surfaces.md`](surfaces.md) §4) runs GPUI **headless on a worker thread inside a foreign
@@ -126,12 +151,14 @@ it — a locked pointer — and that is a window's to give, not an element's
   an adapter, and §2 shrinks to the coordinate translation.
 - **A producer that needs GPUI's *raw* event** — the unadapted type, for an element tree it draws
   itself. That is not the gateway's shape, and it is where the "raw" arm of §1 would have to come back.
-- **The engine growing a first-class "declines" signal on a hit target.** Then pass-through stops being
-  a gateway answer and becomes an input to hit-testing, and §4 shrinks.
+- **Declining inside `hit_test`, at the event's own position, instead of at prepaint.** §4's predicate
+  is resolved a frame behind the pointer; resolving it at the event's position removes the lag, and is the
+  shape to reach for if the lag ever shows. It changes the routing path rather than the element, which is
+  why it is not the cut §4 landed in.
 
 ## 8. What building the first slice found
 
-Four things about the engine, none of which the sketch could have known, and all of which a
+Five things about the engine, none of which the sketch could have known, and all of which a
 producer-facing gateway has to carry.
 
 **An overlay does not claim the pointer unless it says so.** A GPUI element over a surface takes an
@@ -175,3 +202,10 @@ it. Making a capture outlast a redraw would need a stable id, and numbering each
 zero is not it: `reuse_prepaint` grafts a cached subtree's hitboxes from the previous frame without
 advancing the counter, so a freshly minted id can land on one it reused. "Who owns this gesture"
 outlasting a frame is the drag's job for the same reason.
+
+**A canvas that declines is still an ordinary box, not an absent one.** `occlude_where` (§4) sets the
+canvas's *hitbox behavior*, and a non-blocking hitbox is still a hitbox: where the predicate declines, the
+canvas's own listeners fire right alongside the control drawn behind it. That division is deliberate — the
+engine decides who *may* see an event, the producer decides whether it *wants* it — but it means §2's
+*pass* is not free: a producer that should ignore an event over its transparent pixels has to ignore it
+itself, using the predicate it already gave the engine.

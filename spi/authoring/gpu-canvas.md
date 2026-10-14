@@ -7,7 +7,9 @@
   texture/view on Windows, a dma-buf on Linux) and whose `paint_texture(handle, corner_radii,
   opacity, flip_v)` carries a same-device `ImportedTextureHandle` on Linux/macOS. Path B (`Inline`) is
   still unbuilt (M4). The single callback — rather than the §3 `GpuRenderMode` enum — is the actual
-  shape; `Inline` stays deferred.
+  shape; `Inline` stays deferred. One builder method is the canvas's own, not a `Div`'s:
+  `occlude_where(predicate)` lets a transparent canvas claim the pointer only where its content is,
+  rather than over its whole rectangle (§4).
 - **Assumes:** [`foreign-texture.md`](../rendering/foreign-texture.md) and
   [`inline-commands.md`](../rendering/inline-commands.md) — the primitive and the two
   `GpuCanvasContext` hooks it is pushed through (`paint_surface`, `paint_texture`) — and, under them,
@@ -152,6 +154,26 @@ gpu_canvas(|canvas| canvas.paint_surface(source))
 `on_mouse_down`, `on_mouse_move` and `on_scroll_wheel` are on `InteractiveElement` and
 need none. Both work because of the delegation in §3.
 
+One builder method is the canvas's own, not a `Div`'s — the answer a transparent surface needs:
+
+```rust
+use gpui::gpu_canvas;
+
+gpu_canvas(|canvas| canvas.paint_surface(source))
+    .size_full()
+    .occlude_where(|uv| cube.covers(uv))
+```
+
+`occlude_where(predicate)` lets the canvas claim the pointer only where its content is, instead of over
+its whole rectangle: where the predicate says content is, the canvas holds the pointer the way
+`InteractiveElement::occlude` does; where it says there is none, the canvas is an ordinary box and
+hit-testing carries on to whatever is drawn behind it — so a control under a transparent frame stays
+live in the gaps. The predicate is `Fn(Point<f32>) -> bool` and is asked once a frame, with the pointer
+in the canvas's own frame — `0..1` across its bounds, origin top-left, the frame the composited surface
+is indexed by. It is resolved at prepaint, where a frame's hitboxes are built, which is what makes the
+answer one event behind the pointer; [`../rendering/surface-input.md`](../rendering/surface-input.md) §4
+takes that up.
+
 ## 5. Names that do not exist here
 
 Every sketch of this component was written against upstream, and four of its names have
@@ -195,3 +217,6 @@ window's renderer implements the path it asks for.
 - **If a second canvas kind appears** (audio waveform, 3D viewport) with different sizing
   or input semantics, the builder should be split rather than grow a mode enum per
   variant.
+- **If `occlude_where`'s one-frame lag ever shows**, the predicate would move from prepaint into
+  `hit_test`, at the event's own position — a routing change, not a builder one
+  ([`../rendering/surface-input.md`](../rendering/surface-input.md) §7).
