@@ -158,13 +158,13 @@ in flight being the surface's own. The up of a gesture that began *elsewhere* an
 surface still arrives without a matching down, and pairing down with up is the producer's: the gateway
 holds no state across a redraw and so cannot pair them for it.
 
-**The first slice's pointer capture did not survive a frame — and the fix stands.** `Window::capture_pointer`
-is keyed by a `HitboxId`, and `Window::insert_hitbox` took its id from a counter that only ever
-incremented while `Frame::clear` emptied the frame's hitboxes — so an id named a different element the
-next frame, and §3's "the surface holds the gesture" was not something a producer could rely on: a drag
-stopped arriving at the first redraw, which is every drag. `gpui_authoring` now numbers a frame's
-hitboxes from zero again where the next frame's state is cleared, which keeps an element's id stable
-while the element tree is — nothing else holds a hitbox id across frames — and the capture holds. The
-gateway no longer takes a capture itself (the engine's drag carries the gesture instead, and the
-finding above is why), but the fix is what makes `Window::capture_pointer` sound for anyone who does,
-and it is the state pass-through wants, since that too needs "who owns this gesture" to outlast a frame.
+**The engine's pointer capture does not survive a frame, and the gateway does not lean on one.**
+`Window::capture_pointer` is keyed by a `HitboxId`, and `Window::insert_hitbox` takes its id from a
+window-long counter that is never rewound, while `Frame::clear` empties the frame's hitboxes every
+frame — so an id names a different element the next frame, and a capture taken at pointer-down is stale
+at the first redraw, which is every gesture of any length. The gateway therefore holds its gesture on
+the engine's *drag* (the finding above) and takes no capture; `capture_pointer` is left as upstream has
+it. Making a capture outlast a redraw would need a stable id, and numbering each frame's hitboxes from
+zero is not it: `reuse_prepaint` grafts a cached subtree's hitboxes from the previous frame without
+advancing the counter, so a freshly minted id can land on one it reused. "Who owns this gesture"
+outlasting a frame is the drag's job for the same reason.
