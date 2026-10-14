@@ -129,11 +129,13 @@ so the surface is sent the event too and a drag across a control turns the scene
 plain `div` of text — inserts no hitbox at all and claims nothing, which is right; a control has to opt
 in. So §4's rectangle is real but opt-in, which is finer than it looked.
 
-**The engine's pointer capture does not survive a frame.** `Window::capture_pointer` is keyed by a
-`HitboxId`, and `Window::insert_hitbox` numbers a frame's hitboxes afresh — `Frame::clear` empties them
-and the counter only ever increments — so the id a capture holds is not the id the element gets next
-frame. A gesture that spans a redraw therefore stops arriving, and an occluding overlay in the way takes
-the events regardless. The gateway takes the capture where the engine documents it, but §3's "the
-surface captures at pointer-down" is not, today, something a producer can rely on. Making it true — a
-hitbox identity that outlives a frame — is an engine change, and it is what pass-through also wants,
-since both need "who owns this gesture" to live somewhere that outlasts a frame.
+**The engine's pointer capture did not survive a frame — and now does.** `Window::capture_pointer` is
+keyed by a `HitboxId`, and `Window::insert_hitbox` took its id from a counter that only ever incremented
+while `Frame::clear` emptied the frame's hitboxes — so an id named a different element the next frame,
+and §3's "the surface captures at pointer-down" was not something a producer could rely on: a drag
+stopped arriving at the first redraw, which is every drag, and an occluding overlay in the way took the
+events regardless. `gpui_authoring` now numbers a frame's hitboxes from zero again where the next
+frame's state is cleared, which keeps an element's id stable while the element tree is — nothing else
+holds a hitbox id across frames — and the capture holds. `tests/surface_input.rs` covers both cases that
+restores: a drag that leaves the surface, and a drag that passes over an occluding control. It is also
+the state pass-through wants, since both need "who owns this gesture" to outlast a frame.
