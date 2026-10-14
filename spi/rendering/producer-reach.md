@@ -175,7 +175,9 @@ The reach is built everywhere; the gaps are not the same gap.
   `gpui::ImportedTextureExt` — `gpui_linux` re-exports it for the reason `gpui_macos` re-exports
   Metal's. The layering is different here: the *portable* currency on Linux is the dma-buf
   (`SurfaceSource::DmaBuf`), which needs no window device at all, so `device::<R>()` is only for a
-  same-device texture; a producer that can produce a dma-buf never asks for one.
+  same-device texture; a producer that can produce a dma-buf never asks for one — it asks for the
+  **GPU's identity**, which it matches to land on the node the renderer samples from
+  ([`interop-linux.md`](interop-linux.md) §6, §10).
 - **Windows / `DirectXRenderer` — complete for a Direct3D 11 producer**, which is what a Media
   Foundation or DXVA decoder is: `device::<DirectXRenderer>()` hands it the device the platform
   built, so a texture made on that device needs no handle and nothing to synchronise. The Windows

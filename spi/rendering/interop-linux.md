@@ -7,8 +7,14 @@
   `vk::PhysicalDevice`, so an export lands on the GPU the window draws on rather than whichever node
   `GpuDevice::open` finds. `crates/gpui_interop/examples/interop_linux.rs` composes the whole path into
   a window, and `crates/gpui_interop/tests/linux_dmabuf_readback.rs` (behind the `readback-test`
-  feature) composites a **linear** and a **tiled** buffer through the renderer and reads both back byte
-  for byte — §9 is what that turned up. P3
+  feature) composites a **linear** and a **tiled** RGB buffer and a **linear NV12** one through the
+  renderer, reading the RGB pair back byte for byte and the `NV12` one through the shader's BT.601
+  matrix — §9 is what that turned up. `SharedBuffer::new` also pre-checks the format against the
+  device, so an unsupported request is a named error rather than a bare
+  `VK_ERROR_FORMAT_NOT_SUPPORTED`. The adapter step grew the other half a producer that owns its
+  device needs: `Adapter::gpu_id` reads the renderer's GPU *identity* — the DRM render node a VA
+  decoder or another process opens — and remembers it for a producer off the paint, which
+  `gpui_video`'s element reports and `gpui_va` consumes in place of a hardcoded node (§6, §10). P3
   ([`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md)) is the consumer-side import it pairs with.
 - **Companion:** [`producer-seam.md`](producer-seam.md) §5, the two ways a producer gets a dma-buf;
   [`surface-seam.md`](surface-seam.md), the total buffer description and the fences on the handle;
@@ -69,6 +75,8 @@ impl SharedBuffer {
     pub fn handle(&self) -> &DmaBufHandle;
     /// The producer's own render target.
     pub fn image(&self) -> &vk::Image;
+    /// Fill it from host plane bytes — the render `clear` cannot do for a multi-plane format.
+    pub fn fill(&self, device: &Device, planes: &[&[u8]]) -> Result<()>;
 }
 
 /// A fence signalled on the producer's queue — the counterpart of `Fence`.
@@ -91,6 +99,9 @@ reopen this), so the hatch is raw Vulkan through `ash`, a per-platform dependenc
 on Windows. The list is short and unforgiving:
 
 - the device must have `VK_KHR_external_memory_fd` and `VK_EXT_external_memory_dma_buf`;
+- the format is checked against the device **before** `vkCreateImage` — the feature bits the chosen
+  tiling carries and the extent the device caps — so an unsupported format, tiling or size is a named
+  error rather than a bare `VK_ERROR_FORMAT_NOT_SUPPORTED`;
 - the image is created with `VkExternalMemoryImageCreateInfo` (`DMA_BUF_BIT_EXT`) and, for a tiled
   format, a `VkImageDrmFormatModifierExplicitCreateInfoEXT` naming the modifier;
 - memory is allocated with `VkExportMemoryAllocateInfo` and the fd taken with `vkGetMemoryFdKHR`;
@@ -98,6 +109,12 @@ on Windows. The list is short and unforgiving:
   explicit layout that was asked for), and must agree with the modifier and strides on the handle;
 - the acquire fence is exported with `VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT` (or the semaphore
   equivalent) — a `sync_file` is what the engine's `acquire_fence` takes.
+
+The image is created for **transfers and sampling** only: the hatch writes it with transfers (`clear`,
+`fill`) and the consumer samples it, and nothing renders to it, so no usage asks for
+`COLOR_ATTACHMENT` — which linear tiling does not report on these devices anyway, and which the crate
+offers no pipeline to reach. The capability check above asks for exactly those bits, so it cannot
+reject a linear buffer the driver would have made.
 
 ## 6. Matching the adapter, which is not a LUID
 
@@ -122,6 +139,16 @@ The example, `crates/gpui_interop/examples/interop_linux.rs`, is the four lines 
 `clear` → `gpu.paint_surface(buffer.handle())` — with the fallback spelled out, so the header can report
 which of the two devices the tiles were built on.
 
+**The identity, for a producer that owns its device.** `Adapter::gpu_device` lends the renderer's
+device to a producer that renders *on* it — the `SharedBuffer` path. A producer that owns its device
+instead — a VA decoder, a 3D engine, another process — cannot render on someone else's device, but
+still has to land on the renderer's GPU or its dma-buf will not import, so what it needs is the GPU's
+**identity**, not its device. `Adapter::gpu_id` reads it as a [`GpuId`] — the device name Vulkan
+reports, and the DRM render node (`VK_EXT_physical_device_drm`: `/dev/dri/renderD<minor>`) a non-Vulkan
+producer opens — and **remembers** it process-wide, so a producer that runs off the paint reads it
+later with `gpui_interop::gpu_id`. Two consumers landed on it, both in §10: `gpui_va` opens the node it
+names instead of a node picked by hand, and `gpui_video`'s element is what reports it.
+
 ## 7. What it does not do
 
 - **No consumer half.** Import, the modifier-aware sampling and the wait are core, as on Windows.
@@ -136,11 +163,12 @@ which of the two devices the tiles were built on.
   which costs the colour it was tiling for — the same warning `gpui_va` gives on the linear case.
 - **P3 failing.** Then there is no Linux arm to give this to, and the module stays a stub.
 
-## 9. The read-back test, and the two things it caught
+## 9. The read-back test, and the three things it caught
 
 The read-back test (`crates/gpui_interop/tests/linux_dmabuf_readback.rs`) composites a linear and a
 tiled buffer through the headless `wgpu` renderer and reads each pixel back. Getting both arms green
-caught two faults, neither in the renderer.
+caught two faults, neither in the renderer; adding the `NV12` arm later caught a third, in the
+capability check.
 
 **The export needed a dedicated allocation.** `SharedBuffer::new` allocated with
 `VkExportMemoryAllocateInfo` alone. On NVIDIA a *linear* dma-buf exported that way never finished being
@@ -159,8 +187,14 @@ built from one device's list and consumed on another's has no modifier in common
 through `Adapter::gpu_device` (§6) removes it: the producer's device is on the renderer's
 `vk::PhysicalDevice`, so the modifier is picked from the list of the GPU that will sample it.
 
-Both arms now pass on both devices, with no environment pinning: `LINEAR` everywhere, `Y_TILED` on
-Intel and `0x0300000004fe015` on NVIDIA.
+**The capability check asked for more than the hatch uses.** Its first form required
+`COLOR_ATTACHMENT` for an RGB image, and a linear `R8G8B8A8_UNORM` image does not report that bit —
+linear tiling cannot be rendered to, so the check rejected a linear buffer the driver makes happily
+(and that both arms had been clearing and sampling all along). The fix is to request exactly the usages
+the hatch performs — transfers to write, sampling to read — which is what `usage_for` now builds.
+
+All three arms now pass on both devices, with no environment pinning: `LINEAR` everywhere, `Y_TILED`
+on Intel and `0x0300000004fe015` on NVIDIA.
 
 The corollary is worth stating plainly, because it is the sharp edge of §6: **`Tiling::Tiled` is only
 sound on a device the consumer shares.** `Adapter::gpu_device` gives that by construction;
@@ -170,3 +204,34 @@ the whole point of the adapter step, so the hatch enforces it rather than docume
 honoured only on a device `Adapter::gpu_device` lent, and a producer-opened one — or one that offers no
 importable modifier — exports linear with a warning. Wedging the renderer is not a failure a library
 should leave to a doc comment, and a silently mistiled buffer is worse than a slow one.
+
+## 10. The GPU match in the wild, and the node that was hardcoded
+
+The identity (§6) earned its place by fixing a real producer. `gpui_va` decoded on
+`/dev/dri/renderD128`, the Intel render node *the compositor and the window renderer are steered to* —
+on a laptop with a discrete GPU, correct only while the renderer follows the compositor, and wrong the
+moment it does not. The headless renderer, with no compositor to match, sorts to "discrete first": on
+the two-GPU machine this ran on it draws through the NVIDIA 930M (`renderD129`), so a VA surface
+exported on Intel was one the renderer could not import.
+
+**`gpui_va` now reads the node, and refuses to guess.** `render_node()` is
+`gpui_interop::gpu_id().and_then(|gpu| gpu.render_node)`, and both sites that hardcoded the path —
+ffmpeg's `av_hwdevice_ctx_create` and `vaGetDisplayDRM` — go through it. There is deliberately **no
+fallback**: a dma-buf is importable only on the renderer's own GPU, so a node chosen by hand is one the
+renderer cannot sample, and a producer with no GPU to name does nothing rather than export a surface
+the consumer will refuse. Failure beats a wrong node, which is the wedge §9 is about.
+
+**`gpui_video`'s element is what names the GPU.** A producer off the paint has no window to ask, and
+the renderer's device is reachable only from a `gpu_canvas`, so a Linux video paints one **reporting**
+canvas before it opens its decoder: `report_renderer_gpu` runs `attach(gpu.try_device::<WgpuRenderer>())
+→ adapter().gpu_id()` → `remember`, and the element defers producing until `gpui_interop::gpu_id()`
+answers (asking for one more animation frame to get there). The frame's own `surface()` with its
+`object_fit` is untouched; only the pre-report frame uses the canvas. Off Linux the element is
+unchanged.
+
+**Verified on a real window, and seeded in tests.** Running `gpui_video`'s `player` example with
+tracing shows the sequence — `reported=false` → `report_renderer_gpu: device=true` → `GpuId { name:
+"Intel(R) HD Graphics 520", render_node: Some("/dev/dri/renderD128") }` → `reported=true` →
+`serve open_backend=true` → `opened, period 40ms` → `frame at 0.00s …` — the element reports the
+*window renderer's* GPU (the compositor's Intel node), `gpui_va` opens the decoder on it, and frames
+play. `gpui_va`'s unit tests have no window, so they seed the identity explicitly (`remember(GpuDevice::open().gpu_id())`); a real caller never does.
