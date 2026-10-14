@@ -16,6 +16,11 @@
   decoder or another process opens — and remembers it for a producer off the paint, which
   `gpui_video`'s element reports and `gpui_va` consumes in place of a hardcoded node (§6, §10). P3
   ([`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md)) is the consumer-side import it pairs with.
+  The hatch also grew a **render-target** mode — `SharedBuffer::render_target` adds `COLOR_ATTACHMENT`,
+  so a producer's own pipeline draws the frame rather than only `clear`/`fill`ing it — and
+  `crates/gpui_interop/examples/interop_cube.rs` is that producer: a cube rendered by a Vulkan pipeline
+  the example builds on the `GpuDevice` and hands over as a dma-buf, recycled on the renderer's
+  `release` (§11).
 - **Companion:** [`producer-seam.md`](producer-seam.md) §5, the two ways a producer gets a dma-buf;
   [`surface-seam.md`](surface-seam.md), the total buffer description and the fences on the handle;
   [`player.md`](player.md) §2, the release invariant a recycling producer keeps.
@@ -71,6 +76,8 @@ pub struct SharedBuffer { .. }
 impl SharedBuffer {
     /// Allocate a shareable image of `size` in `format`, in a modifier the renderer can import.
     pub fn new(device: &Device, size: Size<DevicePixels>, format: Format) -> Result<Self>;
+    /// `new` with `COLOR_ATTACHMENT` — a shareable image a pipeline can render into (§11).
+    pub fn render_target(device: &Device, size: Size<DevicePixels>, format: Format, tiling: Tiling) -> Result<Self>;
     /// The engine's description, ready for `surface()`.
     pub fn handle(&self) -> &DmaBufHandle;
     /// The producer's own render target.
@@ -110,11 +117,14 @@ on Windows. The list is short and unforgiving:
 - the acquire fence is exported with `VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT` (or the semaphore
   equivalent) — a `sync_file` is what the engine's `acquire_fence` takes.
 
-The image is created for **transfers and sampling** only: the hatch writes it with transfers (`clear`,
-`fill`) and the consumer samples it, and nothing renders to it, so no usage asks for
-`COLOR_ATTACHMENT` — which linear tiling does not report on these devices anyway, and which the crate
-offers no pipeline to reach. The capability check above asks for exactly those bits, so it cannot
-reject a linear buffer the driver would have made.
+By default the image is created for **transfers and sampling** only: `SharedBuffer::new` writes it with
+transfers (`clear`, `fill`) and the consumer samples it, so no usage asks for `COLOR_ATTACHMENT` —
+which linear tiling does not report on these devices anyway. `SharedBuffer::render_target` is the other
+mode: it adds `COLOR_ATTACHMENT`, for a producer whose own pipeline draws the frame ([§11](#11-the-render-target-mode-and-the-foreign-3d-viewport)).
+Because a linear image cannot carry that bit, a rendered buffer is always `Tiling::Tiled` — and on a
+device that is not the renderer's, where no modifier is sound, the request is refused rather than
+falling back to a linear image that cannot be drawn into. The capability check above asks for exactly
+the bits each mode uses, so it cannot reject a linear buffer the driver would have made.
 
 ## 6. Matching the adapter, which is not a LUID
 
@@ -154,6 +164,9 @@ names instead of a node picked by hand, and `gpui_video`'s element is what repor
 - **No consumer half.** Import, the modifier-aware sampling and the wait are core, as on Windows.
 - **No readback.** The CPU case is `read_pixels` ([`interop-crate.md`](interop-crate.md) §5).
 - **No VA-API export.** That is the producer's (`vaExportSurfaceHandle`), §3.
+- **No `SurfaceProducer` over the foreign path.** The crate exports and hands over a `DmaBufHandle`;
+  a producer *type* that owns its ring and decoder and paints itself is a `gpui_video` sample, and the
+  examples here deliberately do not depend on `gpui_video` (§11).
 
 ## 8. What would reopen it
 
@@ -235,3 +248,46 @@ tracing shows the sequence — `reported=false` → `report_renderer_gpu: device
 `serve open_backend=true` → `opened, period 40ms` → `frame at 0.00s …` — the element reports the
 *window renderer's* GPU (the compositor's Intel node), `gpui_va` opens the decoder on it, and frames
 play. `gpui_va`'s unit tests have no window, so they seed the identity explicitly (`remember(GpuDevice::open().gpu_id())`); a real caller never does.
+
+## 11. The render-target mode, and the foreign 3D viewport
+
+`SharedBuffer::render_target` is `new` with `COLOR_ATTACHMENT` added. That one bit changes what the
+crate is for: `new` produces a buffer the hatch *fills* (`clear`, `fill`), `render_target` produces a
+frame a producer's **own pipeline draws** — the foreign viewport, where the pixels come from a 3D engine
+or another API that is not GPUI's renderer at all.
+
+**Why it forces the renderer's device.** A linear image does not report `COLOR_ATTACHMENT` (§5), so a
+rendered buffer must be `Tiling::Tiled` — and `Tiled` is honoured only on the device
+`Adapter::gpu_device` lends (§6, §9). `GpuDevice::open` is therefore not a fallback here as it is for
+`clear`/`fill`: it would ask for a tiled render target on a device whose modifier the renderer may not
+know, so the request is refused, and the example reports that rather than showing an empty canvas.
+
+**The cube.** `crates/gpui_interop/examples/interop_cube.rs` is the mode end to end. It builds a small
+Vulkan pipeline on the `GpuDevice` — a render pass with the shareable colour image and a depth
+attachment, a `mat4x4` uniform, 24 vertices — and compiles its WGSL to SPIR-V at run time with `naga`,
+the frontend and backend `wgpu` itself uses, so no offline shader compiler (`glslc`,
+`glslangValidator`) is needed. `naga`'s default writer options flip the clip-space Y for Vulkan, so the
+projection is the ordinary y-up, zero-to-one-depth one a `wgpu` shader is written against, and the cube
+comes up the right way round.
+
+**The ring.** One buffer cannot be sampled by the compositor and drawn into by the producer at once, so
+the example keeps three and cycles: each painted frame takes a free slot, draws into it, and hands it
+over with an acquire `Fence::sync_file` and a fresh `release` `eventfd`. A slot is reused only once the
+compositor has signalled that release, or a `RELEASE_TIMEOUT` reclaims it so a release that never comes
+does not freeze the cube. This is `gpui_va`'s ring in miniature ([`player.md`](player.md) §2 is the same
+invariant), and the depth image and framebuffer are per-slot for the same reason: two frames' passes
+must not share a depth attachment.
+
+**What was checked, and how.** The window's output cannot be screenshotted in this environment, so the
+cube was verified by reading a rendered slot back to host memory and printing it as ASCII. At a rotated
+pose the three visible faces come out as distinct regions — top, front and side — the top face is the
+brightest and sits **above** the others, which is the one thing the projection and `naga`'s flip have to
+agree on, and the silhouette is centred and inside the frame. Sixty frames produced **zero dropped
+slots**: a renderer that never sampled the buffers would leave every slot to time out on
+`RELEASE_TIMEOUT` and the dropped count would climb, so the count is a direct check that the window's
+renderer is compositing the dma-bufs and signalling them back.
+
+**Why it is not in `gpui_video`.** The crate is the seam; a demo is not. The foreign path could carry a
+`SurfaceProducer` much as `gpui_va` implements one, but that would put a `gpui_video` dependency in an
+example, and the sample-repo split keeps `gpui-interop`'s examples free of it. The cube is therefore
+self-contained, and a production foreign producer belongs beside the other samples.
