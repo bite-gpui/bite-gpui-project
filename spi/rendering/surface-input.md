@@ -1,8 +1,15 @@
 # Input over a surface: the gateway, capture, and pass-through
 
-- **Status:** sketch — unbuilt. Written against `bite_v1.23.1-pre-interop`. It keeps two things
-  straight: GPUI *hosts* input, and a producer must be able to meet its surface's events **without
-  depending on `gpui`**.
+- **Status:** built, in part. `gpui_interop::input` is the gateway's first slice: `surface_input(element,
+  handler)` wraps a surface's element, adapts the pointer events GPUI routes to it into a `SurfaceInput`
+  — surface-local **physical** pixels and the scale factor they were computed with, in the crate's own
+  vocabulary, so the producer names no `gpui` type — and takes the pointer capture on pointer-down.
+  `crates/gpui_interop/examples/interop_cube_drag.rs` is a foreign viewport with GPUI chrome over it — a
+  panel of text and a bar of buttons — and `crates/gpui_interop/tests/surface_input.rs` (behind the
+  `input-test` feature) drives real simulated input through the engine's own dispatch and checks both the
+  adaptation and the layering. §8 has what building it found. Not built: the **answer** (§2/§4 — the
+  engine has no decline signal for a producer to pass an event under its rectangle), scroll, key and
+  pinch, and the guest platform (§5).
 - **Companion:** [`producer-seam.md`](producer-seam.md), the seam and why picking is the producer's;
   [`interop-crate.md`](interop-crate.md) §1/§2, the crate that already names `gpui` and so can adapt
   its events; [`player.md`](player.md) §6, the wedge a mis-honoured demand sets;
@@ -109,3 +116,24 @@ drag from being stolen by whatever it happens to pass beneath. The producer's *p
   itself. That is not the gateway's shape, and it is where the "raw" arm of §1 would have to come back.
 - **The engine growing a first-class "declines" signal on a hit target.** Then pass-through stops being
   a gateway answer and becomes an input to hit-testing, and §4 shrinks.
+
+## 8. What building the first slice found
+
+Two things about the engine, neither of which the sketch could have known, and both of which a
+producer-facing gateway has to carry.
+
+**An overlay does not claim the pointer unless it says so.** A GPUI element over a surface takes an
+event across its own rectangle only if it inserts a *blocking* hitbox — `InteractiveElement::occlude`
+(`HitboxBehavior::BlockMouse`). Without it, hit-testing marks both the overlay and the surface hovered,
+so the surface is sent the event too and a drag across a control turns the scene under it. A caption — a
+plain `div` of text — inserts no hitbox at all and claims nothing, which is right; a control has to opt
+in. So §4's rectangle is real but opt-in, which is finer than it looked.
+
+**The engine's pointer capture does not survive a frame.** `Window::capture_pointer` is keyed by a
+`HitboxId`, and `Window::insert_hitbox` numbers a frame's hitboxes afresh — `Frame::clear` empties them
+and the counter only ever increments — so the id a capture holds is not the id the element gets next
+frame. A gesture that spans a redraw therefore stops arriving, and an occluding overlay in the way takes
+the events regardless. The gateway takes the capture where the engine documents it, but §3's "the
+surface captures at pointer-down" is not, today, something a producer can rely on. Making it true — a
+hitbox identity that outlives a frame — is an engine change, and it is what pass-through also wants,
+since both need "who owns this gesture" to live somewhere that outlasts a frame.
