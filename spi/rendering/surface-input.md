@@ -10,12 +10,14 @@
   `input-test` feature) drives real simulated input through the engine's own dispatch and checks both the
   adaptation and the layering. §8 has what building it found. Not built: the **answer** (§2/§4 — the
   engine has no decline signal for a producer to pass an event under its rectangle), scroll, key and
-  pinch, and the guest platform (§5).
+  pinch, the guest platform (§5), and the pointer lock a 3D *camera* wants — which is not the gateway's
+  to give at all ([`../input/pointer-lock.md`](../input/pointer-lock.md)).
 - **Companion:** [`producer-seam.md`](producer-seam.md), the seam and why picking is the producer's;
   [`interop-crate.md`](interop-crate.md) §1/§2, the crate that already names `gpui` and so can adapt
   its events; [`player.md`](player.md) §6, the wedge a mis-honoured demand sets;
-  [`../input/input-policy-seam.md`](../input/input-policy-seam.md), the parked **policy** seam — this
-  document is about mechanism.
+  [`../input/input-policy-seam.md`](../input/input-policy-seam.md), the parked **policy** seam, and
+  [`../input/pointer-lock.md`](../input/pointer-lock.md), the relative pointer a camera would need —
+  this document is about mechanism.
 
 ## 1. Who owns the event, and where it crosses
 
@@ -112,6 +114,10 @@ Nothing above names a codec, a mesh or a G-buffer. A surface is a surface
 3D viewport under gizmos — all are the same gateway plus pass-through, and all need the gesture to stay
 with where it started, so a drag is not stolen by whatever it happens to pass beneath. The producer's
 *picking* is the only 3D-shaped part, and it stays with the producer.
+
+A 3D viewport that wants a *camera* rather than a gesture needs the one thing this gateway cannot give
+it — a locked pointer — and that is a window's to give, not an element's
+([`../input/pointer-lock.md`](../input/pointer-lock.md)).
 
 ## 7. What would reopen it
 

@@ -39,7 +39,7 @@ its own folder, because it is a surface an application meets rather than part of
 | [`interop-linux.md`](interop-linux.md) | the Linux hatch: the producer half of a shared dma-buf — the payload, the Vulkan specifics, and how a producer that is not VA-API exports its own |
 | [`surface-seam.md`](surface-seam.md) | the rule: the engine owns a *total* pixel description, and a producer resolves every video-domain unknown before the buffer crosses |
 | [`producer-seam.md`](producer-seam.md) | the seam's other half: `SurfaceProducer`, the internal producer trait — why it is neither `gpui-interop`'s nor an SPI, where the video shapes stay, and the two ways a producer gets a dma-buf |
-| [`surface-input.md`](surface-input.md) | input over a surface: the gateway `gpui-interop` owns so a producer meets events without depending on `gpui`, the engine's capture rule, and pass-through |
+| [`surface-input.md`](surface-input.md) | input over a surface: the gateway `gpui-interop` owns so a producer meets events without depending on `gpui`, the engine's drag that carries the gesture, and pass-through; the pointer lock a *camera* would need instead is [`../input/pointer-lock.md`](../input/pointer-lock.md), parked |
 | [`frame-formats.md`](frame-formats.md) | the comprehensive video frame-format vocabulary — the dimensions, the formats video needs, the cross-platform mapping, and what is built |
 | [`probe-p1-reverse-bridge.md`](probe-p1-reverse-bridge.md) | the probe that gates W6's reverse route — a Direct3D 11 producer into a `wgpu` consumer (Host Mode's direction is already measured) |
 | [`probe-p2-macos-adoption.md`](probe-p2-macos-adoption.md) | the probe that gates its macOS module — adopting an `IOSurface` into wgpu |
