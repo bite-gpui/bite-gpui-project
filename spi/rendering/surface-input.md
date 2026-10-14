@@ -104,7 +104,7 @@ predicate over its own frame — `0..1` across its bounds, origin top-left, the 
 is indexed by. The canvas puts a `HitboxFilter` on its hitbox: a `BlockMouse` hitbox narrowed by the
 predicate, so hit-testing skips it wherever the predicate says there is no content, and the pointer
 carries on to whatever is drawn behind it. `Cube::covers` in `interop_cube_drag` is the oracle — the
-cube's eight corners projected into that same frame.
+convex hull of the cube's eight projected corners, in that same frame.
 
 Two things fall out of *how* it lands, and they are the design:
 
