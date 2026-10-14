@@ -165,14 +165,14 @@ gpu_canvas(|canvas| canvas.paint_surface(source))
 ```
 
 `occlude_where(predicate)` lets the canvas claim the pointer only where its content is, instead of over
-its whole rectangle: where the predicate says content is, the canvas holds the pointer the way
-`InteractiveElement::occlude` does; where it says there is none, the canvas is an ordinary box and
-hit-testing carries on to whatever is drawn behind it — so a control under a transparent frame stays
-live in the gaps. The predicate is `Fn(Point<f32>) -> bool` and is asked once a frame, with the pointer
-in the canvas's own frame — `0..1` across its bounds, origin top-left, the frame the composited surface
-is indexed by. It is resolved at prepaint, where a frame's hitboxes are built, which is what makes the
-answer one event behind the pointer; [`../rendering/surface-input.md`](../rendering/surface-input.md) §4
-takes that up.
+its whole rectangle. The predicate is `Fn(Point<f32>) -> bool`, asked in the canvas's own frame — `0..1`
+across its bounds, origin top-left, the frame the composited surface is indexed by — and the canvas puts
+it on a `HitboxFilter` over a `BlockMouse` hitbox: where the predicate says content is, the canvas holds
+the pointer the way `InteractiveElement::occlude` does and nothing behind it is hovered; where it says
+there is none, the hitbox is not hit-tested at all, so the pointer carries on to whatever is drawn behind
+— and the canvas's own listeners do not fire either, since it is not hovered there. The filter is asked by
+hit-testing at the position of the event being routed, so the answer neither lags an event nor depends on
+the window redrawing; [`../rendering/surface-input.md`](../rendering/surface-input.md) §4 takes that up.
 
 ## 5. Names that do not exist here
 
@@ -217,6 +217,6 @@ window's renderer implements the path it asks for.
 - **If a second canvas kind appears** (audio waveform, 3D viewport) with different sizing
   or input semantics, the builder should be split rather than grow a mode enum per
   variant.
-- **If `occlude_where`'s one-frame lag ever shows**, the predicate would move from prepaint into
-  `hit_test`, at the event's own position — a routing change, not a builder one
-  ([`../rendering/surface-input.md`](../rendering/surface-input.md) §7).
+- **If a predicate has to run off the main thread**, the filter would have to be `Send`/`Sync`. It is kept
+  on the frame beside the `Send` hitboxes precisely because a `gpu_canvas` predicate closes over view
+  state that is not.
