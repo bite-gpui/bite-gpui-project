@@ -99,6 +99,8 @@ pub fn custom_choice(
 - The backend sorts **pairs** of `(GpuAdapterInfo, native handle)`, not indices into one list and
   then another: an OpenGL adapter reports `device = 0`, so matching a sorted info back to an adapter
   by vendor/device would be ambiguous.
+- `Custom` sees the list the backend's `enumerate_gpus` returns, in that order, so an index an
+  application derived from `App::enumerate_gpus` is the index the selector sees — before any sorting.
 
 `gpui_wgpu` loses its private copy and calls the shared functions; `gpui_linux` keeps
 `CompositorGpuHint` and converts it to `GpuId::Pci` for the tie-break. This is the one behaviour the
