@@ -67,12 +67,11 @@ These are not new projects: they are holes in the path this milestone built.
 
 | here | is |
 | --- | --- |
-| [`issues/0010-application-gpu-preference.md`](../../issues/0010-application-gpu-preference.md) | open — no application-facing GPU choice; `ZED_DEVICE_ID` is the only control |
-| [`issues/0012-gpu-enumeration-and-negotiation.md`](../../issues/0012-gpu-enumeration-and-negotiation.md) | open — nothing enumerates GPUs or negotiates capabilities before a window exists |
+| [`issues/0012-gpu-enumeration-and-negotiation.md`](../../issues/0012-gpu-enumeration-and-negotiation.md) | open — enumeration and the application preference are in; what a chosen device can import or export is not |
 | [`issues/0013-transfer-function-and-srgb-sampling.md`](../../issues/0013-transfer-function-and-srgb-sampling.md) | open — the surface path has no transfer function, so an sRGB producer is sampled as linear |
 
-The settled direction for the first two is decision `0008` (above): process-wide, chosen once, `LowPower`
-by default. The decision is written; the types and the plumbing are the next slice.
+The settled direction is decision `0008` (above): process-wide, chosen once, `LowPower` by default.
+The preference and enumeration are implemented; the capability tier is the next slice.
 
 ## Follow-on work — in its own repositories
 

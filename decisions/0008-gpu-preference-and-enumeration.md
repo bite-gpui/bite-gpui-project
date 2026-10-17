@@ -33,13 +33,14 @@
      does not rank them; `None`, or an index outside the list, fails the window with the shortfall
      named rather than silently picking another. The chosen adapter is tried first and the rest keep
      `Auto`'s order as fallbacks.
-3. **`ZED_DEVICE_ID` becomes `Device`, not a separate tier.** The variable is parsed in the platform,
-   beside the compositor hint, and lowered onto `GpuPreference::Device`; the one read is
-   `GpuPreference::from_env` (`crates/gpui_platform/src/gpu.rs:88`), not an `env::var` inside
-   `gpui_wgpu`. One precedence order then lives in one place. The
-   **headless** path is the exception: `new_headless` has no platform, so it keeps reading the variable
-   as `Auto`'s explicit override. The env var names a device id only, so the lowered `GpuId` leaves the
-   vendor unconstrained.
+3. **`ZED_DEVICE_ID` becomes `Device`, not a separate tier.** The variable is read in the Linux
+   platform (`gpu_preference_from_env`, `crates/gpui_linux/src/linux/platform.rs:157`) and lowered
+   onto `GpuPreference::Device`; no crate in the renderer, and nothing in `gpui_platform`, reads the
+   environment. One precedence order then lives in one place. The **headless** path has no platform,
+   so it takes an explicit preference (`current_headless_renderer_with`, backed by
+   `WgpuHeadlessRenderer::with_gpu_preference`) instead of reading the variable; a test that pins a
+   GPU translates `ZED_DEVICE_ID` itself. The env var names a device id only, so the lowered `GpuId`
+   leaves the vendor unconstrained.
 4. **The default is `LowPower`.** On a hybrid laptop the panel is wired to the integrated GPU, so a
    renderer on the discrete one keeps it powered for the window's lifetime and crosses PCIe every
    frame to be scanned out. A discrete GPU reached as a *producer* pays neither and can be dropped.
@@ -93,8 +94,9 @@ application cannot decide, cannot ask, and cannot change its mind.
   to integrated. That is the intended fix, and `Auto`/`HighPerformance` keep the old answer reachable.
 - **The platform gains one optional method** (`set_gpu_preference`, default no-op), so macOS and Windows
   compile unchanged; their renderers do not take a `wgpu` preference yet, and say so.
-- **The headless exception is documented** rather than removed, because tests and benchmarks have no
-  platform to state a preference on.
+- **The headless path takes a preference, not an env read.** Benchmarks and tests have no platform
+  to state one, so `current_headless_renderer_with` and `WgpuHeadlessRenderer::with_gpu_preference`
+  take it directly; the default is `Auto`, and the context is cached, so the first caller decides.
 - **The device remains process-wide**, so `Custom` and `Device` are resolved once; a per-viewport
   producer is a different seam (0012 §"scope of the device").
 
@@ -103,7 +105,7 @@ application cannot decide, cannot ask, and cannot change its mind.
 1. **Types and plumbing.** `GpuPreference`, `GpuId` and `GpuAdapterInfo` in `gpui_platform/src/gpu.rs`;
    `Platform::set_gpu_preference` (default no-op); `Application::with_gpu_preference`; thread it through
    the Linux clients beside `CompositorGpuHint` to `WgpuRenderer::new` → `WgpuContext` → the ranking;
-   lower `ZED_DEVICE_ID`; default `LowPower`.
+   lower `ZED_DEVICE_ID` in the Linux platform; default `LowPower`.
 2. **Enumeration and the custom choice.** `App::enumerate_gpus` / `App::active_gpu`;
    `GpuAdapterInfo` mapped out of `wgpu::AdapterInfo` on Linux; `Custom` resolved against the
    enumerated list before ranking; the mapping to `gpui_interop::GpuId`
