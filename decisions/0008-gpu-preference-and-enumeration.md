@@ -34,13 +34,13 @@
      named rather than silently picking another. The chosen adapter is tried first and the rest keep
      `Auto`'s order as fallbacks.
 3. **`ZED_DEVICE_ID` becomes `Device`, not a separate tier.** The variable is read in the Linux
-   platform (`gpu_preference_from_env`, `crates/gpui_linux/src/linux/platform.rs:157`) and lowered
+   (`gpu_preference_from_env`, `crates/gpui_linux/src/linux/platform.rs:158`) and lowered
    onto `GpuPreference::Device`; no crate in the renderer, and nothing in `gpui_platform`, reads the
-   environment. One precedence order then lives in one place. The **headless** path has no platform,
-   so it takes an explicit preference (`current_headless_renderer_with`, backed by
-   `WgpuHeadlessRenderer::with_gpu_preference`) instead of reading the variable; a test that pins a
-   GPU translates `ZED_DEVICE_ID` itself. The env var names a device id only, so the lowered `GpuId`
-   leaves the vendor unconstrained.
+   environment. One precedence order then lives in one place. The **headless** path has no platform
+   instance, so `current_headless_renderer` asks the platform crate for the same value
+   (`gpui_linux::gpu_preference_from_env`), while `current_headless_renderer_with` takes an explicit
+   preference. The env var names a device id only, so the lowered `GpuId` leaves the vendor
+   unconstrained.
 4. **The default is `LowPower`.** On a hybrid laptop the panel is wired to the integrated GPU, so a
    renderer on the discrete one keeps it powered for the window's lifetime and crosses PCIe every
    frame to be scanned out. A discrete GPU reached as a *producer* pays neither and can be dropped.
@@ -94,9 +94,10 @@ application cannot decide, cannot ask, and cannot change its mind.
   to integrated. That is the intended fix, and `Auto`/`HighPerformance` keep the old answer reachable.
 - **The platform gains one optional method** (`set_gpu_preference`, default no-op), so macOS and Windows
   compile unchanged; their renderers do not take a `wgpu` preference yet, and say so.
-- **The headless path takes a preference, not an env read.** Benchmarks and tests have no platform
-  to state one, so `current_headless_renderer_with` and `WgpuHeadlessRenderer::with_gpu_preference`
-  take it directly; the default is `Auto`, and the context is cached, so the first caller decides.
+- **The headless path takes a preference, or asks the platform for one.** With no platform instance,
+  `current_headless_renderer` calls the platform crate's `gpu_preference_from_env`, so the debug
+  override still applies where it did; `current_headless_renderer_with` takes an explicit preference.
+  Without either, the default is `Auto`. The context is cached, so the first caller decides.
 - **The device remains process-wide**, so `Custom` and `Device` are resolved once; a per-viewport
   producer is a different seam (0012 §"scope of the device").
 
