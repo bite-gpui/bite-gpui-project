@@ -126,9 +126,10 @@ publish. On GitHub they point at the site now (see [Sync state](#sync-state)).
 
 ## github.com
 
-Nine repositories in `bite-gpui`: seven carry the project, one is the site, one is a
-consumer. The state below is after the 2026-09-27 sync; how it was set and what cannot
-be changed this way is in [Sync state](#sync-state).
+Eleven repositories in `bite-gpui`: nine carry the project, one is the site, one is a
+consumer. The state below is after the 2026-09-27 sync for the original nine;
+`gpui_interop` and `gpui_video` were created later and have not been through that pass.
+How it was set and what cannot be changed this way is in [Sync state](#sync-state).
 
 | repository | visibility | description | topics | homepage |
 | --- | --- | --- | --- | --- |
@@ -140,6 +141,8 @@ be changed this way is in [Sync state](#sync-state).
 | `gpui_pass` | public | A throttling, self-accounting FramePipeline for GPUI | frame-pipeline, gpui, gui, profiling, rust, throttling | <https://bite-gpui.github.io/> |
 | `distribution` | public | Rewrites the bite-gpui layer stack into publishable crates and releases them to crates.io: naming, staging and versioning | crates-io, gpui, publishing, release-engineering, rust | <https://bite-gpui.github.io/> |
 | `tools` | private | The tooling that applies the bite-gpui architecture to a target: replay onto a new upstream, conflict settlement, per-target carves and measurement | gpui, migration, rebase, rust, tooling | <https://bite-gpui.github.io/> |
+| `gpui_interop` | public | — | — | — |
+| `gpui_video` | public | GPUI's video stack: the `gpui_video` element, the `gpui_video_platform` seam, and the `gpui_va` VA-API producer | — | — |
 | `bite_gpui_scroll_demo` | public | A scroll-and-motion demo built on the published bite-gpui crates, with the frame cost of each effect | benchmarking, demo, gpui, rust, scroll | <https://bite-gpui.github.io/demos> |
 
 What each is, in the project's own framing:
@@ -154,6 +157,8 @@ What each is, in the project's own framing:
 | `gpui_pass` | `gpui_pass` — the `FramePipeline` wrap (throttle + ledger) | its `README.md`, `benchmarks/` |
 | `distribution` | the distribution engine: staging branches into publishable crates and releasing them (`.dist/`) | `DESIGN.md`, `docs/` |
 | `tools` | the migration tooling: replay onto a new upstream, conflict settlement, per-target carves and measurement (`.tools/`) | `docs/workflows.md`, `docs/architecture.md`, `docs/rebase-handoff.md` |
+| `gpui_interop` | the downstream bridge and input crate: the cross-device surface bridge, the input gateway, and the Linux/macOS/Windows arms | its `README.md`, `crates/gpui_interop/` |
+| `gpui_video` | the video stack: `gpui_va` (VA-API decode), `gpui_video` (the element), `gpui_video_platform` (the seam) | no `README.md` yet; `crates/` |
 | `bite_gpui_scroll_demo` | a consumer: the scroll-and-motion demo built on the published crates | its `README.md`, `benchmarks/` |
 
 `bite_gpui_scroll_demo` is the odd one out — it belongs to the usage suite (`.uses/`),
@@ -198,6 +203,11 @@ description already matching its crate's (`gpui_parley`, `gpui_morphorm`) was le
 alone, and topics were only added, never removed. The org profile's Website field was
 normalized to `https://bite-gpui.github.io` in the same pass. The resulting values are
 the [github.com](#githubcom) table above.
+
+The two new repositories are outside that pass: `gpui_interop` has no description, topics or homepage
+on GitHub, and `gpui_video` has a description but no topics or homepage. Both are public and default to
+`main`. The intended values are in [`repositories.md`](repositories.md); syncing them is the same
+`gh repo edit` pass, not done here.
 
 ### crates.io — only on the next publish
 

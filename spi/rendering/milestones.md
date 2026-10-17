@@ -2,9 +2,9 @@
 
 - **Status:** the handoff. What is built, where it is, what is next in what order, and the gates a
   resumer runs. Written 2026-09-29 against `bite_v1.23.1-pre` (`e867ece9f9`), re-pointed onto the
-  canonical `bite_v1.23.x` (`5c0bc06887`, tag `bite_1.23.302`) on 2026-10-17; a citation's line
-  numbers move whenever that ref does, and `script/check-citations` prints what each one now points
-  at.
+  canonical `bite_v1.23.x` on 2026-10-17 and re-derived again when the branch advanced to
+  `a3b0e8f46c` (the last tag, `bite_1.23.302`, is `5c0bc06887`); a citation's line numbers move
+  whenever that ref does, and `script/check-citations` prints what each one now points at.
 - **Read with:** the chapter order in [`README.md`](README.md) for the design — this document is the
   state — and [`producer-reach.md`](producer-reach.md), which is the one gap large enough to have a
   chapter rather than a line here.
@@ -13,12 +13,13 @@
 
 | what | where |
 | --- | --- |
-| the canonical ref, and what every citation resolves against | `bite_v1.23.x`, tip `5c0bc06887` (tag `bite_1.23.302`) |
-| what the canonical ref already carries | the layer stack, the surface re-cut (`PaintSurface`, `draw_surfaces` on all three renderers, `GpuCanvas`) and the renderer-owned device door (`0006`) |
+| the canonical ref, and what every citation resolves against | `bite_v1.23.x`, tip `a3b0e8f46c` (the last tag, `bite_1.23.302`, is `5c0bc06887`) |
+| what the canonical ref already carries | the layer stack; the surface re-cut (`SurfaceSource`/`PaintSurface`, `surface()`, `draw_surfaces` on all three renderers, `GpuCanvas`); the renderer-owned device door (`0006`); the Linux dma-buf importer with its native-layout guard (`0007`); and the GPU preference and enumeration (`0008`) |
 | the design of record for external pixels | [`surfaces.md`](surfaces.md) — the surface unification [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) decides — and its plan and probes in [`surface-plan.md`](surface-plan.md) |
 | the design of record for external pixels | [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) — the surface unification; its source, the *External Surfaces, Platform Interop, and Headless Rendering in GPUI* design record, is filed with the work |
 | Path A, whole | on the canonical ref, sixteen commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
-| the checkout the work is in | `bite-tools/worktrees/wt-seam`, a `git worktree` of the `bite-gpui` clone |
+| the downstream crate | [`gpui_interop`](https://github.com/bite-gpui/gpui_interop) — its own repository, the bridge and the input gateway; issue [`0006`](../../issues/0006-surface-interop.md) |
+| the checkout the work is in | the `bite-gpui` clone on `bite_v1.23.x`, beside the `gpui_interop` repository |
 | the other repositories, and what each is for | [`../../references.md`](../../references.md) |
 
 `#6` merged as `fcde78d01a`, and it was the whole path: the Direct3D arm was stacked on it
@@ -34,18 +35,23 @@ canonical ref carries Path A.
 | --- | --- | --- | --- |
 | the renderer seam: `PlatformRenderer`, the typed `RendererTarget`, the factory, the native hooks | [`renderer-seam.md`](renderer-seam.md) | the canonical ref | PR #4 |
 | the offscreen contract: the three methods ungated, `render_scene` split from `read_pixels`, `PixelBuffer` in place of `image::RgbaImage`, and all three renderers implementing it in the same shape | [`README.md`](README.md) | the canonical ref | `gpui_engine`'s 7 tests, ubuntu CI. Direct3D's "offscreen" is its window's swap chain — it has no headless constructor — so its `render_scene` is "rendered and not presented", which is what its rows already build a hidden window for |
-| Path A's scene half: `CustomRenderPrimitive::Texture`, `ImportedTextureHandle`, `to_quad_record`, `ObservingRenderer` | [`foreign-texture.md`](foreign-texture.md) | the canonical ref | `cargo test -p gpui_engine --lib` |
-| Path A's authoring half: `Window::paint_imported_texture`, `painted_imported_textures` | [`foreign-texture.md`](foreign-texture.md) §3 | the canonical ref | the radii row in `gpui_authoring`'s 347 tests |
+| the surface vocabulary: `SurfaceSource` (`crates/gpui_engine/src/scene.rs:851`), `DirectXSource` (`:802`) and `PaintSurface` (`:908`) | [`surfaces.md`](surfaces.md) | the canonical ref | the three arms below |
+| `draw_surfaces` on all three renderers (`crates/gpui_wgpu/src/wgpu_renderer.rs:2084`, `crates/gpui_apple/src/metal_renderer.rs:1156`, `crates/gpui_windows/src/directx_renderer.rs:918`) and the `surface()` element (`crates/gpui_authoring/src/elements/surface.rs:61`) | [`surfaces.md`](surfaces.md) | the canonical ref | [`surface-plan.md`](surface-plan.md) W2/W3; [`verification.md`](verification.md) §2 |
+| `GpuCanvas` (`crates/gpui_authoring/src/elements/gpu_canvas.rs:135`) and its context (`:37`): `paint_surface` (`:46`), `paint_texture` (`:64`), `device::<R>()` (`:87`) | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the canonical ref | the hand-rolled demos became the element |
+| the Linux dma-buf importer: `DmaBufHandle` (`crates/gpui_engine/src/dmabuf.rs:154`), `DmaBufTextureCache` (`crates/gpui_wgpu/src/dmabuf.rs:692`) and the native-layout guard (`crates/gpui_wgpu/src/dmabuf.rs:163`) | [`zero-copy-import.md`](zero-copy-import.md) | the canonical ref | [`optimus-dmabuf-topologies.md`](../../decisions/optimus-dmabuf-topologies.md); the `surface_dmabuf` suites on both GPUs |
+| the GPU preference and enumeration: `GpuPreference` (`crates/gpui_platform/src/gpu.rs:69`), `with_gpu_preference` (`crates/gpui_runtime/src/application.rs:93`), `adapter_key` (`crates/gpui_wgpu/src/wgpu_context.rs:938`), and `enumerate_gpus` / `active_gpu` (`crates/gpui_authoring/src/app.rs:2116`, `:2124`) over `GpuAdapterInfo` (`crates/gpui_platform/src/gpu.rs:163`) | [`zero-copy-import.md`](zero-copy-import.md) and [`upstream/README.md`](upstream/README.md) PR 5 | the canonical ref | [`0008`](../../decisions/0008-gpu-preference-and-enumeration.md); issue [`0010`](../../issues/0010-application-gpu-preference.md) closed; the capability tier is `0012` |
+| the superseded route: `CustomRenderPrimitive::Texture`, `ImportedTextureHandle` and `paint_imported_texture` | [`foreign-texture.md`](foreign-texture.md) | the canonical ref, superseded by `0005`; the surface path is the public one | `crates/gpui_engine/src/custom_render.rs:41`, `:14`; Path B's `Inline` is unbuilt |
 | the wgpu arm, the offscreen target and the readback | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 3 rows — the sRGB round trip, the ordering, the device identity — skipped with a logged warning where the machine has no adapter |
 | the Metal arm | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 2 rows on `macos-14` — the colour round trip and the boundary check — plus the shader compile the `macos` job already did |
 | the Direct3D arm and its CI job | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 3 rows on `windows-latest`, WARP |
 | the producer's reach: `GpuRenderer::device` and the canvas door `GpuCanvasContext::device::<R>`, and a token builder on each of the three arms (`ImportedTextureExt`, `DirectXTextureExt`, `MetalTextureExt`) | [`producer-reach.md`](producer-reach.md) | the canonical ref | the Direct3D and Metal rows take their device through the door — the route an application has — instead of the renderer's own field |
 | the macOS producer route, measured rather than built: wgpu's adapter *is* the `MetalRenderer`'s own `MTLDevice`, so a wgpu producer there needs a power preference and no handover | [`producer-reach.md`](producer-reach.md) §7 | the canonical ref | the probe's printout, [`../decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md) |
-| the runnable demo: `cargo run -p gpui --example imported_texture`, a producer per platform, composited under a plain `div()` | [`foreign-texture.md`](foreign-texture.md) §3 | `crates/gpui/examples/imported_texture.rs`, the canonical ref (which carries it as `path_a.rs`) | compiles for the host, `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`; running it needs a display |
+| the runnable demos: `cargo run -p gpui --example surface`, a producer per platform, and `gpui_interop`'s `interop_cube_drag` | [`foreign-texture.md`](foreign-texture.md) §3, [`zero-copy-import.md`](zero-copy-import.md) | the canonical ref (which carries it as `path_a.rs`); the interop repository | compile for the host, `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`; running needs a display |
 
 ## 3. The gaps beside the reach
 
-Small and independent, and none of them blocks anything in §4.
+Small and independent. The transfer function is the one with a milestone of its own (M9); the rest do
+not block anything in §4.
 
 - **Metal cannot enforce the same-device rule.** Each arm checks what its sampler needs at the
   boundary, but only Direct3D refuses a texture from *another* device by name — wgpu panics inside
@@ -53,6 +59,10 @@ Small and independent, and none of them blocks anything in §4.
   resource does not expose the device that made it. So on macOS that half of the rule rests on the
   application; it is not closable by writing code
   ([`producer-reach.md`](producer-reach.md) §3).
+- **The surface path has no transfer function.** `YuvColorSpace` models a matrix and a range but not
+  the transfer function, so an sRGB-encoded producer's bytes are sampled as linear; range and
+  transfer are independent axes, so `YuvRange` must not absorb it. Issue
+  [`0013`](../../issues/0013-transfer-function-and-srgb-sampling.md).
 - **The pull-request test job's filter is narrow.** `bite-ci.yml`'s `tests` job runs
   `cargo test -p gpui_authoring -p gpui_engine --lib` and nothing else, so every other crate's tests
   are local-only — `gpui_wgpu`'s need a GPU adapter, and its older tests fail rather than skip
@@ -64,8 +74,9 @@ Small and independent, and none of them blocks anything in §4.
 ## 4. What is next, in order
 
 Reshaped by [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md), which moves
-external pixels onto the existing `PaintSurface` / `surface()`. M1 and M2 stand; M3 is retargeted;
-the bridge is promoted out of "deferred", and the unified surface arm joins the list.
+external pixels onto the existing `PaintSurface` / `surface()`. M1, M2, M3 and M5 are done; M4 and M9
+are unstarted; M6 is built on Windows and Linux but not published; M7 is partial; M8 is done, but for
+the capability tier.
 
 **M1 — the producer's reach. Done.** [`producer-reach.md`](producer-reach.md) and
 [`0006`](../../decisions/0006-renderer-owned-device.md) (which supersedes 0004). `GpuRenderer::device`
@@ -77,7 +88,7 @@ anything below.
 **M2 — the gaps in §3. Done for Path A.** The Metal token builder, the exact encoder, the arm's two
 rows, the Direct3D renderer's offscreen shape, the wgpu token's reach through the facade, and the
 macOS producer route — measured rather than handed over — all landed, and a runnable demo ties them
-together. What is left in §3 is the test filter and the citation churn, neither of which is Path A.
+together. What is left in §3 is the test filter, the transfer function and the citation churn.
 
 **M3 — `GpuCanvas`, retargeted. Done.** [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md). The
 surface an application meets; 0005 changes only its Path A arm — it produces a `SurfaceSource` and
@@ -90,28 +101,40 @@ Linux/macOS after it.
 **M4 — Path B.** [`inline-commands.md`](inline-commands.md). Unstarted. It draws into the window's
 own pass, not a buffer, so 0005 leaves it alone; it needs no device export and is not behind M1.
 
-**M5 — the unified surface arm. Windows half done.** Extend `SurfaceSource` / `PaintSurface` to Windows and Linux and
-implement `draw_surfaces` by retargeting the Direct3D arm that exists
-(`crates/gpui_windows/src/directx_renderer.rs:1125` → `:918`). The Windows half is upstream PR 3 of
-the design record and is built (#9); the Linux half adds the dma-buf variant and is gated on P3. This is what makes `surface()` a
-capability on every desktop rather than macOS alone.
+**M5 — the unified surface arm. Done.** `SurfaceSource` / `PaintSurface` on Windows and Linux, with
+`draw_surfaces` on all three renderers and the `surface()` element. The Windows half is upstream PR 3
+and is built (#9); the Linux half is the dma-buf variant, P3 cleared, with its importer guard
+([`0007`](../../decisions/0007-dmabuf-importer-native-layout-guard.md)). This is what makes `surface()`
+a capability on every desktop rather than macOS alone.
 
-**M6 — the cross-API bridge, `gpui-interop`.** 0002's Tier 2, scheduled rather than deferred by 0005.
-The crate is cross-platform — the same three-step interchange (match the adapter, move a handle, order
-the queues) in each OS's clothes, per [`surfaces.md`](surfaces.md) §2 — but only Windows is
-*measured*, so the Windows module is the scope to build first: a Direct3D 12 / `wgpu` producer → a
-Direct3D 11 shared NT handle, with an `ID3D12Fence` ↔ `ID3D11Fence` handshake. The macOS module waits
-on P2 (`IOSurface` adoption); the Linux module's cross-device case is already measured by P3 (dma-buf +
-`sync_file`). The reverse direction — a Direct3D 11 producer feeding a `wgpu` consumer — is still
-unmeasured ([`producer-reach.md`](producer-reach.md) §6) and is Guest Mode's, so it keeps a probe of
-its own ([`interop-crate.md`](interop-crate.md)).
+**M6 — the cross-API bridge, `gpui_interop`. Host Mode built on Windows and Linux; shipping remains.**
+The crate is its own repository (issue [`0006`](../../issues/0006-surface-interop.md)); Windows
+(`SharedSurface` + `Fence`) and Linux (`SharedBuffer`/`PlaneLayout` + `Fence`, including a
+producer-pushed layout) are built and tested, and the crate's README marks macOS **not yet
+implemented** (P2). It is not published: it takes the core from the sibling `bite-gpui` working tree,
+and `bite-distribution` has no interop target. The reverse direction — a Direct3D 11 producer feeding a
+`wgpu` consumer — is still unmeasured ([`producer-reach.md`](producer-reach.md) §6) and is Guest
+Mode's, so it keeps a probe of its own ([`interop-crate.md`](interop-crate.md)).
 
-**M7 — guest / headless.** The offscreen contract is built (M2); what is left is the worker-thread
-runner that hosts GPUI inside a foreign loop, which belongs in `gpui-interop`.
+**M7 — guest / headless. Partial.** The offscreen contract is built (M2) and `gpui_interop` has a
+`guest` module, but the worker-thread runner that hosts GPUI inside a foreign loop is not measured
+(P1, P7).
+
+**M8 — GPU preference and enumeration. Done, but for the capability tier.** Decision
+[`0008`](../../decisions/0008-gpu-preference-and-enumeration.md) and issue
+[`0010`](../../issues/0010-application-gpu-preference.md) are implemented: `GpuPreference` on
+`Application`, `ZED_DEVICE_ID` read only in the Linux platform (`gpu_preference_from_env`), `LowPower`
+by default, and `App::enumerate_gpus` / `active_gpu` with `Custom` naming one adapter. What remains is
+what issue [`0012`](../../issues/0012-gpu-enumeration-and-negotiation.md) still tracks — what a chosen
+device can import or export, and the recorded refusal of runtime switching.
+
+**M9 — the surface's transfer function. Open.** Issue
+[`0013`](../../issues/0013-transfer-function-and-srgb-sampling.md): the colour pipeline models a
+matrix and a range but not the transfer function, so an sRGB producer is sampled as linear.
 
 ## 5. The gates
 
-**`.meta`.** `script/check-citations` — 444 citations, 0 unresolved (2026-10-17). It
+**`.meta`.** `script/check-citations` — 450 citations, 0 unresolved (2026-10-17). It
 resolves against the canonical ref, so a document may not cite `path:line` for a file that exists
 only on a branch: name it, as `producer-reach.md` does for `crates/gpui_engine/src/custom_render.rs`
 and the two `imported_texture.rs` files. `.meta` is its own repository; never `git add` the zed
@@ -160,14 +183,19 @@ Three traps that cost time if they are not known:
 [`../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) is filed as
 evidence beside the decision it produced. A probe still running lives with the work it gates.
 
-## 6. What has no home yet
+## 6. The decisions these milestones rest on
 
 - **The rendezvous decision** (M1): [`0004`](../../decisions/0004-producer-device-rendezvous.md),
-  decided and built. It supplies the gpui→app half of 0002's "the rendezvous is one slot, and it
-  works both ways", which the code did not have.
+  superseded by [`0006`](../../decisions/0006-renderer-owned-device.md) — the renderer owns the device
+  and the canvas lends it.
 - **The surface decision** (M3/M5): [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md),
-  decided. It reunites the second primitive with `PaintSurface`, so the design is
-  [`surfaces.md`](surfaces.md) and the plan and probes are [`surface-plan.md`](surface-plan.md).
+  decided and built. The design is [`surfaces.md`](surfaces.md); the plan and probes are
+  [`surface-plan.md`](surface-plan.md).
+- **The layout decision** (M5's Linux half):
+  [`0007`](../../decisions/0007-dmabuf-importer-native-layout-guard.md), decided and implemented. It
+  is why a linear dma-buf is refused unless the driver produces its layout.
+- **The GPU decision** (M8): [`0008`](../../decisions/0008-gpu-preference-and-enumeration.md), decided
+  and implemented for the preference and enumeration; capability negotiation follows issue `0012`.
 - **The bridge decision** (M6): 0002 deferred it; 0005 schedules it in a downstream crate, and
   [`surface-plan.md`](surface-plan.md) P1/P5/P6 are the probes that decide whether the direction
   worth having works at all.

@@ -1,8 +1,8 @@
 # 0007 — The dma-buf importer refuses a linear layout the driver itself does not produce
 
 - **Decided:** 2026-10-17
-- **Status:** decided — implemented on the working branch `bite_v1.23.x-dmabuf-linear-plane-layouts`, not
-  yet on the canonical ref; exercised on both the Intel HD 520 and the NVIDIA 930M.
+- **Status:** decided and implemented on the canonical ref (`f256e93171`); exercised on both the Intel
+  HD 520 and the NVIDIA 930M.
 - **Evidence:** [`../issues/0011-linear-dmabuf-plane-layouts.md`](../issues/0011-linear-dmabuf-plane-layouts.md)
   — the bug this closes, and the layouts it measured;
   [`optimus-dmabuf-topologies.md`](optimus-dmabuf-topologies.md) — what an iGPU/dGPU pair does with a linear
@@ -18,8 +18,8 @@
 
 **A linear handle is imported only if the plane layout it declares is one the driver itself produces.**
 
-On the `LINEAR` path — where `gpui_wgpu` gates the explicit layout it built on `tiled` rather than on
-whether the layout can be given (`crates/gpui_wgpu/src/dmabuf.rs:137`, `:149`, `:349`) — the importer now:
+On the `LINEAR` path, where the explicit layout is now gated on `explicit` rather than on the modifier
+(`crates/gpui_wgpu/src/dmabuf.rs:329`, `:337`; the single-plane path at `:558`, `:566`), the importer:
 
 1. **Shapes the guard around the driver's own layout.** It builds a plain, **unbound** `LINEAR` image of the
    handle's format and extent and reads back the **plane offsets** the driver gives it. The handle's

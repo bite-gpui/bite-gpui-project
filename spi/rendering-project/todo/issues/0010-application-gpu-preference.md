@@ -1,1 +1,0 @@
-../../../../issues/0010-application-gpu-preference.md

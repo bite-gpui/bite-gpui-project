@@ -24,7 +24,7 @@ constructor (`crates/gpui_authoring/src/elements/surface.rs:21`, `:61`), the `Gp
 is pushed through (`crates/gpui_authoring/src/elements/gpu_canvas.rs`) and a `draw_surfaces` on every
 renderer (`crates/gpui_windows/src/directx_renderer.rs:918`,
 `crates/gpui_apple/src/metal_renderer.rs:1156`, and wgpu's at
-`crates/gpui_wgpu/src/wgpu_renderer.rs:2065`). It was macOS-only before the arms below landed:
+`crates/gpui_wgpu/src/wgpu_renderer.rs:2084`). It was macOS-only before the arms below landed:
 `SurfaceSource` (`crates/gpui_engine/src/scene.rs`, imported by the element) now carries the
 `CoreVideo`/`DirectX`/`DmaBuf` variants, and every renderer implements `draw_surfaces`.
 

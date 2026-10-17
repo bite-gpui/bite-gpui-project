@@ -9,8 +9,9 @@
   canvas lends. **Both are on the upstream path** (§1), and that is what decides this crate's shape.
 - **Not a seam:** it replaces no `SceneRenderer` and decorates no `FramePipeline` — it is the
   "crate that is neither" ([`../../architecture/extension-tiers.md`](../../architecture/extension-tiers.md)).
-- **A working name.** `gpui-interop` is a placeholder; the crate's real name is part of question 1 of
-  issue `0006`.
+- **The home and name are settled.** The crate and its repository are `gpui_interop` (`gpui-interop` in
+  prose); that is question 1 of issue `0006` answered. What remains open there is shipping, not
+  placement.
 
 ## 1. The constraint that shapes it: `PaintSurface` is going upstream
 

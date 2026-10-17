@@ -42,7 +42,7 @@ clear answer, and it is *no*, along the axis that matters:
 - The crate says it itself: *"The element DSL is not separable from the runtime: an element is laid
   out and painted with a concrete `Window` and `App`"* (`crates/gpui_authoring/src/gpui_authoring.rs:8`).
 - `gpui_runtime` is **above** authoring — it installs `Application::with_layout_engine`
-  (`crates/gpui_runtime/src/application.rs:92`) and `with_frame_pipeline` (`:107`) but reaches
+  (`crates/gpui_runtime/src/application.rs:102`) and `with_frame_pipeline` (`:107`) but reaches
   authoring only through its public surface. It can hold a *policy* or a decorator; it cannot own
   the frame state.
 - `gpui_engine` is **below** `gpui_platform`, and the frame's channels name `PlatformInputHandler`
@@ -688,7 +688,7 @@ an open boundary with no shipped swap is what `FramePipeline` already is. A mode
 published implementation of a published trait — and a swap is what 0001 bounds. The probe's deciding finding is that every
 `Window` field is `pub(crate)`, so the seam's published surface is the *whole* API a mode gets and the
 seam cannot itself be out of tree. The hook follows the bootstrap seams already there:
-`with_layout_engine` (`crates/gpui_runtime/src/application.rs:92`) and `with_frame_pipeline`
+`with_layout_engine` (`crates/gpui_runtime/src/application.rs:102`) and `with_frame_pipeline`
 (`:107`) are factories, the first taking no window and the second a `WindowId`, and retention is
 stateful per window — so it is the second shape, one instance per `WindowId`:
 

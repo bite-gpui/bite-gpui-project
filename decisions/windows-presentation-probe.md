@@ -17,7 +17,7 @@ was created with:
 
 | backend set | surface from the `HWND` | adapter | a frame presented |
 | --- | --- | --- | --- |
-| `VULKAN \| GL` — what `gpui_wgpu` asked for at the probe (`crates/gpui_wgpu/src/wgpu_context.rs:395`) | created | **none** | — |
+| `VULKAN \| GL` — what `gpui_wgpu` asked for at the probe (`crates/gpui_wgpu/src/wgpu_context.rs:443`) | created | **none** | — |
 | `DX12` | created | `Microsoft Basic Render Driver`, `Dx12`, `Cpu` | **yes** |
 | `VULKAN` | not created | — | — |
 | `GL` | created | **none** | — |
@@ -27,11 +27,11 @@ Three things follow, and the first is the one that would have cost a patch:
 
 - **`gpui_wgpu`'s instance did not enable Direct3D 12.** Its non-wasm instance was
   `Backends::VULKAN | Backends::GL`
-  (`crates/gpui_wgpu/src/wgpu_context.rs:395`) — right for Linux, and never run on Windows,
+  (`crates/gpui_wgpu/src/wgpu_context.rs:443`) — right for Linux, and never run on Windows,
   where it found no adapter at all: *"vulkan drivers/libraries could not be loaded ... dx12 not
   requested, gl found no adapters"*. So `WgpuRenderer::new` failed on Windows **before**
   presentation was reached, and the Windows commit was not plumbing alone: `gpui_wgpu` had to
-  enable `DX12`, which the seam does (`crates/gpui_wgpu/src/wgpu_context.rs:397`).
+  enable `DX12`, which the seam does (`crates/gpui_wgpu/src/wgpu_context.rs:445`).
 - **Once it does, presentation works.** A surface built from `RawWindowHandle::Win32` over
   the `HWND` finds the DX12 adapter, configures, acquires a frame and presents it.
 - **A DirectComposition tree on the same `HWND` does not stop it.** Committing a target,

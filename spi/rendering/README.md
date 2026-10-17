@@ -201,7 +201,7 @@ RFC's "≈16.0 GB/s at 4K120" is its own formula miscounted — `W × H × 4 × 
    `crates/gpui_authoring/src/platform/test/window.rs:529`) and one override
    (`crates/gpui_apple/src/metal_renderer.rs:1825`). The *production* resize path
    already has a name: `WgpuRenderer::update_drawable_size`
-   (`crates/gpui_wgpu/src/wgpu_renderer.rs:1363`). So neither "lift the gate" nor "drop
+   (`crates/gpui_wgpu/src/wgpu_renderer.rs:1382`). So neither "lift the gate" nor "drop
    it" was needed — the contract gets the production name, which is also what makes a
    factory-installed renderer behave exactly as the backend's own.
 4. **Where does the factory live — `Application` or the window?** **The window.**
@@ -222,7 +222,7 @@ RFC's "≈16.0 GB/s at 4K120" is its own formula miscounted — `W × H × 4 × 
    revision. The same-device payload stays the wgpu `TextureView` on every platform wgpu
    renders, and the raw Metal handle on macOS.
 7. **`SharedGraphicsContext`, from the uncommitted draft.** **Rejected.** It duplicates
-   `WgpuContext` field for field (`crates/gpui_wgpu/src/wgpu_context.rs:14`) and
+   `WgpuContext` field for field (`crates/gpui_wgpu/src/wgpu_context.rs:12`) and
    `WgpuRenderer::new` takes the *existing* `WgpuContextSlot`, so a parallel type cannot be
    injected. It also creates a device, which is the thing the draft's own §1 warns
    against.

@@ -75,9 +75,10 @@ rests on, and the cheapest thing to probe next.
 | NVIDIA 580.178.04 | `offset 0`, row 128, **size 65536** | `offset 65536`, row 128, size 65536 | 131072 |
 
 The NVIDIA driver pads luma to 64 KiB, so its chroma plane does not sit where the DRM `NV12` layout puts
-it. `gpui_wgpu`'s importer drops the handle's plane layouts when the modifier is linear
-(`crates/gpui_wgpu/src/dmabuf.rs:171`, `crates/gpui_wgpu/src/dmabuf.rs:377`) and samples the driver's
-layout instead, so a canonical producer renders green on the dGPU and correctly on the iGPU. This is 0011.
+it. `gpui_wgpu`'s importer used to drop the handle's plane layouts when the modifier was linear and
+sample the driver's layout instead, so a canonical producer rendered green on the dGPU and correctly
+on the iGPU. This is 0011; [`0007`](0007-dmabuf-importer-native-layout-guard.md) now refuses a linear
+layout the driver did not produce (`crates/gpui_wgpu/src/dmabuf.rs:163`, `:180`).
 
 ## Measured: cross-device import fails
 
@@ -88,7 +89,7 @@ dropping a dma-buf surface: no memory type accepted the dma-buf import (last: So
 ```
 
 The importer does try all types the image allows, each with a
-`VkMemoryDedicatedAllocateInfo` (`crates/gpui_wgpu/src/dmabuf.rs:476`), so the failure is not a missed
+`VkMemoryDedicatedAllocateInfo` (`crates/gpui_wgpu/src/dmabuf.rs:666`), so the failure is not a missed
 heap check —
 `VkExternalMemoryFeatureFlags::IMPORTABLE` was reported for that buffer and the driver still refused it.
 Only the same-GPU case imported.

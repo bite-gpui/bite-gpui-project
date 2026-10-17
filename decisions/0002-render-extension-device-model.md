@@ -36,7 +36,7 @@ GPU resources:
    `GpuContext = Rc<RefCell<Option<WgpuContext>>>`
    (`crates/gpui_wgpu/src/wgpu_renderer.rs:233`) with
    `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
-   (`crates/gpui_wgpu/src/wgpu_context.rs:14`).
+   (`crates/gpui_wgpu/src/wgpu_context.rs:12`).
 
 ## What the constraint implies for a producer
 
@@ -68,11 +68,13 @@ tier 1 is that renderer itself, which is the revision below.
 let mut ctx_ref = gpu_context.borrow_mut();
 let context = match ctx_ref.as_mut() {
     Some(context) => { context.check_compatible_with_surface(&surface)?; context }
-    None => ctx_ref.insert(WgpuContext::new(instance, &surface, compositor_gpu)?),
+    None => ctx_ref.insert(WgpuContext::new(
+        instance, &surface, compositor_gpu, gpu_preference,
+    )?),
 };
 ```
 
-(`crates/gpui_wgpu/src/wgpu_renderer.rs:406`-`:415`). So an application that already has a
+(`crates/gpui_wgpu/src/wgpu_renderer.rs:409`-`:414`). So an application that already has a
 device, adapter and queue it wants to use can build the `WgpuContext`, put it in the slot
 from its own factory, and the renderer adopts it;
 `check_compatible_with_surface` is the guard that the adapter still presents to this
@@ -151,7 +153,7 @@ written and holds, with two riders that
 [`windows-presentation-probe.md`](windows-presentation-probe.md) records. `WgpuRenderer` can
 present on a Windows window, but only on Direct3D 12, and reaching it was a backend change and
 not plumbing alone: the seam's Windows commit is what enables `Backends::DX12`
-(`crates/gpui_wgpu/src/wgpu_context.rs:397`). And the DX12 surface offers `Opaque` alpha alone,
+(`crates/gpui_wgpu/src/wgpu_context.rs:445`). And the DX12 surface offers `Opaque` alpha alone,
 so a window it renders cannot be transparent the way the default renderer's can.
 
 ## Revision, 2026-09-28: adoption is app-reachable

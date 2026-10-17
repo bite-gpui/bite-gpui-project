@@ -117,13 +117,17 @@ same-device arm; the `Shared` half is the capability §6 describes.
 
 **Commits:** `2ff6730480`, `a443f7399f`, `5fa4836b08`, `cc5f1805b0`, `180869931e`.
 
-### PR 5 — GPU enumeration and selection (not built)
+### PR 5 — GPU enumeration and selection (selection and enumeration built, capability not)
 
 **Adds:** an API for an application to *list* the adapters a machine has and *select* one per window or
-renderer. **Not in the fork:** the only GPU fact upstream exposes is `GpuSpecs` *reporting*
-(`crates/gpui_platform/src/gpu.rs`), not a chooser. A separate PR for the API, and one per platform.
+renderer. **Selection is built:** `GpuPreference` on `Application`, `ZED_DEVICE_ID` read only in the
+Linux platform, `LowPower` by default. **Enumeration is built:** `App::enumerate_gpus` / `active_gpu`
+and `GpuAdapterInfo`, with `Custom` naming one adapter. **Capability is not:** there is no report of
+what a device will import or export, beyond `GpuSpecs` *reporting*
+(`crates/gpui_platform/src/gpu.rs`). A separate PR for the API, and one per platform.
 
-**Commits:** none.
+**Commits:** `400f655e96` (the preference), `cbc5a3d978` (enumeration), `a3b0e8f46c` (the environment
+read moves to the platform).
 
 ### PR 6 — offscreen and headless (partial)
 
@@ -217,8 +221,8 @@ proposal.
 
 ## 7. The commits each PR would carry
 
-§2 reads against the fork's actual history — `bite_v1.23.x`, tip `5c0bc06887`, tag `bite_1.23.302`.
-Each PR is the fork's commit group replayed as one:
+§2 reads against the fork's actual history — `bite_v1.23.x`, tip `a3b0e8f46c` (the last tag,
+`bite_1.23.302`, is `5c0bc06887`). Each PR is the fork's commit group replayed as one:
 
 | PR | fork commits (`bite_v1.23.x`) |
 | --- | --- |
@@ -226,7 +230,7 @@ Each PR is the fork's commit group replayed as one:
 | **2** Linux | `a3e28b47ad`, `baabca38d5`, `ebc28c5fb9`, `fdfbeb8359`, `eae8044988`, `b90c8051d5`, `2386d06048`, `19f03f96b3`, `0cbb0f7840` |
 | **3** Windows | `bed0cd2ba4`, `b22b082fba`, `1abb3787fa`, `2c3e26e4aa`, `e654076fb2`, `744c237bec`, `05ef5463f0` |
 | **4** Mac/Apple | `2ff6730480`, `a443f7399f`, `5fa4836b08`, `cc5f1805b0`, `180869931e` |
-| **5** GPU selection | — (not built) |
+| **5** GPU selection | `400f655e96` (the preference), `cbc5a3d978` (enumeration), `a3b0e8f46c` (the env read); the capability tier unbuilt |
 | **6** offscreen + headless | `e72542da71`, `3c424fa55d`, `e051519534`, `d321449ef6`, `ed0fe22c4f`; headless partial |
 
 The fork's own grouping, which these are cut from — **core** (the renderer seam and the

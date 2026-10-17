@@ -54,7 +54,7 @@ rule, and they serve different producers:
 `WgpuContextSlot` is a shared `Rc` rather than a field for the second reason:
 `WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>` (`crates/gpui_wgpu/src/wgpu_renderer.rs:233`),
 whose `WgpuContext` exposes `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
-(`crates/gpui_wgpu/src/wgpu_context.rs:14`). An application that owns the slot and returns
+(`crates/gpui_wgpu/src/wgpu_context.rs:12`). An application that owns the slot and returns
 `WgpuRenderer::new(context, …)` from its own factory ends up holding the device the renderer
 adopts — so on wgpu there *is* an export, it is just one the application performs on itself. It
 requires installing a factory, which is the boundary
@@ -93,7 +93,7 @@ Two facts behind the table:
 The factory's input does not close it either. `RendererTarget`'s one erased field
 (`crates/gpui_platform/src/platform_renderer.rs:129`) is an **input**, and what each platform puts
 in it is a *surface configuration* or the platform's device bundle for its own renderer: X11 sends
-`&WgpuSurfaceConfig` (`crates/gpui_linux/src/linux/x11/window.rs:783`), Windows sends
+`&WgpuSurfaceConfig` (`crates/gpui_linux/src/linux/x11/window.rs:785`), Windows sends
 `&DirectXDevices` (`crates/gpui_windows/src/events.rs:1322`). Before the accessor there was no path
 from a window back to a device its renderer holds; `GpuRenderer::device` is that path, and it needs
 no target field because it is answered after the renderer exists.

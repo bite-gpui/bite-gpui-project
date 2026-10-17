@@ -52,7 +52,7 @@ hooks it replaced; it was drawn by
 **one** renderer rather than two — DirectX's `draw_surfaces` returned an explicit unsupported
 error (`crates/gpui_windows/src/directx_renderer.rs:918`) and wgpu's arm was `{}` under the
 comment that surfaces "are macOS-only for video playback and are not implemented by the WGPU
-renderer" (`crates/gpui_wgpu/src/wgpu_renderer.rs:1960`) — and that one rendered **YCbCr**,
+renderer" (`crates/gpui_wgpu/src/wgpu_renderer.rs:1979`) — and that one rendered **YCbCr**,
 not RGBA: Metal's `surface_fragment` returns `ycbcrToRGBTransform * ycbcr`
 (`crates/gpui_apple/src/shaders.metal:885`), and wgpu's `fs_surface` does the same over two
 planes, `t_y` and `t_cb_cr` (`crates/gpui_wgpu/src/shaders.wgsl:1423`). The surface's Windows and
@@ -243,7 +243,7 @@ property of the view, and the usage flags must include `TextureUsages::TEXTURE_B
 
 **Not a Windows special case, after all.** The surface format is the renderer's choice, and the
 wgpu renderer picks a non-sRGB one on every platform — `preferred_formats = [Bgra8Unorm,
-Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:519`) — so a Windows window running
+Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:537`) — so a Windows window running
 `WgpuRenderer` shows the same `*_UNORM` surface convention the rule above states, and the default
 `DirectXRenderer`'s `B8G8R8A8_UNORM` target
 (`crates/gpui_windows/src/directx_renderer.rs:34`) is that convention on the renderer that supports
@@ -292,13 +292,13 @@ which the factory has: `WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>`
 (`crates/gpui_wgpu/src/wgpu_renderer.rs:233`; the canonical ref still spells the alias
 `GpuContext`), whose `WgpuContext` exposes
 `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
-(`crates/gpui_wgpu/src/wgpu_context.rs:14`). Two notes for whoever writes the guide: the
+(`crates/gpui_wgpu/src/wgpu_context.rs:12`). Two notes for whoever writes the guide: the
 slot is `None` until the first renderer initialises it, and `Rc<RefCell<…>>` is `!Send`,
 so this is a same-thread affordance and not something a worker thread can use.
 
 ## 6. The queue, and why there is no fence
 
-One device has one `queue` (`crates/gpui_wgpu/src/wgpu_context.rs:14`), and that is what
+One device has one `queue` (`crates/gpui_wgpu/src/wgpu_context.rs:12`), and that is what
 orders the producer against the frame. The application submits the pass that fills its
 texture; the renderer's frame is submitted after it; so the GPU executes them in that
 order and the texture is complete by the time the composite samples it. No semaphore, no
