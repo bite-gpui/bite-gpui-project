@@ -111,7 +111,7 @@ runner that hosts GPUI inside a foreign loop, which belongs in `gpui-interop`.
 
 ## 5. The gates
 
-**`.meta`.** `script/check-citations` — 409 citations, 0 unresolved (2026-10-17). It
+**`.meta`.** `script/check-citations` — 444 citations, 0 unresolved (2026-10-17). It
 resolves against the canonical ref, so a document may not cite `path:line` for a file that exists
 only on a branch: name it, as `producer-reach.md` does for `crates/gpui_engine/src/custom_render.rs`
 and the two `imported_texture.rs` files. `.meta` is its own repository; never `git add` the zed

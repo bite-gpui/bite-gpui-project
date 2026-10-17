@@ -8,9 +8,10 @@
 
 The chosen GPU — and anything about what it can do — is observable only *after* a window exists:
 
-- `window.gpu_specs()` (`wgpu_renderer.rs:1236`) — a name, a device type and driver strings, after the
+- `window.gpu_specs()` (`crates/gpui_wgpu/src/wgpu_renderer.rs:1236`) — a name, a device type and
+  driver strings, after the
   window, and nothing about what the device can *do*;
-- `Adapter::gpu_id` (`gpui-interop/crates/gpui_interop/src/adapter.rs:99`) — inside a `gpu_canvas`,
+- `Adapter::gpu_id` (`gpui_interop`'s `adapter.rs`) — inside a `gpu_canvas`,
   which is to say during a frame, with the device already built.
 
 There is no accessor for the adapter list, no way to ask what a device will import or export, and no way
@@ -42,14 +43,16 @@ needs a different seam from a per-window one.
 The shape this round suggests: `WaylandClient`/`X11Client` own a single `WgpuContext` (instance, adapter,
 device, queue) and hand a clone into each window's `WgpuRenderer`, so nothing is duplicated; the
 *preference* is then configuration on `Application`/`PlatformOptions`, not a per-window argument.
-Adapter creation is already lazy — `select_adapter_and_device` (`wgpu_context.rs:604`) verifies a
+Adapter creation is already lazy — `select_adapter_and_device`
+(`crates/gpui_wgpu/src/wgpu_context.rs:604`) verifies a
 compatible surface before choosing — which is why the preference must reach that point rather than the
 renderer's construction.
 
 ## Who picks the GPU
 
-1. **The OS/DE** — the compositor hint (`Compositor GPU hint`, `gpui_linux/src/linux/platform.rs:1313`),
-   tier 2 of `sort_adapters` (`wgpu_context.rs:686`) today.
+1. **The OS/DE** — the compositor hint (`Compositor GPU hint`,
+   `crates/gpui_linux/src/linux/platform.rs:1313`), tier 2 of `sort_adapters`
+   (`crates/gpui_wgpu/src/wgpu_context.rs:690`) today.
 2. **The application, at startup** — a preference, possibly derived from capabilities (shape 1).
 3. **At runtime** — the expensive one, and per the scope above not a per-window operation.
 

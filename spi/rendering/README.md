@@ -59,13 +59,18 @@ its own folder, because it is a surface an application meets rather than part of
 | [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 
-Eight documents outside this folder are part of the work rather than of the design:
+Eleven documents outside this folder are part of the work rather than of the design:
 [`../../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)
 decides which devices a producer may use,
 [`../../decisions/0004-producer-device-rendezvous.md`](../../decisions/0004-producer-device-rendezvous.md)
-decides how a producer reaches one, and
+decides how a producer reaches one,
 [`../../decisions/0005-external-rendering-unifies-under-surface.md`](../../decisions/0005-external-rendering-unifies-under-surface.md)
-decides that the two are one primitive, a `PaintSurface`. The measurements they rest on are
+decides that the two are one primitive, a `PaintSurface`,
+[`../../decisions/0007-dmabuf-importer-native-layout-guard.md`](../../decisions/0007-dmabuf-importer-native-layout-guard.md)
+decides that a linear dma-buf is imported only at a layout the driver itself produces, and
+[`../../decisions/0008-gpu-preference-and-enumeration.md`](../../decisions/0008-gpu-preference-and-enumeration.md)
+decides that the GPU is process-wide and chosen once from an application preference. The
+measurements they rest on are
 [`../../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md), what 0002's
 Windows clause rests on,
 [`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md),
@@ -75,7 +80,9 @@ measurement that reopens it,
 [`../../decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md), what
 §6's macOS commit and §10 rest on, and
 [`../../decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md), the
-producer probe, which answers §2's macOS row.
+producer probe, which answers §2's macOS row, and
+[`../../decisions/optimus-dmabuf-topologies.md`](../../decisions/optimus-dmabuf-topologies.md), what an
+iGPU/dGPU pair does with a linear buffer.
 [`rendering-project/`](../rendering-project/README.md) gathers symlinks to all of them.
 
 ## Status

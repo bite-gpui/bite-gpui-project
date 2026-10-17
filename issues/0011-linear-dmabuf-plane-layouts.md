@@ -6,24 +6,27 @@
 
 ## What is wrong
 
-`import_luma_chroma` builds the plane layouts from the handle (`dmabuf.rs:141`) and the
-`VkImageDrmFormatModifierExplicitCreateInfoEXT` that carries them (`dmabuf.rs:149`) — then **drops them
+`import_luma_chroma` builds the plane layouts from the handle
+(`crates/gpui_wgpu/src/dmabuf.rs:141`) and the `VkImageDrmFormatModifierExplicitCreateInfoEXT` that
+carries them (`crates/gpui_wgpu/src/dmabuf.rs:149`) — then **drops them
 when the modifier is linear**:
 
 ```rust
-let tiled = handle.modifier != DmaBufHandle::LINEAR;                              // dmabuf.rs:137
+let tiled = handle.modifier != DmaBufHandle::LINEAR;          // crates/gpui_wgpu/src/dmabuf.rs:137
 …
-.tiling(if tiled { DRM_FORMAT_MODIFIER_EXT } else { LINEAR })                      // dmabuf.rs:163
-let image_info = if tiled { image_info.push_next(&mut modifier_layout) } else { image_info };  // dmabuf.rs:171
+.tiling(if tiled { DRM_FORMAT_MODIFIER_EXT } else { LINEAR })  // crates/gpui_wgpu/src/dmabuf.rs:163
+let image_info = if tiled { image_info.push_next(&mut modifier_layout) } else { image_info };  // crates/gpui_wgpu/src/dmabuf.rs:171
 ```
 
-`import_plane` does the same for a single plane (`dmabuf.rs:377`). So for a **linear** buffer the
+`import_plane` does the same for a single plane (`crates/gpui_wgpu/src/dmabuf.rs:377`). So for a
+**linear** buffer the
 `VkImage` carries no explicit layout, the driver supplies its own — `vkGetImageSubresourceLayout` — and
 the plane offsets the `DmaBufHandle` declares are ignored. The function's own doc says the opposite
-("the buffer is a single object at the two planes' offsets", `dmabuf.rs:120`), which is true of the
+("the buffer is a single object at the two planes' offsets",
+`crates/gpui_wgpu/src/dmabuf.rs:120`), which is true of the
 *producer's* object and not of the image the driver builds.
 
-(Line numbers are from the published `bite-gp-wgpu-1.23.301`.)
+(Line numbers are from `bite_v1.23.x`.)
 
 ## Measured
 
@@ -59,7 +62,8 @@ because it exports a *tiled* surface, which takes the explicit-layout branch.
 Pass the explicit plane layouts for `LINEAR` too. `VK_EXT_image_drm_format_modifier` permits
 `DRM_FORMAT_MOD_LINEAR` with `VkImageDrmFormatModifierExplicitCreateInfoEXT`, so the code path already
 exists — only the `if tiled` guard is wrong. It needs the extension *enabled on the device*, which
-`WgpuContext::device_with_surface_import` (`wgpu_context.rs:509`) already arranges where the adapter
+`WgpuContext::device_with_surface_import` (`crates/gpui_wgpu/src/wgpu_context.rs:509`) already arranges
+where the adapter
 supports it (see 0008); where it does not, **refuse the handle** rather than sample it wrong.
 
 ## What would close it

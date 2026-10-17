@@ -3,9 +3,10 @@
 **Status: the import milestone is complete.** This project was *getting foreign pixels into GPUI*:
 the renderer seam (`SceneRenderer` behind `PlatformRenderer`), the unified `PaintSurface` /
 `surface()` path — Path A — the producer's device reach, and the `GpuCanvas` authoring surface. That
-set is built and is the top of this folder. What is not built is under [`todo/`](todo/), and it is
-**not the same project**: the two directions it leaves — carrying events across a surface, and
-rendering GPUI *into* a foreign renderer — are separate efforts, sketched below.
+set is built and is the top of this folder. What is not built is under [`todo/`](todo/): a few gaps
+in the path itself (GPU selection, the transfer function), and the two directions it leaves —
+carrying events across a surface, and rendering GPUI *into* a foreign renderer — which are separate
+efforts, sketched below.
 
 Everything the render extension needs is at one path, as symlinks. The documents live where their
 subject lives — the chapters in [`../rendering/`](../rendering/README.md), the authoring surface in
@@ -31,6 +32,7 @@ prose.
 | [`rendering/surfaces.md`](../rendering/surfaces.md) | the design of record for external pixels — the unification under `PaintSurface`/`surface()`, and host vs. guest modes |
 | [`rendering/surface-plan.md`](../rendering/surface-plan.md) | the implementation plan for `surfaces.md`, and the probes it is gated on |
 | [`rendering/surface-seam.md`](../rendering/surface-seam.md) | the settled rule: the engine owns a *total* pixel description, and a producer resolves every video-domain unknown |
+| [`rendering/zero-copy-import.md`](../rendering/zero-copy-import.md) | the importer as a whole — the semantic/physical split, the zero-VRAM layout guard, the colour pipeline, and the multi-GPU rules (built; the transfer-function axis is 0013) |
 | [`rendering/producer-reach.md`](../rendering/producer-reach.md) | the other half of Path A — how a producer gets the device — what each platform lends now, and what is left |
 | [`rendering/verification.md`](../rendering/verification.md) | the matrix, and the platform each check needs |
 | [`rendering/milestones.md`](../rendering/milestones.md) | the handoff: what is built, what is next in what order, and the gates a resumer runs |
@@ -43,17 +45,34 @@ prose.
 | [`decisions/0004-producer-device-rendezvous.md`](../../decisions/0004-producer-device-rendezvous.md) | decision 0004 — how a producer reaches the device: the window lends it (superseded by 0006) |
 | [`decisions/0005-external-rendering-unifies-under-surface.md`](../../decisions/0005-external-rendering-unifies-under-surface.md) | decision 0005 — external pixels unify under the existing `PaintSurface`, not a second primitive |
 | [`decisions/0006-renderer-owned-device.md`](../../decisions/0006-renderer-owned-device.md) | decision 0006 — the renderer owns the device and the canvas lends it; supersedes 0004 |
+| [`decisions/0007-dmabuf-importer-native-layout-guard.md`](../../decisions/0007-dmabuf-importer-native-layout-guard.md) | decision 0007 — a linear dma-buf is imported only at a layout the driver itself produces; closes 0011 |
+| [`decisions/0008-gpu-preference-and-enumeration.md`](../../decisions/0008-gpu-preference-and-enumeration.md) | decision 0008 — the GPU is process-wide, chosen once from an application `GpuPreference`; decided, not implemented |
 | [`decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) | the first measurement 0002 rests on |
 | [`decisions/shared-surface.md`](../../decisions/shared-surface.md) | the shared-buffer probe that reopens 0002 — Windows adoption and the macOS pool, token and fence measured; macOS adoption open |
 | [`decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md) | the measurement 0002's Windows clause rests on |
 | [`decisions/macos-presentation-probe.md`](../../decisions/macos-presentation-probe.md) | the measurement renderer-seam §6's macOS commit and §10 rest on |
 | [`decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md) | the measurement that answers Path A's macOS producer route — wgpu's adapter *is* the `MetalRenderer`'s device |
 | [`decisions/linux-dmabuf-probe.md`](../../decisions/linux-dmabuf-probe.md) | the measurement the Linux dma-buf arm rests on (P3) |
+| [`decisions/optimus-dmabuf-topologies.md`](../../decisions/optimus-dmabuf-topologies.md) | the measurement of an iGPU/dGPU pair — what stays tiled, what must be linear, and which path fails |
 | [`decisions/windows-interop-manifest.md`](../../decisions/windows-interop-manifest.md) | the interop row that died before `main` for want of an application manifest |
 | [`architecture/frame-flow.md`](../../architecture/frame-flow.md) | where the seam is entered in a frame |
 | [`architecture/layer-stack.md`](../../architecture/layer-stack.md) | the ruling the extension has to clear |
 | [`issues/0008-dmabuf-tiled-modifiers-wgpu.md`](../../issues/0008-dmabuf-tiled-modifiers-wgpu.md) | closed — the Linux arm is linear-only (accepted); tiled modifiers are future `wgpu-hal` work |
 | [`issues/0009-windows-probe-vm.md`](../../issues/0009-windows-probe-vm.md) | closed — the probe VM gives the Windows devices CI has not got |
+| [`issues/0011-linear-dmabuf-plane-layouts.md`](../../issues/0011-linear-dmabuf-plane-layouts.md) | closed — a linear dma-buf was sampled at the driver's plane layout, not the handle's |
+
+## Not done — gaps in the built path
+
+These are not new projects: they are holes in the path this milestone built.
+
+| here | is |
+| --- | --- |
+| [`issues/0010-application-gpu-preference.md`](../../issues/0010-application-gpu-preference.md) | open — no application-facing GPU choice; `ZED_DEVICE_ID` is the only control |
+| [`issues/0012-gpu-enumeration-and-negotiation.md`](../../issues/0012-gpu-enumeration-and-negotiation.md) | open — nothing enumerates GPUs or negotiates capabilities before a window exists |
+| [`issues/0013-transfer-function-and-srgb-sampling.md`](../../issues/0013-transfer-function-and-srgb-sampling.md) | open — the surface path has no transfer function, so an sRGB producer is sampled as linear |
+
+The settled direction for the first two is decision `0008` (above): process-wide, chosen once, `LowPower`
+by default. The decision is written; the types and the plumbing are the next slice.
 
 ## Follow-on work — in its own repositories
 

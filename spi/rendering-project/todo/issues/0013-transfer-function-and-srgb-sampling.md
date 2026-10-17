@@ -1,0 +1,1 @@
+../../../../issues/0013-transfer-function-and-srgb-sampling.md

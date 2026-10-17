@@ -76,8 +76,8 @@ rests on, and the cheapest thing to probe next.
 
 The NVIDIA driver pads luma to 64 KiB, so its chroma plane does not sit where the DRM `NV12` layout puts
 it. `gpui_wgpu`'s importer drops the handle's plane layouts when the modifier is linear
-(`dmabuf.rs:171`, `dmabuf.rs:377`) and samples the driver's layout instead, so a canonical producer
-renders green on the dGPU and correctly on the iGPU. This is 0011.
+(`crates/gpui_wgpu/src/dmabuf.rs:171`, `crates/gpui_wgpu/src/dmabuf.rs:377`) and samples the driver's
+layout instead, so a canonical producer renders green on the dGPU and correctly on the iGPU. This is 0011.
 
 ## Measured: cross-device import fails
 
@@ -88,7 +88,8 @@ dropping a dma-buf surface: no memory type accepted the dma-buf import (last: So
 ```
 
 The importer does try all types the image allows, each with a
-`VkMemoryDedicatedAllocateInfo` (`dmabuf.rs:483`), so the failure is not a missed heap check —
+`VkMemoryDedicatedAllocateInfo` (`crates/gpui_wgpu/src/dmabuf.rs:476`), so the failure is not a missed
+heap check —
 `VkExternalMemoryFeatureFlags::IMPORTABLE` was reported for that buffer and the driver still refused it.
 Only the same-GPU case imported.
 
