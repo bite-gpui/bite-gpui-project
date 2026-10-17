@@ -76,14 +76,27 @@ tiled, what must be linear, and which of them fails today — are measured in
 The enumerate and active accessors and the factory plumbing they need; a decision on runtime switching,
 or its explicit refusal recorded; and the process-wide-versus-per-window device ruling written down.
 
-## Update, 2026-10-17 — the rulings are recorded; the reach is not
+## Update, 2026-10-17 — the rulings are recorded, and enumeration lands
 
 [`../decisions/0008-gpu-preference-and-enumeration.md`](../decisions/0008-gpu-preference-and-enumeration.md)
 settles the device scope (process-wide, chosen once), the preference API, the default (`LowPower`) and
-the refusal of runtime switching. Step 1 landed with it: `GpuPreference`, `GpuId` and `GpuAdapterInfo` on
-`gpui_platform`; `Application::with_gpu_preference`; the `Platform` hook; the Linux plumbing beside
-`CompositorGpuHint`; and `ZED_DEVICE_ID` lowered to `Device` in the platform, with the ranking unit-tested.
+the refusal of runtime switching. Step 1 landed with it: `GpuPreference`, `GpuId` and `GpuAdapterInfo`
+on `gpui_platform`; `Application::with_gpu_preference`; the `Platform` hook; the Linux plumbing beside
+`CompositorGpuHint`; and `ZED_DEVICE_ID` lowered to `Device` in the platform, with the ranking
+unit-tested.
 
-What this issue still owes is the enumeration itself: `enumerate_gpus`/`active_gpu` on the app, the
-`Device`/`Custom` variants made usable, and the mapping to the producer-facing
-`gpui_interop::GpuId` — plus the capability tier `0008` defers.
+Step 2 landed next:
+
+- `App::enumerate_gpus()` returns the adapters the process could render on, and `App::active_gpu()`
+  the one the renderer actually chose (both `None`/empty until a platform and, for the active one, a
+  window exist). No device is created to answer either.
+- `GpuPreference::Custom` now receives the whole list and returns the index of **one** adapter. A
+  selector that names nothing, or an index past the list, fails the window naming the shortfall; a
+  chosen adapter the display cannot be configured on falls through to `Auto`'s order.
+- `GpuAdapterInfo` is mapped from `wgpu::AdapterInfo` in `gpui_wgpu`, so the renderer's type stops at
+  its boundary; the Linux clients enumerate from the shared context's instance once it exists.
+- `gpui_interop::GpuId::from_adapter` maps the same adapter onto the producer-facing identity (name
+  and DRM render node), and `matches_adapter` is the name join a `Custom` selector can use.
+
+What this issue still owes is the capability tier `0008` defers: what a chosen device will import or
+export, asked on a device the caller already has.

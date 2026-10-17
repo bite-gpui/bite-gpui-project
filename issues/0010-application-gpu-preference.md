@@ -70,7 +70,8 @@ settles the shape. The device is process-wide and chosen once, before the first 
 `Application::with_gpu_preference`, carried on the platform and read where the adapter is chosen;
 `ZED_DEVICE_ID` is lowered to `Device` in the platform (the headless path keeps reading it because it
 has no platform to state one); and the default is `LowPower`, with `Auto` preserving the old
-ranking. `Custom` waits for enumeration, which is `0012`'s half.
+ranking. `Custom` waited for enumeration, which is `0012`'s half and has now landed: it receives the
+enumerated list and names one adapter, rather than ranking them.
 
 ## Caveat
 

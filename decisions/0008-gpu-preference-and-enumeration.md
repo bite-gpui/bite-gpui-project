@@ -1,10 +1,10 @@
 # 0008 — The GPU is process-wide, chosen before the first window from an application preference
 
 - **Decided:** 2026-10-17
-- **Status:** decided — step 1 implemented on the working tree: the types (`GpuPreference`, `GpuId`,
-  `GpuAdapterInfo`), `Application::with_gpu_preference`, the `Platform` hook, the Linux plumbing and the
-  `ZED_DEVICE_ID` lowering, with a unit-tested ranking. Enumeration (step 2) and capability negotiation
-  (step 3) are not.
+- **Status:** decided — steps 1 and 2 implemented on the working tree: the types (`GpuPreference`,
+  `GpuId`, `GpuAdapterInfo`), `Application::with_gpu_preference`, the `Platform` hook, the Linux
+  plumbing, the `ZED_DEVICE_ID` lowering and a unit-tested ranking; `App::enumerate_gpus` /
+  `App::active_gpu` and the `Custom` variant. Capability negotiation (step 3) is not.
 - **Evidence:** [`../issues/0010-application-gpu-preference.md`](../issues/0010-application-gpu-preference.md)
   (the preference) and [`../issues/0012-gpu-enumeration-and-negotiation.md`](../issues/0012-gpu-enumeration-and-negotiation.md)
   (enumeration and the device scope); the measured pair in
@@ -28,8 +28,11 @@
    - `LowPower` — the integrated adapter when there is one;
    - `HighPerformance` — the discrete adapter when there is one;
    - `Device(GpuId)` — a named adapter, matched by PCI vendor/device;
-   - `Custom(Arc<dyn Fn(&GpuAdapterInfo) -> Option<usize> + Send + Sync>)` — **deferred** until
-     enumeration exists (decision 5), because a predicate needs a shape to consume.
+   - `Custom(Arc<dyn Fn(&[GpuAdapterInfo]) -> Option<usize> + Send + Sync>)` — the closure receives
+     the enumerated list and returns the index of the one adapter it wants. It **chooses** a GPU, it
+     does not rank them; `None`, or an index outside the list, fails the window with the shortfall
+     named rather than silently picking another. The chosen adapter is tried first and the rest keep
+     `Auto`'s order as fallbacks.
 3. **`ZED_DEVICE_ID` becomes `Device`, not a separate tier.** The variable is parsed in the platform,
    beside the compositor hint, and lowered onto `GpuPreference::Device`; the one read is
    `GpuPreference::from_env` (`crates/gpui_platform/src/gpu.rs:88`), not an `env::var` inside
@@ -101,7 +104,9 @@ application cannot decide, cannot ask, and cannot change its mind.
    `Platform::set_gpu_preference` (default no-op); `Application::with_gpu_preference`; thread it through
    the Linux clients beside `CompositorGpuHint` to `WgpuRenderer::new` → `WgpuContext` → the ranking;
    lower `ZED_DEVICE_ID`; default `LowPower`.
-2. **Enumeration.** `enumerate_gpus` / `active_gpu`, `Device`/`Custom` made usable, and the mapping to
-   `gpui_interop::GpuId`.
+2. **Enumeration and the custom choice.** `App::enumerate_gpus` / `App::active_gpu`;
+   `GpuAdapterInfo` mapped out of `wgpu::AdapterInfo` on Linux; `Custom` resolved against the
+   enumerated list before ranking; the mapping to `gpui_interop::GpuId`
+   (`GpuId::from_adapter`) beside the producer-facing identity.
 3. **Capability negotiation.** What a chosen device will import/export, asked on a device the caller
    already has — the interop crate's report, surfaced through the application seam.

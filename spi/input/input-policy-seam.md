@@ -83,8 +83,8 @@ closure has no policy in it, and nothing on `Application` can put one there.
 `Platform` is the broadest trait in the layer — executors, text system, displays,
 `open_window`, menus, dock menus, clipboard, credentials, keyboard layout and mapper,
 notifications, prompts, thermal state, URL schemes
-(`crates/gpui_platform/src/platform.rs:59-274`). It also does not carry input: it
-only *creates* the window (`fn open_window`, `:93`), and input lives on the
+(`crates/gpui_platform/src/platform.rs:59-303`). It also does not carry input: it
+only *creates* the window (`fn open_window`, `:95`), and input lives on the
 `PlatformWindow` it returns. Filtering a mouse coordinate would therefore mean
 delegating two large traits for a single callback. This is why the frame-pipeline
 approach was rejected and why a dedicated seam is worth proposing instead.

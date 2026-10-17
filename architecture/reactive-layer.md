@@ -39,11 +39,11 @@ flowchart TD
 | what | where | what it is for |
 | --- | --- | --- |
 | `Effect` | `app.rs:3165` | the queue's item: `Notify`, `Emit`, `RefreshWindows`, `NotifyGlobalObservers`, `Defer`, `EntityCreated` |
-| `pending_effects: VecDeque<Effect>` | `app.rs:659` | what the next flush will drain. Effects cause effects, so the queue is drained to quiescence |
-| `pending_notifications: FxHashSet<EntityId>` | `app.rs:695` | dedupes a notify from an entity nothing is displaying |
-| `observers: SubscriberSet<EntityId, Handler>` | `app.rs:661` | who to run when an entity notifies |
-| `tracked_entities: FxHashMap<WindowId, FxHashSet<EntityId>>` | `app.rs:704` | the entities a window *actually renders right now*, rebuilt per frame by `record_entities_accessed` (`app.rs:1140`) |
-| `window_invalidators_by_entity` | `app.rs:702` | an entity's invalidator per window. **Monotonic** — an entry alone does not mean the window still displays the entity, which is why the lookup is filtered |
+| `pending_effects: VecDeque<Effect>` | `app.rs:660` | what the next flush will drain. Effects cause effects, so the queue is drained to quiescence |
+| `pending_notifications: FxHashSet<EntityId>` | `app.rs:696` | dedupes a notify from an entity nothing is displaying |
+| `observers: SubscriberSet<EntityId, Handler>` | `app.rs:662` | who to run when an entity notifies |
+| `tracked_entities: FxHashMap<WindowId, FxHashSet<EntityId>>` | `app.rs:705` | the entities a window *actually renders right now*, rebuilt per frame by `record_entities_accessed` (`app.rs:1141`) |
+| `window_invalidators_by_entity` | `app.rs:703` | an entity's invalidator per window. **Monotonic** — an entry alone does not mean the window still displays the entity, which is why the lookup is filtered |
 | `WindowInvalidator` | `window.rs:174` | per window: `dirty`, `dirty_views`, `update_count`, the platform waker |
 | `update_count` | `window.rs:155` | how many invalidations this window has seen. Read by `Window::dispatch_event` to ask whether an input event *caused* one (`window.rs:6242`), which is what feeds the input-rate tracker |
 | `dirty_views` | `window.rs:154` | the views invalidated since the last draw. `finish_frame` clears it (`window.rs:3711`) |
