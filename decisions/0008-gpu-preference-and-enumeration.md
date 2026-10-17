@@ -110,6 +110,8 @@ application cannot decide, cannot ask, and cannot change its mind.
 2. **Enumeration and the custom choice.** `App::enumerate_gpus` / `App::active_gpu`;
    `GpuAdapterInfo` mapped out of `wgpu::AdapterInfo` on Linux; `Custom` resolved against the
    enumerated list before ranking; the mapping to `gpui_interop::GpuId`
-   (`GpuId::from_adapter`) beside the producer-facing identity.
+   (`GpuId::from_adapter`) beside the producer-facing identity. The Windows and macOS arms, which
+   need a different identity and a device the platform has already created, are designed in
+   [`0009`](0009-gpu-preference-platform-backends.md) (draft).
 3. **Capability negotiation.** What a chosen device will import/export, asked on a device the caller
    already has — the interop crate's report, surfaced through the application seam.
