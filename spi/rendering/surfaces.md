@@ -19,12 +19,12 @@
 ## 1. One primitive, two distances
 
 `PaintSurface` already exists — a variant of the scene's primitive enum
-(`crates/gpui_engine/src/scene.rs:238`, struct at `:784`), a `Surface` element and its `surface()`
-constructor (`crates/gpui_authoring/src/elements/surface.rs:27`, `:35`), the `GpuCanvasContext` it
+(`crates/gpui_engine/src/scene.rs:244`, struct at `:908`), a `Surface` element and its `surface()`
+constructor (`crates/gpui_authoring/src/elements/surface.rs:21`, `:61`), the `GpuCanvasContext` it
 is pushed through (`crates/gpui_authoring/src/elements/gpu_canvas.rs`) and a `draw_surfaces` on every
-renderer (`crates/gpui_windows/src/directx_renderer.rs:852`,
+renderer (`crates/gpui_windows/src/directx_renderer.rs:918`,
 `crates/gpui_apple/src/metal_renderer.rs:1156`, and wgpu's at
-`crates/gpui_wgpu/src/wgpu_renderer.rs:1698`). It was macOS-only before the arms below landed:
+`crates/gpui_wgpu/src/wgpu_renderer.rs:2065`). It was macOS-only before the arms below landed:
 `SurfaceSource` (`crates/gpui_engine/src/scene.rs`, imported by the element) now carries the
 `CoreVideo`/`DirectX`/`DmaBuf` variants, and every renderer implements `draw_surfaces`.
 
@@ -38,7 +38,7 @@ records the route we built instead (`CustomRenderPrimitive::Texture`,
 `crates/gpui_engine/src/custom_render.rs:41`) and why it is superseded.
 
 The payload is a **typed, cfg-gated enum** — the shape `PaintSurface` already carries in its
-`source: SurfaceSource` field (`crates/gpui_engine/src/scene.rs:784`); the `#[cfg]`-gated payload it
+`source: SurfaceSource` field (`crates/gpui_engine/src/scene.rs:908`); the `#[cfg]`-gated payload it
 replaced was the precedent, not a compromise:
 
 ```rust
@@ -83,8 +83,8 @@ descriptor per frame. That is the whole of what the arm buys — ergonomics and 
 speed.
 
 `PaintSurface` also gains `corner_radii` — the element already stubs it
-(`crates/gpui_authoring/src/elements/surface.rs:99`) — and the `opacity` and `flip_v` our primitive carried. **Its `bounds`
-stay `Bounds<ScaledPixels>`** (`crates/gpui_engine/src/scene.rs:786`): a renderer has no scale factor, so the element
+(`crates/gpui_authoring/src/elements/surface.rs:147`) — and the `opacity` and `flip_v` our primitive carried. **Its `bounds`
+stay `Bounds<ScaledPixels>`** (`crates/gpui_engine/src/scene.rs:910`): a renderer has no scale factor, so the element
 converts at paint time, as `paint_quad` does.
 
 **Name the collision.** "Surface" is overloaded. In wgpu a `Surface` is the *window presentation
@@ -155,7 +155,7 @@ The renderer's obligation is one method, `draw_surfaces`:
 - **Bind the surface and draw a quad through it.** The geometry, the content-mask clip and the
   corner SDF are the quad path's, not a second implementation — which is what
   `CustomRenderPrimitive::to_quad_record` (`crates/gpui_engine/src/custom_render.rs:101`) already
-  encodes, and what the Direct3D arm already reads (`crates/gpui_windows/src/directx_renderer.rs:862`). The retarget keeps
+  encodes, and what the Direct3D arm already reads (`crates/gpui_windows/src/directx_renderer.rs:1125`). The retarget keeps
   it and moves the call.
 - **Straight-through, bit-exact sampling.** On Direct3D the surface's non-sRGB view is sampled
   straight to the `*_UNORM` backbuffer, with no transfer function to cancel — the finding
@@ -182,8 +182,8 @@ supported shape is **headless rendering on a worker thread**:
 - the host owns the window and its cadence; the GPUI thread runs a headless platform context with no
   native surface, ticking its executors;
 - the frame is produced through the offscreen contract that already exists —
-  `render_scene` split from `read_pixels` (`crates/gpui_engine/src/renderer.rs:80`, `:102`, `:110`)
-  with `PixelBuffer` (`:19`) as the CPU type — so a GPU consumer takes the surface and a CPU consumer
+  `render_scene` split from `read_pixels` (`crates/gpui_engine/src/renderer.rs:118`, `:140`, `:148`)
+  with `PixelBuffer` (`:57`) as the CPU type — so a GPU consumer takes the surface and a CPU consumer
   takes the bytes, and neither is a special case of the other;
 - the two hops a host needs (translated input in, sampled frame out) are ordinary platform work, not
   a new seam.
@@ -200,8 +200,8 @@ worked example (match a `wgpu` adapter to GPUI's Direct3D 11 adapter by LUID, ex
 NT handle, bridge an `ID3D12Fence` to an `ID3D11Fence`); macOS is the `IOSurface` case and Linux the
 dma-buf one, so the crate is cross-platform and only its Windows module is built first. Core publishes
 only the two things the crate needs: the device
-(`Window::device_any`, `crates/gpui_authoring/src/window.rs:3031`, erased on the traits at
-`crates/gpui_platform/src/platform_window.rs:159` and `:97`) and the surface element. This is
+(`crates/gpui_engine/src/renderer.rs:42`, reached through `PlatformWindow::with_renderer` at
+`crates/gpui_platform/src/platform_window.rs:151`) and the surface element. This is
 [`0002`](../../decisions/0002-render-extension-device-model.md)'s deferred Tier 2, now *scheduled*
 rather than deferred — but the same-device route is the milestone, and the bridge is a second step
 whose reverse direction is still unmeasured ([`producer-reach.md`](producer-reach.md) §6). The bridge
@@ -213,11 +213,11 @@ planned in [`interop-crate.md`](interop-crate.md).
 ## 6. What this changes here, and what it keeps
 
 - **Kept verbatim:** `PixelBuffer` and the `render_scene`/`read_pixels` split
-  (`crates/gpui_engine/src/renderer.rs:19`, `:102`, `:110`) — the record's upstream PR 1, already built; the quad-record
+  (`crates/gpui_engine/src/renderer.rs:57`, `:140`, `:148`) — the record's upstream PR 6, already built; the quad-record
   encoding (`crates/gpui_engine/src/custom_render.rs:101`); the Direct3D arm's sampler and SRV path
-  (`crates/gpui_windows/src/directx_renderer.rs:862`, `create_imported_texture_view` at `:1787`); and `device_any`.
+  (`crates/gpui_windows/src/directx_renderer.rs:1125`, `create_imported_texture_view` at `:2154`); and the renderer-owned device door (`GpuRenderer::device`, `crates/gpui_engine/src/renderer.rs:42`).
 - **Retargeted:** `CustomRenderPrimitive::Texture` → `PaintSurface`; `paint_imported_texture`
-  (`window.rs:5000`; now `pub(crate)`, reached through `GpuCanvasContext::paint_texture`) →
+  (`window.rs:5054`; now `pub(crate)`, reached through `GpuCanvasContext::paint_texture`) →
   `surface()`; the token builders (`ImportedTextureExt`, `DirectXTextureExt`,
   `MetalTextureExt`) → `From<…> for SurfaceSource`; `draw_custom` → `draw_surfaces`.
 - **Superseded:** the second primitive, the erased `ImportedTextureHandle`
@@ -227,7 +227,7 @@ planned in [`interop-crate.md`](interop-crate.md).
   ([`renderer-seam.md`](renderer-seam.md)) — this chapter adds no method to `SceneRenderer` beyond
   the `draw_surfaces` that already exists. Path B is **fork-carried**: upstream has said the callback
 primitive is not one it wants ([zed #64849](https://github.com/zed-industries/zed/discussions/64849)),
-so it is W7 and never a PR ([`upstream-prs.md`](upstream-prs.md) §5).
+so it is W7 and never a PR ([`upstream/README.md`](upstream/README.md) §3).
 
 ## 7. Open, and what would reopen this
 

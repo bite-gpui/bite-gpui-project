@@ -51,10 +51,11 @@ its own folder, because it is a surface an application meets rather than part of
 | [`probe-p4-video-formats.md`](probe-p4-video-formats.md) | the inventory behind the additive YCbCr pass — what decoders actually emit |
 | [`probe-p7-guest-thread.md`](probe-p7-guest-thread.md) | the probe that gates W6 — the offscreen contract across the worker-thread boundary |
 | [`player.md`](player.md) | the runnable player end of the surface path — the release invariant that keeps biting, what the decoder had to add (containers, plain-baseline H.264), the two upstream bugs it found, and where a frame's time goes |
-| [`upstream-prs.md`](upstream-prs.md) | the PRs to open upstream, what each carries, and what stays downstream — read with the upstream Discussion |
-| [`pr-1-pixel-buffer.md`](pr-1-pixel-buffer.md) | the ready-to-open body for PR 1 — the render/readback split |
-| [`pr-2-windows-paint-surface.md`](pr-2-windows-paint-surface.md) | the ready-to-open body for PR 2 — `paint_surface` on Windows |
-| [`interop-scaffold.md`](interop-scaffold.md) | the `gpui-interop` crate's concrete scaffold — layout, API and tests — and the test that proves PR 2 is sufficient |
+| [`upstream/README.md`](upstream/README.md) | the upstreaming plan — the sequence, the PRs and their order, and the commits behind each; read with the upstream Discussion |
+| [`upstream/pr-vocabulary-and-spi.md`](upstream/pr-vocabulary-and-spi.md) | the body for PR 1 — the renderer seam, the surface vocabulary and `GpuCanvas` |
+| [`upstream/pr-windows-paint-surface.md`](upstream/pr-windows-paint-surface.md) | the body for PR 3 — `paint_surface` on Windows |
+| [`upstream/pr-offscreen.md`](upstream/pr-offscreen.md) | the body for PR 6 — the offscreen render/readback split |
+| [`interop-scaffold.md`](interop-scaffold.md) | the `gpui-interop` crate's concrete scaffold — layout, API and tests — and the test that proves PR 3 is sufficient |
 | [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 
@@ -93,7 +94,7 @@ The name of that path changed after it merged. [`0005`](../../decisions/0005-ext
 unifies external pixels under the existing `PaintSurface` / `surface()` rather than a second
 primitive, so what PR #6 built is retargeted into `draw_surfaces`: the same arms, colour space and
 rendezvous, under the entry point upstream already has. The offscreen half — `PixelBuffer`, and
-`render_scene` split from `read_pixels` — is that record's upstream PR 1, already built.
+`render_scene` split from `read_pixels` — is that record's upstream PR 6, already built.
 
 What that adds up to is that the three consumer arms and the three producers are level: each
 renderer samples an RGBA foreign texture, lends its device, has a token builder an application names
@@ -189,11 +190,11 @@ RFC's "≈16.0 GB/s at 4K120" is its own formula miscounted — `W × H × 4 × 
    ruling against doing that.
 3. **`set_viewport_size` on `PlatformRenderer`?** **No — and the name is wrong.**
    `SceneRenderer::set_viewport_size` is test-gated
-   (`crates/gpui_engine/src/renderer.rs:95`), has exactly one caller (the test window,
+   (`crates/gpui_engine/src/renderer.rs:133`), has exactly one caller (the test window,
    `crates/gpui_authoring/src/platform/test/window.rs:529`) and one override
-   (`crates/gpui_apple/src/metal_renderer.rs:1813`). The *production* resize path
+   (`crates/gpui_apple/src/metal_renderer.rs:1825`). The *production* resize path
    already has a name: `WgpuRenderer::update_drawable_size`
-   (`crates/gpui_wgpu/src/wgpu_renderer.rs:1297`). So neither "lift the gate" nor "drop
+   (`crates/gpui_wgpu/src/wgpu_renderer.rs:1363`). So neither "lift the gate" nor "drop
    it" was needed — the contract gets the production name, which is also what makes a
    factory-installed renderer behave exactly as the backend's own.
 4. **Where does the factory live — `Application` or the window?** **The window.**
@@ -237,7 +238,7 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
 
 - **Path A reuses `PaintSurface`'s machinery, and not its drawing.** The variant, its batch,
   its ordering and its content-mask handling are what the primitive is shaped after
-  (`crates/gpui_engine/src/scene.rs:784`); the drawing is new, because `PaintSurface` is
+  (`crates/gpui_engine/src/scene.rs:908`); the drawing is new, because `PaintSurface` is
   itself macOS-only video with a YCbCr fragment path, drawn by one renderer, and every sprite
   and path fragment samples the atlas instead of a texture of its own.
   [`foreign-texture.md`](foreign-texture.md) §1 states it once.
@@ -260,7 +261,7 @@ Each of these was decided on evidence and is not reopened by re-reading the draf
   renderer's trait rather than on the factory's input.
 - **The trait upcast is load-bearing.** `PlatformWindow::with_renderer` and `present`
   hand out `&mut dyn SceneRenderer`
-  (`crates/gpui_platform/src/platform_window.rs:150`, `:167`), and the explicit
+  (`crates/gpui_platform/src/platform_window.rs:151`, `:157`), and the explicit
   `as_scene_renderer` shims are gone, so reaching a `Box<dyn PlatformRenderer>` as a
   `dyn SceneRenderer` is upcasting. Stable since 1.86; `rust-toolchain.toml` is 1.95.
 

@@ -1,10 +1,11 @@
-# PR 1 — the body, ready to open
+# The offscreen-split body, ready to open
 
 - **Target:** `zed-industries/zed`, `main`. **Opened:** not yet.
-- **The plan:** [`../upstream-prs.md`](../upstream-prs.md) §2. **Precondition:** none — this is the
-  independent one, and it ships first.
-- **Built in the fork:** `crates/gpui_engine/src/renderer.rs:19` (`PixelBuffer`), `:102`/`:110`/`:115`
-  (the `render_scene` / `read_pixels` / `render_scene_to_image` split), `:80` (the trait). The fork's
+- **The plan:** [`README.md`](README.md) §2, PR 6(a). **Precondition:** none — it is independent of the
+  surface PRs and fileable in parallel.
+- **Built in the fork:** `e72542da71` (`gpui_engine, gpui_authoring: make offscreen rendering part of
+  the renderer contract`) — `crates/gpui_engine/src/renderer.rs:57` (`PixelBuffer`), `:140`/`:148`/`:153`
+  (the `render_scene` / `read_pixels` / `render_scene_to_image` split), `:118` (the trait). The fork's
   paths differ from upstream's because the fork is split into layer crates; the code is the same.
 
 ## Title

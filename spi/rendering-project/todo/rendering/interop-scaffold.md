@@ -1,0 +1,1 @@
+../../../rendering/interop-scaffold.md

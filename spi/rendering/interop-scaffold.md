@@ -1,21 +1,20 @@
 # The `gpui-interop` scaffold
 
-- **Status:** proposed — the crate's concrete shape: its home, layout, dependencies, public API, and
-  the test that proves the upstreamed `paint_surface` support is **sufficient**. It complements
-  [`interop-crate.md`](interop-crate.md) (the design and the posture) with the thing to build.
+- **Status:** built — the crate's concrete shape: its layout, dependencies, public API, and the test
+  that proves the upstreamed `paint_surface` support is **sufficient**. It complements
+  [`interop-crate.md`](interop-crate.md) (the design and the posture) with what was built.
 - **Read with:** [`interop-crate.md`](interop-crate.md) (why it exists, and the upstreaming constraint),
-  [`upstream-prs.md`](upstream-prs.md) (the API it consumes), [`surface-plan.md`](surface-plan.md)
+  [`upstream/README.md`](upstream/README.md) (the API it consumes), [`surface-plan.md`](surface-plan.md)
   (the probes that gate each module).
-- **Home:** unsettled — issue [`0006`](../../issues/0006-surface-interop.md) question 1. A new
-  `gpui-interop` repository is the recommendation; a crate in the fork builds against the facade and
-  the W2 branch until then.
+- **Home:** settled — `bite-gpui/gpui_interop`, its own repository (issue
+  [`0006`](../../issues/0006-surface-interop.md) question 1).
 
 ## 1. The point of the test
 
 The crate is not only a bridge. Its **first test proves the PR is worth merging**: that a foreign
-producer's frame reaches the scene through `surface()` with the two things PR 2 adds — the Windows
+producer's frame reaches the scene through `surface()` with the two things PR 3 adds — the Windows
 `SurfaceSource` variant and `DirectXWindowExt::d3d11_device()`. That test needs **no bridge** and no
-second device; it is the same-device case, and it is the acceptance test PR 2 should carry
+second device; it is the same-device case, and it is the acceptance test PR 3 should carry
 ([`verification.md`](verification.md) §2). If it passes on the PR's branch, the upstreamed feature
 does the job; if it does not, the PR is not yet the feature upstream agreed to take.
 
@@ -27,7 +26,7 @@ The crate's manifest, as proposed:
 # Cargo.toml
 [package]
 name = "gpui-interop"
-# the gpui it builds against is the facade — upstream's once PR 2 lands,
+# the gpui it builds against is the facade — upstream's once PR 3 lands,
 # the fork's before that; same name, a pinned version.
 
 [features]
@@ -171,29 +170,29 @@ it building before that lands upstream:
 - **(b) A `legacy-primitive` shim.** A feature that routes the same-device hand-off through the fork's
   *current* second primitive — `CustomRenderPrimitive::Texture`
   (`crates/gpui_engine/src/custom_render.rs:41`), pushed by `Window::paint_imported_texture`
-  (`crates/gpui_authoring/src/window.rs:5000`; `pub(crate)` now, so a shim outside the fork needs a
-  `pub` door first, or reaches it through `GpuCanvasContext::paint_texture`) — so the device accessor
-  (`device_any`, `crates/gpui_authoring/src/window.rs:3031`) can be smoke-tested *today*, before W2.
+  (`crates/gpui_authoring/src/window.rs:5054`; `pub(crate)` now, so a shim outside the fork needs a
+  `pub` door first, or reaches it through `GpuCanvasContext::paint_texture`) — so the device door
+  (`GpuCanvasContext::device::<R>`, `crates/gpui_authoring/src/elements/gpu_canvas.rs:87`) can be smoke-tested *today*, before W2.
   It is deleted the moment (a) is available; it exists so the crate is not blocked on a branch that
   is not merged.
 
 ## 7. The two tests
 
-**The PR-2 sufficiency test.** No bridge, no second device.
+**The same-device sufficiency test.** No bridge, no second device.
 
 1. Open a window (the fork's test harness on `windows-latest`, or a real one).
-2. `let device = window.d3d11_device().ok_or(Unavailable::NoDevice)?;` — the accessor PR 2 adds.
+2. `let device = window.d3d11_device().ok_or(Unavailable::NoDevice)?;` — the accessor PR 3 adds.
 3. Allocate an `ID3D11Texture2D` (`B8G8R8A8_UNORM`), clear it to a known colour, make an SRV.
 4. Paint `surface(srv)` inside a `div()`.
 5. Render a frame and read it back; **assert the colour lands in the surface's rect** — the
    straight-through round trip, byte for byte.
 
-*Pass:* PR 2 and the accessor are **sufficient** for the simplest interop case, which is the claim the
-record has been making. *This test is also what PR 2 should carry*, so upstream's reviewers see the
+*Pass:* PR 3 and the accessor are **sufficient** for the simplest interop case, which is the claim the
+record has been making. *This test is also what PR 3 should carry*, so upstream's reviewers see the
 feature being used.
 
-*Ran:* the D3D-level form of this test is `interop-probe --pr2`, and it **passes** on the Windows
-probe guest (2026-10-07): an `ID3D11Texture2D` (`B8G8R8A8_UNORM`) cleared to `[32, 96, 192, 255]`, its
+*Ran:* the D3D-level form of this test is the probe's `same-device` check (`script/interop-probe`),
+and it **passes** on the Windows probe guest (2026-10-07): an `ID3D11Texture2D` (`B8G8R8A8_UNORM`) cleared to `[32, 96, 192, 255]`, its
 SRV drawn through a full-screen triangle on **one device**, read back byte-exact (0/4096). See
 [`../../issues/0009-windows-probe-vm.md`](../../issues/0009-windows-probe-vm.md).
 
@@ -205,7 +204,7 @@ unavailable — the pattern the wgpu rows already use.
 
 ## 8. What the scaffold does not include
 
-- **No renderer arm.** `draw_surfaces` is PR 2's; the crate produces a `SurfaceSource` and nothing else.
+- **No renderer arm.** `draw_surfaces` is PR 3's; the crate produces a `SurfaceSource` and nothing else.
 - **No seam, no pipeline.** It is reached by the application, not installed by it.
 - **No same-device helper.** The same-device case needs none — the sufficiency test is the exception,
   and it is a test.
@@ -224,5 +223,5 @@ document, and the sufficiency test is unaffected in spirit:
 - **The device door is the renderer, not the window.** Where §1 and §7 write
   `DirectXWindowExt::d3d11_device()` / `window.d3d11_device()`, the fork reaches the device through
   `GpuRenderer` plus `GpuCanvasContext::device::<R>()` ([`0006`](../../decisions/0006-renderer-owned-device.md)).
-  The PR-2 sufficiency test is the same test — a same-device SRV through `surface()` — and is
+  The same-device sufficiency test is the same test — a same-device SRV through `surface()` — and is
   unaffected in spirit; only the call that obtains the device changes spelling.

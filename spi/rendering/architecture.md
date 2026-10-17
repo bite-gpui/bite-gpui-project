@@ -1,11 +1,12 @@
 # The rendering slice: how pixels produced outside GPUI reach a window
 
-- **Status:** the architecture as built on the fork branch `bite_v1.23.1-pre-interop`.
-  That branch is **ahead of the canonical ref `bite_v1.23.1-pre` and is not merged
-  into it** — the merge is a separate, CI-verified step (the fork's `bite-ci.yml` runs
-  the per-platform rows; see [`verification.md`](verification.md)).
-  Where this document names a file, the shape is what the branch has; a citation that
-  resolves against the canonical ref would show the pre-slice shape.
+- **Status:** the surface path is on the canonical ref `bite_v1.23.x` — `PaintSurface`,
+  `draw_surfaces` on all three renderers, `GpuCanvas` and its renderer-owned device door.
+  The **remainder** — the `SurfaceProducer` seam, the `gpui_va`/`gpui_video` crates, the player,
+  and the downstream `gpui_interop` crate — is built in its own repositories, **`gpui_interop`**
+  and **`gpui_video`** (see [`repositories.md`](../../repositories.md)), against that ref; it is
+  not a branch of this clone. Where this document names a file only those repositories have, the
+  citations name files and symbols rather than `path:line`.
 - **Scope:** the *rendering slice* — the crates and seams through which a producer's
   pixels (a video frame, a decoded buffer, a second GPU's render target) are composited
   into a GPUI window. It is the map of this chapter; [`README.md`](README.md) is the
@@ -187,35 +188,30 @@ queues*.
 | piece | where | upstream? |
 | --- | --- | --- |
 | the renderer seam (`SceneRenderer`, `PlatformRenderer`, factory) | `gpui_platform`, `gpui_engine` | fork-carried; not yet proposed |
-| `PaintSurface` + `draw_surfaces` | `gpui_engine`, each backend | proposed as PR 2 (Windows arm) |
-| `surface()` element | `gpui_authoring` | proposed as PR 2 |
-| `SurfaceSource::DirectX(DirectXSource)` (texture, view **and** shared) | `gpui_engine` | the fork is *richer* than PR 2's bare SRV — see [`upstream-prs.md`](upstream-prs.md) §7 |
+| `PaintSurface` + `draw_surfaces` | `gpui_engine`, each backend | proposed as PR 3 (Windows arm) |
+| `surface()` element | `gpui_authoring` | proposed as PR 3 |
+| `SurfaceSource::DirectX(DirectXSource)` (texture, view **and** shared) | `gpui_engine` | the fork is *richer* than PR 3's bare SRV — see [`upstream/README.md`](upstream/README.md) §5 |
 | `gpu_canvas` + `GpuCanvasContext` | `gpui_authoring` | fork-carried |
 | the renderer-owned device (`GpuRenderer`) and its canvas door (`device::<R>()`) | `gpui_engine`, `gpui_authoring` | fork-carried |
 | `gpui_interop` (adapter match, handle/fence transport) | its own crate | downstream, never a PR — [`interop-crate.md`](interop-crate.md) |
 | the dma-buf (Linux) and CoreVideo (macOS) arms | backends | the Linux arm is PR-adjacent; see [`milestones.md`](milestones.md) |
 
-The ordering and the split are [`upstream-prs.md`](upstream-prs.md) §6; the read of the
+The ordering and the split are [`upstream/README.md`](upstream/README.md) §4; the read of the
 fork's build against that plan is §7 there.
 
 ## 7. Merge status
 
 ```
-  origin/bite_v1.23.1-pre            <- the canonical ref the docs anchor citations to
-        |                               still has: on_render_surface/on_render_texture,
-        |                               Window::paint_imported_texture (pub), the
-        |                               *WindowExt paint traits, gpui_wgpu::GpuContext
+  bite_v1.23.x                    <- the canonical ref the docs anchor citations to; it carries
+        |                            the surface path: PaintSurface, draw_surfaces on all three
+        |                            renderers, GpuCanvas and its renderer-owned device door
         |
-        *  ... branch bite_v1.23.1-pre-interop (this slice) ...
-        |     + surface payload texture/view   + gpui_interop
-        |     + gpu_canvas -> GpuCanvasContext + GpuRenderer (renderer-owned device)
-        |
+        *  the remainder, in its own repositories, built against that ref:
+        |     gpui_interop — the bridge, the input gateway, guest mode
+        |     gpui_video   — gpui_va / gpui_video, the player
         v
-  (not merged)                       merge is a separate CI-verified step:
-                                     the fork's bite_* CI runs the platform rows,
-                                     which no Linux gate can reach.
 ```
 
-Nothing in this slice is on `bite_v1.23.1-pre` yet. Until the branch merges, the docs
-that cite the canonical ref describe the pre-slice shape, and the two are reconciled by
-the merge and its CI run, not by re-pointing citations ahead of it.
+The *surface* path is on the canonical `bite_v1.23.x`. The video/interop remainder is built in the
+`gpui_interop` and `gpui_video` repositories against that ref; where these docs describe the
+producer seam, the video crates or the player, those live there and are named rather than cited.

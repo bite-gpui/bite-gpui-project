@@ -52,7 +52,7 @@ rule, and they serve different producers:
 | **app → gpui** | the application creates the device and installs a renderer that adopts it | wgpu only, and only through a factory |
 
 `WgpuContextSlot` is a shared `Rc` rather than a field for the second reason:
-`WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>` (`crates/gpui_wgpu/src/wgpu_renderer.rs:173`),
+`WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>` (`crates/gpui_wgpu/src/wgpu_renderer.rs:233`),
 whose `WgpuContext` exposes `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
 (`crates/gpui_wgpu/src/wgpu_context.rs:14`). An application that owns the slot and returns
 `WgpuRenderer::new(context, …)` from its own factory ends up holding the device the renderer
@@ -76,7 +76,7 @@ handed nothing still asks the same renderer for `device` and `queue`.
 Two facts behind the table:
 
 - **The device is reached through the renderer, and only at paint time.** `PlatformWindow::with_renderer`
-  hands out `&mut dyn SceneRenderer` (`crates/gpui_platform/src/platform_window.rs:150`) and no
+  hands out `&mut dyn SceneRenderer` (`crates/gpui_platform/src/platform_window.rs:151`) and no
   device, and the seam refuses to widen `SceneRenderer` for a platform-shaped concern, so the typed
   door is a downcast: `GpuRenderer` sits beside `SceneRenderer` and each renderer that has a device
   implements it, and `GpuCanvasContext::device::<R>()` asserts the window's renderer is `R`. A
@@ -91,7 +91,7 @@ Two facts behind the table:
   the application rather than on the renderer.
 
 The factory's input does not close it either. `RendererTarget`'s one erased field
-(`crates/gpui_platform/src/platform_renderer.rs:147`) is an **input**, and what each platform puts
+(`crates/gpui_platform/src/platform_renderer.rs:129`) is an **input**, and what each platform puts
 in it is a *surface configuration* or the platform's device bundle for its own renderer: X11 sends
 `&WgpuSurfaceConfig` (`crates/gpui_linux/src/linux/x11/window.rs:783`), Windows sends
 `&DirectXDevices` (`crates/gpui_windows/src/events.rs:1322`). Before the accessor there was no path

@@ -26,7 +26,7 @@ GPU resources:
 2. **On Windows both paths require `gpui_wgpu::WgpuRenderer` for a `wgpu` producer**, installed
    through the renderer factory. The default `DirectXRenderer` supported neither, and it said so
    rather than succeeding silently: `draw_surfaces` returned an explicit unsupported error
-   (`crates/gpui_windows/src/directx_renderer.rs:852`). Corrected 2026-09-29 for a Direct3D 11
+   (`crates/gpui_windows/src/directx_renderer.rs:918`). Corrected 2026-09-29 for a Direct3D 11
    producer — see the second revision below.
 3. **Sharing a resource across devices is out of scope for this milestone.** No `IOSurface`
    variant, no DXGI shared-handle variant, no dma-buf; the erased texture payload keeps no
@@ -34,7 +34,7 @@ GPU resources:
    [`shared-surface.md`](shared-surface.md) measures the bridge a later milestone could take.
 4. **The device is reached through the factory**, which already carries it:
    `GpuContext = Rc<RefCell<Option<WgpuContext>>>`
-   (`crates/gpui_wgpu/src/wgpu_renderer.rs:173`) with
+   (`crates/gpui_wgpu/src/wgpu_renderer.rs:233`) with
    `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
    (`crates/gpui_wgpu/src/wgpu_context.rs:14`).
 
@@ -72,7 +72,7 @@ let context = match ctx_ref.as_mut() {
 };
 ```
 
-(`crates/gpui_wgpu/src/wgpu_renderer.rs:340`-`:349`). So an application that already has a
+(`crates/gpui_wgpu/src/wgpu_renderer.rs:406`-`:415`). So an application that already has a
 device, adapter and queue it wants to use can build the `WgpuContext`, put it in the slot
 from its own factory, and the renderer adopts it;
 `check_compatible_with_surface` is the guard that the adapter still presents to this

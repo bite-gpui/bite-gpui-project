@@ -86,7 +86,7 @@ METAL, after the layer arrived: PRESENT OK
 
 - **`MacSceneRenderer` keeps its shape.** The window can go on having
   `-[NSView makeBackingLayer]` return the renderer's layer
-  (`crates/gpui_macos/src/window.rs:3264`), because wgpu neither needs that layer to be a
+  (`crates/gpui_macos/src/window.rs:3258`), because wgpu neither needs that layer to be a
   `CAMetalLayer` nor minds when it arrives. The macOS commit is plumbing plus `Backends::METAL`, the
   same shape as the Windows commit.
 - **A wgpu renderer need not vend a layer at all**, subject to §4's one unmeasured corner.

@@ -27,7 +27,7 @@ kind of error that is only caught much later.
 
 - **Every claim about the code cites it, as `crate/file.rs:line`.** No assertion
   about behaviour without a `path:line` a reader can check in seconds.
-- **One canonical ref.** All line numbers resolve against `bite_v1.23.1-pre`, not
+- **One canonical ref.** All line numbers resolve against `bite_v1.23.x`, not
   against whatever a checkout happens to be on. Changing that ref invalidates every
   citation and means a full re-derivation pass.
 - **Do not restate a fact specified once elsewhere.** Naming, versions and the crate
@@ -58,7 +58,7 @@ Three facts determine whether it works, and each is easy to get wrong:
    beside each other (`repositories.md` names them).
 
 2. **The canonical ref is a remote-tracking branch in a fresh clone.** The script now
-   falls back from the bare name `bite_v1.23.1-pre` to `origin/bite_v1.23.1-pre`, so a
+   falls back from the bare name `bite_v1.23.x` to `origin/bite_v1.23.x`, so a
    fresh clone resolves without a local branch. Do not "fix" this by removing the
    fallback.
 
@@ -85,5 +85,6 @@ there rather than here so it is not a second copy.
 - `script/` — operator tooling rather than architecture: the Windows probe VM and the workflow
   scripts. [`script/README.md`](script/README.md) is the manual, and
   [`issues/0009`](issues/0009-windows-probe-vm.md) is why the guest is shaped the way it is.
-- `spi/rendering-project/` — nothing but symlinks into the real documents. Do not write a
-  real document here; opening a symlink edits the original.
+- `spi/rendering-project/` — nothing but symlinks into the real documents, in two groups: the
+  built import milestone at the top level, and the not-done follow-on work under `todo/`. Do not
+  write a real document here; opening a symlink edits the original.

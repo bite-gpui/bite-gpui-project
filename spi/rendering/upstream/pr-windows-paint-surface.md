@@ -1,23 +1,23 @@
-# PR 2 — the body, ready to open
+# The Windows-surface body, ready to open
 
-- **Target:** `zed-industries/zed`, `main`. **Opened:** not yet. **Depends on:** PR 1
-  ([`pr-1-pixel-buffer.md`](pr-1-pixel-buffer.md)) only in spirit — the two touch different paths and
-  can land in either order.
-- **The plan:** [`../upstream-prs.md`](../upstream-prs.md) §3. **Welcome upstream:** the Discussion
+- **Target:** `zed-industries/zed`, `main`. **Opened:** not yet. **Depends on:** PR 1 (the vocabulary and
+  `GpuCanvas`).
+- **The plan:** [`README.md`](README.md) §2, PR 3. **Welcome upstream:** the Discussion
   [`#64849`](https://github.com/zed-industries/zed/discussions/64849) — *"i would not have any problem
   with upstreaming support for that since it should be straightforward"*, and *"i would strongly lean
   towards surface sharing here"*.
-- **Built in the fork:** `crates/gpui_engine/src/scene.rs` (`SurfaceSource`, the `DirectXSource`
-  texture/view pair, and `PaintSurface`); `crates/gpui_authoring/src/elements/surface.rs:99` (the
-  `corner_radii` stub); `crates/gpui_windows/src/directx_renderer.rs:852` (`draw_surfaces`) and
-  `:862` (the arm it takes over from); `crates/gpui_authoring/src/window.rs:3031` (the device
-  accessor, `device_any`). The same-device arm runs in the examples
-  (`crates/gpui/examples/surface.rs`, `crates/gpui/examples/imported_texture.rs`); the cross-device
-  arm is downstream in `crates/gpui_interop` ([`interop-crate.md`](interop-crate.md)).
+- **Built in the fork:** the commit group in [`README.md`](README.md) §7 — `bed0cd2ba4`,
+  `b22b082fba`, `1abb3787fa`, `2c3e26e4aa`, `e654076fb2`, `744c237bec` (the Windows arm). By path: `crates/gpui_engine/src/scene.rs` (`SurfaceSource`, the `DirectXSource`
+  texture/view pair, and `PaintSurface`); `crates/gpui_authoring/src/elements/surface.rs:147` (the
+  `corner_radii` stub); `crates/gpui_windows/src/directx_renderer.rs:918` (`draw_surfaces`) and
+  `:1125` (the arm it takes over from); `crates/gpui_authoring/src/elements/gpu_canvas.rs:87` (the
+  device door, `GpuCanvasContext::device::<R>`). The same-device arm runs in the example
+  (`crates/gpui/examples/surface.rs`); the cross-device arm is downstream in the `gpui_interop`
+  repository ([`interop-crate.md`](../interop-crate.md)).
 - **The fork's payload is richer than this body.** The body below is upstream's PR, carrying a bare
   `ID3D11ShaderResourceView`; the fork builds `SurfaceSource::DirectX(DirectXSource)`, whose
   `DirectXSource` is `Texture(ID3D11Texture2D)` (the renderer makes the view) or
-  `View(ID3D11ShaderResourceView)` (the producer made it) — [`surfaces.md`](surfaces.md) §1.
+  `View(ID3D11ShaderResourceView)` (the producer made it) — [`surfaces.md`](../surfaces.md) §1.
 
 ## Title
 
@@ -87,10 +87,10 @@ two differences, recorded here so the replay is not a surprise and so the diverg
 
 - **The producer's device door.** The fork replaced `DirectXWindowExt::d3d11_device()` with
   `GpuRenderer` plus `GpuCanvasContext::device::<R>()` / `try_device::<R>()`, and deleted
-  `DirectXWindowExt` ([`0006`](../../decisions/0006-renderer-owned-device.md)). The *capability* is
+  `DirectXWindowExt` ([`0006`](../../../decisions/0006-renderer-owned-device.md)). The *capability* is
   unchanged — a producer can obtain the renderer's device — and the window-extension spelling is the
   fork-specific part; this body keeps the spelling upstream proposed
-  ([`upstream-prs.md`](upstream-prs.md) §8).
+  ([`README.md`](README.md) §6).
 - **The `Shared` arm.** The fork adds `DirectXSource::Shared(SharedDirectXSurface)`, a
   device-independent NT handle the renderer resolves, so the renderer owns the consumer half of
   cross-device sharing (`OpenSharedResource1` + SRV, `OpenSharedFence` + `Wait`, cached). The body's

@@ -97,7 +97,7 @@ Two asymmetries are worth stating, because they look like the same check and are
 - **Windows:** a cross-target `cargo check` in debug is nearly equivalent to a native
   one, because in debug the HLSL is compiled at run time by `D3DCompileFromFile` and the
   Rust includes the generated bindings only when debug assertions are off
-  (`crates/gpui_windows/src/directx_renderer.rs:2002`). The native job is release, so it
+  (`crates/gpui_windows/src/directx_renderer.rs:2369`). The native job is release, so it
   differs where it matters.
 - **macOS:** the same trick does not work. `crates/gpui_apple/src/metal_renderer.rs:38`
   includes `OUT_DIR/shaders.metallib` in every profile, and only a macOS host produces

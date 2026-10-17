@@ -1,0 +1,1 @@
+../../../decisions/0006-renderer-owned-device.md

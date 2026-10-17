@@ -9,8 +9,9 @@ gives it — is a window-level pointer lock, and that lies below the seam the ga
 would sit beside; [`../rendering/surfaces.md`](../rendering/surfaces.md) §4, host and guest modes;
 [`input-policy-seam.md`](input-policy-seam.md), the other parked input document.
 
-**Line references** are to the branch `bite_v1.23.1-pre-interop-gpu_canvas`, where the sources live
-under `crates/` (`crates/gpui_platform`, `crates/gpui_types`, `crates/gpui_authoring`).
+**Line references** are to the canonical ref `bite_v1.23.x` (the engine sources,
+under `crates/gpui_platform`, `crates/gpui_types`, `crates/gpui_authoring`), and to the
+`gpui_interop` repository for the crate side.
 
 ---
 
@@ -37,10 +38,10 @@ pointer surface is three calls and a query:
 - `Platform::set_cursor_style(CursorStyle)` — `crates/gpui_platform/src/platform.rs:233`
 - `Platform::hide_cursor_until_mouse_moves()` and `Platform::is_cursor_visible()` — `:237`, `:240`
 - `PlatformWindow::mouse_position() -> Point<Pixels>` —
-  `crates/gpui_platform/src/platform_window.rs:97`
+  `crates/gpui_platform/src/platform_window.rs:98`
 
 and nothing that grabs, confines or locks. The raw handle GPUI lends
-(`impl HasWindowHandle for Window`, `crates/gpui_authoring/src/window.rs:8074`) is not an answer: the
+(`impl HasWindowHandle for Window`, `crates/gpui_authoring/src/window.rs:8142`) is not an answer: the
 backend's own event loop would still be the one receiving the motion, and it delivers that motion as
 an absolute position (§3), so a producer reaching around GPUI would fight the framework rather than
 extend it.

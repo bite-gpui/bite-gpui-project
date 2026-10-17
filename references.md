@@ -37,6 +37,11 @@ tiers, [`spi/README.md`](spi/README.md) for the seams a swap implements, and
 [`decisions/0001-no-third-swap.md`](decisions/0001-no-third-swap.md) for why the swap
 tier stops at two.
 
+Two crates sit in neither tier, because they are not seams at all: **`gpui_interop`** — the
+downstream bridge and input crate the surface work's follow-ons live in — and **`gpui_video`** — the
+video stack (`gpui_va`, `gpui_video`, `gpui_video_platform`) on the surface path. See
+[`spi/rendering-project/README.md`](spi/rendering-project/README.md).
+
 ### Inside `bite-tools`
 
 Worth knowing before opening it. `docs/` is three kinds, kept apart on purpose —
@@ -72,7 +77,8 @@ second copy would go stale:
 
 Each effort is its own repository, checked out as a parallel working copy beside the
 others rather than nested inside the clone: `bite-gpui` (the source), `bite-distribution`,
-`bite-tools`, `bite-gpui.github.io`, `gpui_parley`, `gpui_morphorm`, `gpui_pass`, and this
+`bite-tools`, `bite-gpui.github.io`, `gpui_parley`, `gpui_morphorm`, `gpui_pass`, `gpui_interop`,
+`gpui_video`, and this
 repository. The usage suite (`bite_gpui_scroll_demo` and the other exercises) is a
 separate set of consumer repositories. Committing any of these working copies into a
 `bite_*` branch would duplicate it across twelve branches, so they stay apart by living
@@ -80,7 +86,7 @@ in their own repositories.
 
 | working copy | its own repository? |
 | --- | --- |
-| `bite-gpui`, `bite-distribution`, `bite-tools`, `bite-gpui.github.io`, `gpui_parley`, `gpui_morphorm`, `gpui_pass`, this repository | yes |
+| `bite-gpui`, `bite-distribution`, `bite-tools`, `bite-gpui.github.io`, `gpui_parley`, `gpui_morphorm`, `gpui_pass`, `gpui_interop`, `gpui_video`, this repository | yes |
 | the usage suite | the demos are separate repositories; `.uses/` itself is a working directory, not a repository |
 
 `gpui_pass` is the wrap's repository — `gpui_pass`, which throttles a window's frame rate

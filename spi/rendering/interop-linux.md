@@ -1,6 +1,6 @@
 # The Linux hatch: an exported dma-buf, ordered by a dma-fence
 
-- **Status:** built — `gpui_interop`'s `linux` module exports a shareable `BGRA8`/`RGBA8` or two-plane
+- **Status:** built — the `gpui_interop` repository's `linux` module (`crates/gpui_interop/src/linux.rs`) exports a shareable `BGRA8`/`RGBA8` or two-plane
   `NV12` image, linear or on a driver-tiled modifier the renderer can import, and a `Fence` that hands
   over the acquire `sync_file`; Linux unit tests allocate each on a real device. §6's adapter step
   landed too: `Adapter::gpu_device` makes a second logical device on the renderer's own

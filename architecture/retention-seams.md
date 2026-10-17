@@ -6,7 +6,7 @@
   each attachment point.
 - **Sources.** The same two efforts, read at the same places: Zed `#63800` at
   `refs/pull/63800/head` (`3d0b7f0a`) and gpui-fast's `main` (`fast/`, `docs/`). Claims about this
-  stack are cited against `bite_v1.23.1-pre`. `bite-gp-morphorm` and `bite-gp-parley` are named but
+  stack are cited against `bite_v1.23.x`. `bite-gp-morphorm` and `bite-gp-parley` are named but
   not cited by line: they are published from repositories of their own, not from this checkout.
 
 ## 1. The seams that exist
@@ -17,7 +17,7 @@
 | `FrameSession` | `crates/gpui_engine/src/frame_session.rs:18` | owns the layout engine for a window; the scene stays in the facade's frame | — |
 | `FramePipeline` | `crates/gpui_authoring/src/window/frame_pipeline.rs:28` | passes over `PreparedRoots`; `should_render` defers a frame | `bite-gp-pass` |
 | `TextSystem` | `crates/gpui_engine/src/text_system.rs:33` | already carries layouts across frames — `layout_index` at `:133`, `reuse_layouts`, `truncate_layouts` | `bite-gp-parley` |
-| `.cached()`, and **not a seam** | `view.rs:295` (`ViewElementState`), `view.rs:302` (`ViewElementCacheKey`), `view.rs:426` (`prepaint_cached_view`) | one view's previous prepaint/paint ranges, replayed by `window.rs:4294` / `window.rs:4344` against `window.rs:1023` / `window.rs:1033` | — |
+| `.cached()`, and **not a seam** | `view.rs:295` (`ViewElementState`), `view.rs:302` (`ViewElementCacheKey`), `view.rs:426` (`prepaint_cached_view`) | one view's previous prepaint/paint ranges, replayed by `window.rs:4348` / `window.rs:4398` against `window.rs:1065` / `window.rs:1075` | — |
 
 ## 2. Why it is not a plugin today
 
@@ -47,9 +47,9 @@ clear answer, and it is *no*, along the axis that matters:
   the frame state.
 - `gpui_engine` is **below** `gpui_platform`, and the frame's channels name `PlatformInputHandler`
   and `PlatformWindow` — so the frame cannot move down without inverting that edge.
-- The tier boundary already exists, *inside* the crate: `_authoring.rs:65` "What is not authoring
-  API" (frame orchestration, element storage, frame double-buffering and the hit-test tree at `:75`)
-  and `:82` "The rest of `Window` is runtime API".
+- The tier boundary already exists, *inside* the crate: `_authoring.rs:68` "What is not authoring
+  API" (frame orchestration, element storage, frame double-buffering and the hit-test tree at `:78`)
+  and `:85` "The rest of `Window` is runtime API".
 
 The pivot is `Window`. Any cut that isolates the walk also moves `Window`, which either drags the
 platform SPI into the engine or erases the engine/authoring distinction.
@@ -141,11 +141,11 @@ is the payoff half; a leaf change stays expensive until both are done. §9 seque
 
 **The blocker.** A retention mode's store — the part of the thread that lives outside this stack
 (§10's R2) — needs to record and replay a view's slice of the frame. That slice is not a handle; it is a protocol across eleven channels in
-`crates/gpui_authoring/src/window.rs:997` (`Frame`): hitboxes, tooltips (`:978`), deferred draws
-(`:983`, holding a frame-arena `AnyElement`), the dispatch tree, accessed element states, mouse
+`crates/gpui_authoring/src/window.rs:1034` (`Frame`): hitboxes, tooltips (`:1015`), deferred draws
+(`:1020`, holding a frame-arena `AnyElement`), the dispatch tree, accessed element states, mouse
 listeners (type-erased closures), input handlers (the platform SPI), cursor styles, tab stops and
-the text-cache index — addressed by `PrepaintStateIndex` (`:1023`) and `PaintIndex` (`:1033`) and
-replayed by `reuse_prepaint` (`:4271`) / `reuse_paint` (`:4344`), which **move** slices out of the
+the text-cache index — addressed by `PrepaintStateIndex` (`:1065`) and `PaintIndex` (`:1075`) and
+replayed by `reuse_prepaint` (`:4319`) / `reuse_paint` (`:4398`), which **move** slices out of the
 rendered frame into the next and remap dispatch ids.
 
 **Why publishing it is wrong.** The channels are heterogeneous in kind (plain data, non-cloneable
@@ -669,11 +669,11 @@ Each is a channel of the frame, and each resolution is cited to the mode that ha
 
 | # | invariant | failure mode | resolution (as designed) |
 | --- | --- | --- | --- |
-| **R4** | occurrence identity | two mounts of one `Entity<V>` take the same element path — `ViewElement::id()` is `self.entity_id.map(ElementId::View)` (`view.rs:313`) — so they share one `(GlobalElementId, TypeId)` entry in the `Frame`'s single element-state map (`window.rs:1000`) and cannot keep separate state or subscriptions | split **mount identity** from **state identity**: `View::element_id()` says where a node mounts and `View::entity()` which entity backs it; the mount is found again by the occurrence `(element path, parent node, nth)`, identity within a node being `(node, Location::caller(), nth)` overridden by an explicit key. A repeated mount of one entity goes to the next occurrence, and element state is per node |
+| **R4** | occurrence identity | two mounts of one `Entity<V>` take the same element path — `ViewElement::id()` is `self.entity_id.map(ElementId::View)` (`view.rs:313`) — so they share one `(GlobalElementId, TypeId)` entry in the `Frame`'s single element-state map (`window.rs:1037`) and cannot keep separate state or subscriptions | split **mount identity** from **state identity**: `View::element_id()` says where a node mounts and `View::entity()` which entity backs it; the mount is found again by the occurrence `(element path, parent node, nth)`, identity within a node being `(node, Location::caller(), nth)` overridden by an explicit key. A repeated mount of one entity goes to the next occurrence, and element state is per node |
 | **R6** | orphan layout roots | a subtree laid out as its own root inside a node (`layout_as_root`, `element.rs:246` — list rows, editor blocks, the measured row of a `uniform_list`) hangs off no child list the node retains, so retiring the node's root never reaches it and it leaks one Taffy tree per item per frame | A found this by review and fixes it at layout time rather than by a list to retire: `Window::compute_layout` marks such orphan roots as **frame layout**, and `TaffyLayoutEngine::finish_frame` removes them as subtrees, stopping short of another node's retained root and never touching a tree a node painted with (`layout_trees_measured_inside_a_node_do_not_accumulate`) |
-| **R7** | dispatch identity and deferred context | the dispatch tree's ids are per-frame. Upstream remaps a replayed subtree by an offset delta, which A documents as insufficient once empty nodes are elided and a child owns a nested range. And a `DeferredDraw` (`window.rs:983`) can only render in the ambient context it was attached in | A records a node's pushes and pops as a contiguous range of the live `dispatch_tree.nodes`, snapshots the non-empty nodes after paint, and resolves each parent to a kept node of the scope (`DispatchParent::Recorded`) or the scope's attachment point (`DispatchParent::Attachment`); reuse pushes them back under the active node. A **node-owned dispatch tree with stable ids** removes the snapshot altogether and is A's own follow-up — cleaner, but *"not needed for correctness or the measured performance"*. The deferred root must *capture the ambient context it was attached in* — element-id stack, text-style stack, rem size, content mask, offset and dispatch parent — and re-render there |
+| **R7** | dispatch identity and deferred context | the dispatch tree's ids are per-frame. Upstream remaps a replayed subtree by an offset delta, which A documents as insufficient once empty nodes are elided and a child owns a nested range. And a `DeferredDraw` (`window.rs:1020`) can only render in the ambient context it was attached in | A records a node's pushes and pops as a contiguous range of the live `dispatch_tree.nodes`, snapshots the non-empty nodes after paint, and resolves each parent to a kept node of the scope (`DispatchParent::Recorded`) or the scope's attachment point (`DispatchParent::Attachment`); reuse pushes them back under the active node. A **node-owned dispatch tree with stable ids** removes the snapshot altogether and is A's own follow-up — cleaner, but *"not needed for correctness or the measured performance"*. The deferred root must *capture the ambient context it was attached in* — element-id stack, text-style stack, rem size, content mask, offset and dispatch parent — and re-render there |
 | **R8** | text-cache ownership | carrying text per view needs the cache to keep, per node, the `(key, layout)` pairs it looked up, not the whole-frame carry the trait's default shim gives (`crates/gpui_engine/src/text_system.rs:133`) | A makes the node the unit: each phase of a node holds its `TextUse` — including text shaped inside a Taffy measure closure, attributed to the node that requested the measured layout, since measuring runs outside the traversal — and a redraw seeds it back into the frame cache first; the cache stays one previous frame deep. The follow-up is to record the uses on the window's traversal stack as slices of one frame-level vector, so the `Arc` handles are moved rather than cloned and dropped per node |
-| **R9** | input handler / IME on replay | `Frame::input_handlers` (`window.rs:1008`) holds the platform's `PlatformInputHandler`s; a replayed view whose subtree owned the focused handler would leave the platform pointing into a frame that is gone | resolve **dynamically**: A has the recordings own their handlers, leased out of their slot for the length of a call, and `PlatformInputHandler` *"resolves the rendered frame's input handler through its context on every call"*, so a replayed view moves nothing — it changes which handler the context resolves to |
+| **R9** | input handler / IME on replay | `Frame::input_handlers` (`window.rs:1050`) holds the platform's `PlatformInputHandler`s; a replayed view whose subtree owned the focused handler would leave the platform pointing into a frame that is gone | resolve **dynamically**: A has the recordings own their handlers, leased out of their slot for the length of a call, and `PlatformInputHandler` *"resolves the rendered frame's input handler through its context on every call"*, so a replayed view moves nothing — it changes which handler the context resolves to |
 | **R10** | atlas / tile lifetime | a replayed sprite can reference a tile the atlas released between frames — the crash behind Zed's atlas work | this one is **R1-shaped, not a pure invariant**: it needs an additive engine-SPI change, and there are two independent halves. Zed merged the renderer half — `#64623`, backends *skip a sprite whose texture was released instead of panicking* — while its `Window`-lifetime companion `#64619` was closed unmerged. A's branch does not ref-count tiles either: it forces a full refresh when an image is evicted, and lists *"audit for the same eviction pattern"* over GPUI's per-frame-use caches as remaining work. AB takes ref-marked tiles as a requirement on `PlatformAtlas` (`crates/gpui_engine/src/atlas.rs:56`) |
 
 ### Class 3: the trade-offs and the bootstrap
@@ -703,7 +703,7 @@ impl Application {
 
 **R12 — the inspector and accessibility.** The interim is what the mechanisms already do: A's
 `.cached()` bypasses itself while the inspector is picking (`is_inspector_picking`,
-`window.rs:7551`), and B lists the same four things that are never drawn from the last frame — a
+`window.rs:7619`), and B lists the same four things that are never drawn from the last frame — a
 refresh, a drag, the inspector picking, accessibility active. **Resolution:** keep the fallback as
 the interim — return `None` and rebuild in full while either is active — and take A's plan as the
 target, since A names deleting both: stable per-mount ids with partial accessibility

@@ -11,7 +11,7 @@
 - **Read with:** [`probe-p5-fence-loop.md`](probe-p5-fence-loop.md),
   [`probe-p6-adapter-luid.md`](probe-p6-adapter-luid.md),
   [`probe-p9-device-loss.md`](probe-p9-device-loss.md), and
-  [`verification.md`](verification.md) §2 (the PR-2 sufficiency row).
+  [`verification.md`](verification.md) §2 (the same-device sufficiency row).
 - **Gates:** W5 — and, through P6, the shape of `gpui-interop`'s `attach`/`Adapter`.
 
 ## What one run must print
@@ -29,9 +29,9 @@ Each prints `PASS` / `FAIL` / `SKIP` with its evidence, so a partial answer is s
 3. **P9 — device loss.** Drop GPUI's device (`PlatformRenderer::device_lost` → `recover`) while a
    surface is held, then re-attach; the bridge must tear down and re-negotiate without crashing the
    host process.
-4. **The PR-2 sufficiency test.** An `ID3D11Texture2D` cleared to a known colour, as an SRV through
+4. **The same-device sufficiency test.** An `ID3D11Texture2D` cleared to a known colour, as an SRV through
    `surface()` in a `div()`, read back **byte for byte** — no bridge, no second device. This is the
-   claim that PR 2 and the device accessor are *sufficient*, and it is also what PR 2 should carry.
+   claim that PR 3 and the device accessor are *sufficient*, and it is also what PR 3 should carry.
 
 ## What its outcome decides
 

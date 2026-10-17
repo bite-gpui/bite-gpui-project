@@ -82,7 +82,7 @@ struct WgpuResult {
 }
 
 fn main() {
-    println!("interop-probe: the packed Windows checklist (P6 adapter identity + P5 fence loop + P9 device loss + the PR-2 sufficiency test)");
+    println!("interop-probe: the packed Windows checklist (P6 adapter identity + P5 fence loop + P9 device loss + the same-device sufficiency test)");
     println!("adapter order and LUIDs come from DXGI; wgpu is DX12-only here");
     println!();
 
@@ -97,7 +97,7 @@ fn main() {
     let wgpu = check_p6_wgpu(dxgi.as_ref());
     let p5 = check_p5(dxgi.as_ref());
     let p9 = check_p9(dxgi.as_ref(), simulate, pnp);
-    let pr2 = check_pr2(dxgi.as_ref());
+    let same_device = check_same_device(dxgi.as_ref());
 
     println!();
     println!("SUMMARY");
@@ -130,8 +130,8 @@ fn main() {
         }
     );
     println!(
-        "PR-2 same-device: {}",
-        match &pr2 {
+        "same-device  : {}",
+        match &same_device {
             Ok(note) => format!("PASS — {note}"),
             Err(e) => format!("FAIL/SKIP — {e}"),
         }
@@ -973,11 +973,11 @@ fn check_p9(dxgi: Result<&DxgiResult, &String>, simulate: bool, pnp: bool) -> Re
 }
 
 // -------------------------------------------------------------------------------------------
-// The PR-2 sufficiency test: a same-device `ID3D11Texture2D` straight through, no bridge
+// The same-device sufficiency test: a same-device `ID3D11Texture2D` straight through, no bridge
 // (spi/rendering/interop-scaffold.md §7, `tests/same_device.rs`).
 // -------------------------------------------------------------------------------------------
 
-const PR2_VS: &str = r#"
+const SAME_DEVICE_VS: &str = r#"
 struct VSOut { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
 VSOut main(uint id : SV_VertexID) {
     float2 p = float2((id << 1) & 2, id & 2);
@@ -988,7 +988,7 @@ VSOut main(uint id : SV_VertexID) {
 }
 "#;
 
-const PR2_PS: &str = r#"
+const SAME_DEVICE_PS: &str = r#"
 Texture2D tex : register(t0);
 SamplerState smp : register(s0);
 float4 main(float2 uv : TEXCOORD0) : SV_TARGET { return tex.Sample(smp, uv); }
@@ -996,9 +996,9 @@ float4 main(float2 uv : TEXCOORD0) : SV_TARGET { return tex.Sample(smp, uv); }
 
 /// The known colour: RGBA (32, 96, 192, 255)/255 -- three distinct channels, so a channel swap
 /// would not round-trip. Stored B8G8R8A8, so its raw bytes are [192, 96, 32, 255].
-const PR2_RGBA: [f32; 4] = [32.0 / 255.0, 96.0 / 255.0, 192.0 / 255.0, 1.0];
-const PR2_EXPECT_BGRA: [u8; 4] = [192, 96, 32, 255];
-const PR2_TARGET_CLEAR: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
+const SAME_DEVICE_RGBA: [f32; 4] = [32.0 / 255.0, 96.0 / 255.0, 192.0 / 255.0, 1.0];
+const SAME_DEVICE_EXPECT_BGRA: [u8; 4] = [192, 96, 32, 255];
+const SAME_DEVICE_TARGET_CLEAR: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
 
 unsafe fn blob_text(b: &ID3DBlob) -> String {
     let p = b.GetBufferPointer() as *const u8;
@@ -1015,7 +1015,7 @@ unsafe fn compile_hlsl(src: &str, entry: &str, target: &str) -> Result<ID3DBlob,
     D3DCompile(
         bytes.as_ptr() as *const core::ffi::c_void,
         bytes.len(),
-        PCSTR(b"pr2.hlsl\0".as_ptr()),
+        PCSTR(b"same_device.hlsl\0".as_ptr()),
         None,
         None::<&ID3DInclude>,
         PCSTR(entry_c.as_ptr() as *const u8),
@@ -1113,12 +1113,12 @@ unsafe fn d3d11_read_pixels(
     Ok(out)
 }
 
-/// PR-2 sufficiency: one D3D11 device, an `ID3D11Texture2D` cleared to a known colour, sampled
-/// straight through as an SRV into a render target -- no bridge, no second device. Read back
-/// byte for byte (the assertion `interop-scaffold.md` §7 step 5 asks for).
-fn check_pr2(dxgi: Result<&DxgiResult, &String>) -> Result<String, String> {
+/// same-device sufficiency: one D3D11 device, an `ID3D11Texture2D` cleared to a known colour,
+/// sampled straight through as an SRV into a render target -- no bridge, no second device. Read
+/// back byte for byte (the assertion `interop-scaffold.md` §7 step 5 asks for).
+fn check_same_device(dxgi: Result<&DxgiResult, &String>) -> Result<String, String> {
     println!();
-    println!("== PR-2 sufficiency: a same-device ID3D11Texture2D, no bridge ==");
+    println!("== same-device sufficiency: a same-device ID3D11Texture2D, no bridge ==");
     let dxgi = dxgi.map_err(|e| format!("no DXGI baseline: {e}"))?;
     let adapter = &dxgi.adapter;
     let luid = luid_str(dxgi.device_luid);
@@ -1153,10 +1153,10 @@ fn check_pr2(dxgi: Result<&DxgiResult, &String>) -> Result<String, String> {
             0,
         )?;
         let src_rtv = d3d11_rtv(&device, &src)?;
-        context.ClearRenderTargetView(&src_rtv, &PR2_RGBA);
+        context.ClearRenderTargetView(&src_rtv, &SAME_DEVICE_RGBA);
         let src_srv = d3d11_srv(&device, &src)?;
         println!(
-            "surface : ID3D11Texture2D B8G8R8A8_UNORM {TEX_W}x{TEX_H}, cleared to RGBA {PR2_RGBA:?}, SRV made"
+            "surface : ID3D11Texture2D B8G8R8A8_UNORM {TEX_W}x{TEX_H}, cleared to RGBA {SAME_DEVICE_RGBA:?}, SRV made"
         );
 
         // The draw target, cleared to a different colour so the draw is observable.
@@ -1168,11 +1168,11 @@ fn check_pr2(dxgi: Result<&DxgiResult, &String>) -> Result<String, String> {
             0,
         )?;
         let tgt_rtv = d3d11_rtv(&device, &tgt)?;
-        context.ClearRenderTargetView(&tgt_rtv, &PR2_TARGET_CLEAR);
+        context.ClearRenderTargetView(&tgt_rtv, &SAME_DEVICE_TARGET_CLEAR);
 
         // 4. paint `surface(srv)`: a full-screen triangle whose PS samples the SRV.
-        let vs_blob = compile_hlsl(PR2_VS, "main", "vs_5_0")?;
-        let ps_blob = compile_hlsl(PR2_PS, "main", "ps_5_0")?;
+        let vs_blob = compile_hlsl(SAME_DEVICE_VS, "main", "vs_5_0")?;
+        let ps_blob = compile_hlsl(SAME_DEVICE_PS, "main", "ps_5_0")?;
         let vs_bytes =
             std::slice::from_raw_parts(vs_blob.GetBufferPointer() as *const u8, vs_blob.GetBufferSize());
         let ps_bytes =
@@ -1241,7 +1241,7 @@ fn check_pr2(dxgi: Result<&DxgiResult, &String>) -> Result<String, String> {
         for i in 0..total {
             let s = &src_px[i * 4..i * 4 + 4];
             let t = &tgt_px[i * 4..i * 4 + 4];
-            if t != s || t != PR2_EXPECT_BGRA {
+            if t != s || t != SAME_DEVICE_EXPECT_BGRA {
                 mismatches += 1;
                 if first_bad.is_none() {
                     first_bad = Some((i, [t[0], t[1], t[2], t[3]]));
@@ -1249,7 +1249,7 @@ fn check_pr2(dxgi: Result<&DxgiResult, &String>) -> Result<String, String> {
             }
         }
         println!(
-            "readback: source first pixel {:?}, target first pixel {:?}; expected BGRA {PR2_EXPECT_BGRA:?}; {mismatches}/{total} off",
+            "readback: source first pixel {:?}, target first pixel {:?}; expected BGRA {SAME_DEVICE_EXPECT_BGRA:?}; {mismatches}/{total} off",
             &src_px[0..4],
             &tgt_px[0..4]
         );
@@ -1259,7 +1259,7 @@ fn check_pr2(dxgi: Result<&DxgiResult, &String>) -> Result<String, String> {
 
         if mismatches == 0 {
             println!(
-                "PR-2 sufficiency: PASS — the SRV round-tripped byte-exact through one device, no bridge"
+                "same-device sufficiency: PASS — the SRV round-tripped byte-exact through one device, no bridge"
             );
             Ok("byte-exact, no bridge".to_string())
         } else {

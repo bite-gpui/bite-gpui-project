@@ -47,7 +47,7 @@ what they add to the decision is that the per-backend payload types become publi
 app→gpui is already reachable for wgpu through the factory. What was missing was gpui→app, and the
 question was where a *typed* accessor could hang: a type the application already holds is a `Window`
 or a renderer reached through `PlatformWindow::with_renderer`
-(`crates/gpui_platform/src/platform_window.rs:150`), which hands out `&mut dyn SceneRenderer` and no
+(`crates/gpui_platform/src/platform_window.rs:151`), which hands out `&mut dyn SceneRenderer` and no
 device.
 
 **Owned rather than borrowed.** The only route from a window to a renderer is a closure, and no
@@ -66,8 +66,8 @@ implement a trait for `Window`. The facade depends on both, and `platform_entry.
 its per-platform re-exports live, beside the wasm one.
 
 **What makes the window the right anchor is that it already forwards.** `Window` owns
-`Box<dyn PlatformWindow>` (`crates/gpui_authoring/src/window.rs:1267`) and reaches it for everything
-it does not own itself (`:1789`), so one erased method on each of the two traits is the whole of the
+`Box<dyn PlatformWindow>` (`crates/gpui_authoring/src/window.rs:1318`) and reaches it for everything
+it does not own itself (`:1840`), so one erased method on each of the two traits is the whole of the
 plumbing, and neither `SceneRenderer` nor `PlatformWindow` grows a hardware type.
 
 ## Rejected alternatives

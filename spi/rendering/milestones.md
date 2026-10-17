@@ -1,7 +1,8 @@
 # Milestones
 
 - **Status:** the handoff. What is built, where it is, what is next in what order, and the gates a
-  resumer runs. Written 2026-09-29, against `bite_v1.23.1-pre` at `e867ece9f9`; a citation's line
+  resumer runs. Written 2026-09-29 against `bite_v1.23.1-pre` (`e867ece9f9`), re-pointed onto the
+  canonical `bite_v1.23.x` (`5c0bc06887`, tag `bite_1.23.302`) on 2026-10-17; a citation's line
   numbers move whenever that ref does, and `script/check-citations` prints what each one now points
   at.
 - **Read with:** the chapter order in [`README.md`](README.md) for the design — this document is the
@@ -12,12 +13,12 @@
 
 | what | where |
 | --- | --- |
-| the canonical ref, and what every citation resolves against | `bite_v1.23.1-pre`, tip `81e87f0708` (the squashed dma-buf surface arm, PR #10, on top of the Windows arm, PR #9) |
-| what the canonical ref already carries | the renderer seam (#4), the fork's CI file (#5), Path A whole (#6), the Windows surface arm plus `GpuCanvas` (#9), and the Linux dma-buf surface arm (#10) |
+| the canonical ref, and what every citation resolves against | `bite_v1.23.x`, tip `5c0bc06887` (tag `bite_1.23.302`) |
+| what the canonical ref already carries | the layer stack, the surface re-cut (`PaintSurface`, `draw_surfaces` on all three renderers, `GpuCanvas`) and the renderer-owned device door (`0006`) |
 | the design of record for external pixels | [`surfaces.md`](surfaces.md) — the surface unification [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) decides — and its plan and probes in [`surface-plan.md`](surface-plan.md) |
 | the design of record for external pixels | [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) — the surface unification; its source, the *External Surfaces, Platform Interop, and Headless Rendering in GPUI* design record, is filed with the work |
 | Path A, whole | on the canonical ref, sixteen commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
-| the checkout the work is in | `.tools/worktrees/wt-seam` in the zed clone |
+| the checkout the work is in | `bite-tools/worktrees/wt-seam`, a `git worktree` of the `bite-gpui` clone |
 | the other repositories, and what each is for | [`../../references.md`](../../references.md) |
 
 `#6` merged as `fcde78d01a`, and it was the whole path: the Direct3D arm was stacked on it
@@ -38,7 +39,7 @@ canonical ref carries Path A.
 | the wgpu arm, the offscreen target and the readback | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 3 rows — the sRGB round trip, the ordering, the device identity — skipped with a logged warning where the machine has no adapter |
 | the Metal arm | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 2 rows on `macos-14` — the colour round trip and the boundary check — plus the shader compile the `macos` job already did |
 | the Direct3D arm and its CI job | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 3 rows on `windows-latest`, WARP |
-| the producer's reach: `Window::device_any`, and a token builder on each of the three arms (`ImportedTextureExt`, `DirectXTextureExt`, `MetalTextureExt`) | [`producer-reach.md`](producer-reach.md) | the canonical ref | the Direct3D and Metal rows take their device through the accessor — the route an application has — instead of the renderer's own field |
+| the producer's reach: `GpuRenderer::device` and the canvas door `GpuCanvasContext::device::<R>`, and a token builder on each of the three arms (`ImportedTextureExt`, `DirectXTextureExt`, `MetalTextureExt`) | [`producer-reach.md`](producer-reach.md) | the canonical ref | the Direct3D and Metal rows take their device through the door — the route an application has — instead of the renderer's own field |
 | the macOS producer route, measured rather than built: wgpu's adapter *is* the `MetalRenderer`'s own `MTLDevice`, so a wgpu producer there needs a power preference and no handover | [`producer-reach.md`](producer-reach.md) §7 | the canonical ref | the probe's printout, [`../decisions/macos-wgpu-producer-probe.md`](../../decisions/macos-wgpu-producer-probe.md) |
 | the runnable demo: `cargo run -p gpui --example imported_texture`, a producer per platform, composited under a plain `div()` | [`foreign-texture.md`](foreign-texture.md) §3 | `crates/gpui/examples/imported_texture.rs`, the canonical ref (which carries it as `path_a.rs`) | compiles for the host, `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`; running it needs a display |
 
@@ -58,7 +59,7 @@ Small and independent, and none of them blocks anything in §4.
   without one, which is a decision about what a GPU-less runner is for rather than a wiring change.
   Issue [`0003`](../../issues/0003-scheduled-builds.md) holds the wider version of the question.
 - **The canonical ref's citations move when it advances.** Anything that lands on
-  `bite_v1.23.1-pre` re-derives every citation in this repository.
+  `bite_v1.23.x` re-derives every citation in this repository.
 
 ## 4. What is next, in order
 
@@ -67,8 +68,9 @@ external pixels onto the existing `PaintSurface` / `surface()`. M1 and M2 stand;
 the bridge is promoted out of "deferred", and the unified surface arm joins the list.
 
 **M1 — the producer's reach. Done.** [`producer-reach.md`](producer-reach.md) and
-[`0004`](../../decisions/0004-producer-device-rendezvous.md). `Window::device_any` is built on all
-three renderers, so the decision that was M1's first step is taken and the accessor exists; what
+[`0006`](../../decisions/0006-renderer-owned-device.md) (which supersedes 0004). `GpuRenderer::device`
+is built on each renderer that owns a device, and the canvas lends it as
+`GpuCanvasContext::device::<R>`, so the decision that was M1's first step is taken and the door exists; what
 each platform still lacks is [`producer-reach.md`](producer-reach.md) §7, and none of it blocks
 anything below.
 
@@ -90,7 +92,7 @@ own pass, not a buffer, so 0005 leaves it alone; it needs no device export and i
 
 **M5 — the unified surface arm. Windows half done.** Extend `SurfaceSource` / `PaintSurface` to Windows and Linux and
 implement `draw_surfaces` by retargeting the Direct3D arm that exists
-(`crates/gpui_windows/src/directx_renderer.rs:862` → `:852`). The Windows half is upstream PR 2 of
+(`crates/gpui_windows/src/directx_renderer.rs:1125` → `:918`). The Windows half is upstream PR 3 of
 the design record and is built (#9); the Linux half adds the dma-buf variant and is gated on P3. This is what makes `surface()` a
 capability on every desktop rather than macOS alone.
 
@@ -109,7 +111,7 @@ runner that hosts GPUI inside a foreign loop, which belongs in `gpui-interop`.
 
 ## 5. The gates
 
-**`.meta`.** `script/check-citations` — 324 citations, 0 unresolved when this was written. It
+**`.meta`.** `script/check-citations` — 409 citations, 0 unresolved (2026-10-17). It
 resolves against the canonical ref, so a document may not cite `path:line` for a file that exists
 only on a branch: name it, as `producer-reach.md` does for `crates/gpui_engine/src/custom_render.rs`
 and the two `imported_texture.rs` files. `.meta` is its own repository; never `git add` the zed
@@ -146,7 +148,7 @@ Three traps that cost time if they are not known:
   `NotAttempted("llvm-rc")`, because embedding Windows resources needs a resource compiler Linux
   does not have. Check `-p gpui_windows` instead; the facade is CI's job.
 - In debug, the HLSL is compiled at run time by `D3DCompileFromFile`
-  (`crates/gpui_windows/src/directx_renderer.rs:2002` is the release branch that replaces it) and
+  (`crates/gpui_windows/src/directx_renderer.rs:2369` is the release branch that replaces it) and
   the byte arrays come from `crates/gpui_windows/build.rs`, whose shader compilation is
   `#[cfg(all(target_os = "windows", not(debug_assertions)))]`. So a shader error and a `from_bytes`
   arm are both invisible to a local debug check.

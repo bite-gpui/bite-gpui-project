@@ -21,10 +21,10 @@
 no second scene primitive.** Five consequences:
 
 1. **One primitive, and it already exists.** `Primitive::Surface(PaintSurface)`
-   (`crates/gpui_engine/src/scene.rs:238`, struct at `:784`), the `Surface` element and `surface()`
-   (`crates/gpui_authoring/src/elements/surface.rs:27`, `:35`), `SurfaceSource`
-   (`:13`), `MacWindowExt::paint_surface` (`crates/gpui_authoring/src/window/mac.rs:17`) and each
-   renderer's `draw_surfaces` (`crates/gpui_windows/src/directx_renderer.rs:852`) are the seam. They
+   (`crates/gpui_engine/src/scene.rs:244`, struct at `:908`), the `Surface` element and `surface()`
+   (`crates/gpui_authoring/src/elements/surface.rs:21`, `:61`), `SurfaceSource`
+   (`crates/gpui_engine/src/scene.rs:851`), `GpuCanvasContext::paint_surface` (`crates/gpui_authoring/src/elements/gpu_canvas.rs:46`) and each
+   renderer's `draw_surfaces` (`crates/gpui_windows/src/directx_renderer.rs:918`) are the seam. They
    are **extended, not replaced**. The element was macOS-only when this was decided, because
    `SurfaceSource` had one variant and `draw_surfaces` was a stub off macOS; it now carries the
    `CoreVideo`/`DirectX`/`DmaBuf` variants and every renderer implements `draw_surfaces`.
@@ -34,7 +34,7 @@ no second scene primitive.** Five consequences:
    producer made (`DirectXSource`) — the ergonomic default and its escape, and the shape that makes
    Windows symmetric with macOS, whose `CoreVideo` arm is likewise a *resource*. `PaintSurface` also
    gains `corner_radii`, which the element already stubs as a `TODO`
-   (`crates/gpui_authoring/src/elements/surface.rs:99`), plus the `opacity` and
+   (`crates/gpui_authoring/src/elements/surface.rs:147`), plus the `opacity` and
    `flip_v` our primitive carries.
 3. **dma-buf is a Surface transport, not a texture.** It is Linux's sibling of `IOSurface` and the
    DXGI shared NT handle: a kernel-level, cross-process, cross-API buffer handshake, imported into
@@ -44,8 +44,8 @@ no second scene primitive.** Five consequences:
    `wgpu` and D3D12.
 5. **Guest mode is the offscreen contract, not a desktop `run_embedded`.** A foreign host embeds
    GPUI as a headless renderer on a worker thread; it is the same
-   `render_scene`/`read_pixels`/`render_scene_to_image` contract (`crates/gpui_engine/src/renderer.rs:80`,
-   `:102`, `:110`, `:115`), with the GPU path handing back a surface instead of a CPU buffer.
+   `render_scene`/`read_pixels`/`render_scene_to_image` contract (`crates/gpui_engine/src/renderer.rs:118`,
+   `:140`, `:148`, `:153`), with the GPU path handing back a surface instead of a CPU buffer.
 
 ## What each built artifact becomes
 
@@ -54,12 +54,12 @@ new entry point calls.
 
 | built artifact (this tree) | where | becomes |
 | --- | --- | --- |
-| `PixelBuffer`, and `render_scene` split from `read_pixels` | `crates/gpui_engine/src/renderer.rs:19`, `:102`, `:110`, `:115` | **kept verbatim** — this is the design's upstream PR 1, already built |
+| `PixelBuffer`, and `render_scene` split from `read_pixels` | `crates/gpui_engine/src/renderer.rs:57`, `:140`, `:148`, `:153` | **kept verbatim** — this is the design's upstream PR 6, already built |
 | `CustomRenderPrimitive::to_quad_record` — the geometry, content-mask and corner-SDF encoding into the quad record | `crates/gpui_engine/src/custom_render.rs:101` | **kept** — it is the record the surface fragment reads, so the HLSL/SDF path survives |
-| the Direct3D arm: SRV creation, the imported-texture sampler, the per-primitive draw | `crates/gpui_windows/src/directx_renderer.rs:862` | **retargeted** into `draw_surfaces` (`:852`), the stub it replaces |
-| `Window::device_any` and the erased `PlatformWindow`/`PlatformRenderer` accessors | `crates/gpui_authoring/src/window.rs:3031`, `crates/gpui_platform/src/platform_window.rs:159`, `crates/gpui_platform/src/platform_renderer.rs:97` | **kept** — the rendezvous 0004 decided; only its typed facade spelling changes (below) |
-| `ImportedTextureExt` / `DirectXTextureExt` / `MetalTextureExt` (token builders on a texture) | `crates/gpui_windows/src/imported_texture.rs:43`, re-exported at `crates/gpui/src/platform_entry.rs:37` | **retargeted** into `From<…> for SurfaceSource` converters; the format/usage validation they do becomes the converter's |
-| `CustomRenderPrimitive::Texture`, `ImportedTextureHandle`, `Primitive::Custom`, `scene.custom`, `paint_imported_texture`, `painted_imported_textures` | `crates/gpui_engine/src/custom_render.rs:41`, `:14`; `crates/gpui_engine/src/scene.rs:239`; `crates/gpui_authoring/src/window.rs:5000`, `:3037` | **superseded** — the surface path replaces them; `CustomRenderPrimitive` keeps only its `Inline` (Path B) arm |
+| the Direct3D arm: SRV creation, the imported-texture sampler, the per-primitive draw | `crates/gpui_windows/src/directx_renderer.rs:1125` | **retargeted** into `draw_surfaces` (`:918`), the stub it replaces |
+| `GpuRenderer::device` — the renderer-owned device door | `crates/gpui_engine/src/renderer.rs:36`, `:42` | **retargeted** — `0006` replaces 0004's window-lent `device_any`; the canvas lends it as `GpuCanvasContext::device::<R>` (`crates/gpui_authoring/src/elements/gpu_canvas.rs:87`) |
+| `ImportedTextureExt` / `DirectXTextureExt` / `MetalTextureExt` (token builders on a texture) | `crates/gpui_windows/src/imported_texture.rs:43`, re-exported at `crates/gpui/src/platform_entry.rs:39` | **retargeted** into `From<…> for SurfaceSource` converters; the format/usage validation they do becomes the converter's |
+| `CustomRenderPrimitive::Texture`, `ImportedTextureHandle`, `Primitive::Custom`, `scene.custom`, `paint_imported_texture`, `painted_imported_textures` | `crates/gpui_engine/src/custom_render.rs:41`, `:14`; `crates/gpui_engine/src/scene.rs:245`; `crates/gpui_authoring/src/window.rs:5054`, `:3085` | **superseded** — the surface path replaces them; `CustomRenderPrimitive` keeps only its `Inline` (Path B) arm |
 | the cross-API fence bridge | not built | **not built** — measured in [`shared-surface.md`](shared-surface.md); now parked in `gpui-interop` rather than deferred |
 
 ## Why
@@ -115,7 +115,7 @@ not merge. Recorded so the re-litigation is not paid twice.
   the reverse direction (a D3D11 producer feeding a `wgpu` consumer) is still the one
   [`producer-reach.md`](../spi/rendering/producer-reach.md) §6 records as unmeasured.
 - **`PaintSurface`'s bounds must stay `ScaledPixels`.** The design writes `Bounds<Pixels>`, but the
-  primitive takes `Bounds<ScaledPixels>` (`crates/gpui_engine/src/scene.rs:786`) because a renderer
+  primitive takes `Bounds<ScaledPixels>` (`crates/gpui_engine/src/scene.rs:910`) because a renderer
   has no scale factor of its own; the element converts at paint time, as `paint_quad` does. The
   conversion stays in the element, and the design's `Pixels` is a slip, not a change.
 

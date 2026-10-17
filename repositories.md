@@ -12,7 +12,7 @@ cite the legacy name only when quoting an older document.
 
 ## The organisation's repositories
 
-Nine repositories in `bite-gpui`: seven carry the project, one is the site, one is a
+Eleven repositories in `bite-gpui`: nine carry the project, one is the site, one is a
 consumer. `bite-tools` is private; the rest are public.
 
 | canonical | legacy | what it is |
@@ -26,6 +26,8 @@ consumer. `bite-tools` is private; the rest are public.
 | `gpui_morphorm` | `.morphorm` | `gpui_morphorm` — the `LayoutEngine` swap, a morphorm-backed layout engine |
 | `gpui_pass` | `.pass` | `gpui_pass` — the `FramePipeline` wrap (throttle + ledger) |
 | `bite_gpui_scroll_demo` | `.uses/scroll-demo` | a consumer: the scroll-and-motion demo built on the published crates |
+| `gpui_interop` | — | the downstream bridge and input crate — the cross-device surface bridge, the input gateway, and the Linux/macOS/Windows arms — in its own repository |
+| `gpui_video` | — | the video stack on the surface path: `gpui_va` (decode), `gpui_video` (the element), `gpui_video_platform` |
 
 ## The usage suite
 

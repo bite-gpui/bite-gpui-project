@@ -38,23 +38,23 @@ flowchart TD
 
 | what | where | what it is for |
 | --- | --- | --- |
-| `Effect` | `app.rs:3089` | the queue's item: `Notify`, `Emit`, `RefreshWindows`, `NotifyGlobalObservers`, `Defer`, `EntityCreated` |
-| `pending_effects: VecDeque<Effect>` | `app.rs:654` | what the next flush will drain. Effects cause effects, so the queue is drained to quiescence |
-| `pending_notifications: FxHashSet<EntityId>` | `app.rs:690` | dedupes a notify from an entity nothing is displaying |
-| `observers: SubscriberSet<EntityId, Handler>` | `app.rs:656` | who to run when an entity notifies |
-| `tracked_entities: FxHashMap<WindowId, FxHashSet<EntityId>>` | `app.rs:699` | the entities a window *actually renders right now*, rebuilt per frame by `record_entities_accessed` (`app.rs:1113`) |
-| `window_invalidators_by_entity` | `app.rs:697` | an entity's invalidator per window. **Monotonic** — an entry alone does not mean the window still displays the entity, which is why the lookup is filtered |
-| `WindowInvalidator` | `window.rs:175` | per window: `dirty`, `dirty_views`, `update_count`, the platform waker |
-| `update_count` | `window.rs:273` | how many invalidations this window has seen. Read by `Window::dispatch_event` to ask whether an input event *caused* one (`window.rs:6174`), which is what feeds the input-rate tracker |
-| `dirty_views` | `window.rs:155` | the views invalidated since the last draw. `finish_frame` clears it (`window.rs:3663`) |
+| `Effect` | `app.rs:3165` | the queue's item: `Notify`, `Emit`, `RefreshWindows`, `NotifyGlobalObservers`, `Defer`, `EntityCreated` |
+| `pending_effects: VecDeque<Effect>` | `app.rs:659` | what the next flush will drain. Effects cause effects, so the queue is drained to quiescence |
+| `pending_notifications: FxHashSet<EntityId>` | `app.rs:695` | dedupes a notify from an entity nothing is displaying |
+| `observers: SubscriberSet<EntityId, Handler>` | `app.rs:661` | who to run when an entity notifies |
+| `tracked_entities: FxHashMap<WindowId, FxHashSet<EntityId>>` | `app.rs:704` | the entities a window *actually renders right now*, rebuilt per frame by `record_entities_accessed` (`app.rs:1140`) |
+| `window_invalidators_by_entity` | `app.rs:702` | an entity's invalidator per window. **Monotonic** — an entry alone does not mean the window still displays the entity, which is why the lookup is filtered |
+| `WindowInvalidator` | `window.rs:174` | per window: `dirty`, `dirty_views`, `update_count`, the platform waker |
+| `update_count` | `window.rs:155` | how many invalidations this window has seen. Read by `Window::dispatch_event` to ask whether an input event *caused* one (`window.rs:6242`), which is what feeds the input-rate tracker |
+| `dirty_views` | `window.rs:154` | the views invalidated since the last draw. `finish_frame` clears it (`window.rs:3711`) |
 
 ## The chain, step by step
 
-1. **`Context::notify`** (`context.rs:221`) forwards to **`App::notify`** (`app.rs:2791`)
+1. **`Context::notify`** (`context.rs:221`) forwards to **`App::notify`** (`app.rs:2801`)
    with the entity's id. `notify` is the only thing that means "this entity changed";
    there is no diffing anywhere.
 2. **`App::notify` fans out to windows, not to the world.** It looks up the entity's
-   invalidators, then filters them through `tracked_entities` (`app.rs:2798-2810`) with
+   invalidators, then filters them through `tracked_entities` (`app.rs:2808-2820`) with
    the comment that the map is monotonic and an entry alone does not mean the window is
    rendering the entity. So a change reaches only the windows that display it.
 3. **With no window displaying it**, the notify is deduped against
@@ -67,7 +67,7 @@ flowchart TD
    observers run.
 6. **Inside a draw** (`DrawPhase::Prepaint`/`Paint`/`Focus`), none of that happens: the
    invalidation is counted and recorded and the function returns `false`. The frame in
-   progress absorbs it — `mark_view_dirty` (`window.rs:2385`) puts the view and its
+   progress absorbs it — `mark_view_dirty` (`window.rs:2436`) puts the view and its
    ancestors into the frame's `dirty_views`, which is what keeps a cached view from
    being reused after something under it changed (`view.rs:442`).
 7. **`flush_effects`** (`app.rs:1725`) drains the queue one effect at a time. A `Notify`
@@ -131,7 +131,7 @@ flowchart TD
     build --> scene
 ```
 
-On a hit the builder is never called: `reuse_prepaint` (`window.rs:4294`) replays the
+On a hit the builder is never called: `reuse_prepaint` (`window.rs:4348`) replays the
 previous frame's prepaint range, and `extend_accessed` (`entity_map.rs:180`) re-registers
 the entities the cached subtree had read, so what the window depends on stays accurate
 without re-running anything.

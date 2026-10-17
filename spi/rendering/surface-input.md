@@ -1,6 +1,7 @@
 # Input over a surface: the gateway, the gesture, and pass-through
 
-- **Status:** built, in part. `gpui_interop::input` is the gateway's first slice: `surface_input(element,
+- **Status:** built, in part. `gpui_interop::input` (the `gpui_interop` repository, `src/input.rs`)
+  is the gateway's first slice: `surface_input(element,
   handler)` wraps a surface's element, adapts the pointer events GPUI routes to it into a `SurfaceInput`
   — surface-local **physical** pixels and the scale factor they were computed with, in the crate's own
   vocabulary, so the producer names no `gpui` type — and founds the gesture on the engine's own *drag*,

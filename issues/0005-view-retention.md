@@ -48,7 +48,7 @@ layouts across a reused frame — `layout_index` / `reuse_layouts` / `truncate_l
 the `TextSystem` trait (`crates/gpui_engine/src/text_system.rs:133-139`), implemented over
 the line-layout cache (`crates/gpui_engine_default/src/line_layout.rs:150-209`) — and the
 frame retains its hit-test tree across the double buffer
-(`crates/gpui_authoring/src/_authoring.rs:75`). What is missing is the evaluation that
+(`crates/gpui_authoring/src/_authoring.rs:78`). What is missing is the evaluation that
 consults them at each view boundary.
 
 ## What has been tried, and where it stands

@@ -1,10 +1,10 @@
 # The interop crate: `gpui-interop`
 
-- **Status:** proposed — a plan for the downstream crate [`surfaces.md`](surfaces.md) §5 names. A
-  provisional crate is being built **in the fork** (`crates/gpui_interop`), so it can iterate
-  quickly; it will move to its own home once its shape is settled. That home is issue
-  [`0006`](../../issues/0006-surface-interop.md), and the workstreams and probes it rests on are
-  [`surface-plan.md`](surface-plan.md) W5–W6 and P1–P6.
+- **Status:** built, and it has moved to its own home: the crate lives in the **`gpui_interop`
+  repository** (`bite-gpui/gpui_interop`) — `src/{adapter,guest,input,linux,macos,windows}.rs`, the
+  cube and Linux examples, and the cross-device, dma-buf-readback and surface-input tests. The
+  workstreams and probes it rests on are [`surface-plan.md`](surface-plan.md) W5–W6 and P1–P6, and
+  the coordination is issue [`0006`](../../issues/0006-surface-interop.md).
 - **Assumes:** the surface element is in the facade (`surface()`), and the renderer owns the device the
   canvas lends. **Both are on the upstream path** (§1), and that is what decides this crate's shape.
 - **Not a seam:** it replaces no `SceneRenderer` and decorates no `FramePipeline` — it is the
@@ -21,7 +21,7 @@ That fact fixes this crate's posture, and it is the reason the crate is *downstr
 layer of ours:
 
 - **It depends on the upstreamed API, not on a fork layer.** Its inputs are `surface()`
-  (`crates/gpui_authoring/src/elements/surface.rs:35`), the payload enum
+  (`crates/gpui_authoring/src/elements/surface.rs:61`), the payload enum
   (`crates/gpui_engine/src/scene.rs`), and the renderer-owned device the canvas lends
   ([`GpuRenderer` / `GpuCanvasContext::device::<R>()`](../../decisions/0006-renderer-owned-device.md))
   — the shapes that go upstream. It must
@@ -40,7 +40,7 @@ layer of ours:
   invent its own transport type.
 
 The crate's lifetime is therefore: **against the fork's facade now, against upstream `gpui` once PR 1
-and PR 2 land, with the same source either way** — `gpui` is the facade in both, so the crate selects
+(the vocabulary) and PR 3 (the Windows arm) land, with the same source either way** — `gpui` is the facade in both, so the crate selects
 nothing.
 
 ## 2. What it is for

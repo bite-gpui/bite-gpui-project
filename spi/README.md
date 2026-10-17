@@ -26,7 +26,7 @@ Verified 2026-09-26 against the source in a `bite_*` branch.
 | `LayoutEngine` | `crates/gpui_engine/src/layout.rs:53` | `Application::with_layout_engine(impl Fn() -> Box<dyn LayoutEngine>)` | **published** — `bite-gp-morphorm` |
 | `FramePipeline` | `crates/gpui_authoring/src/window/frame_pipeline.rs:28` | `Application::with_frame_pipeline(impl Fn(WindowId) -> Box<dyn FramePipeline>)` | **no swap ships** — a *wrap* decorates it instead: `bite-gp-pass`, see [`../architecture/extension-tiers.md`](../architecture/extension-tiers.md). Why no third *swap*: [`../decisions/0001-no-third-swap.md`](../decisions/0001-no-third-swap.md) |
 | `Platform` | `crates/gpui_platform/src/platform.rs:59` | `Application::with_platform(Rc<dyn Platform>)` | none out-of-tree; host-selected by `cfg(target_os)` |
-| `SceneRenderer` | `crates/gpui_engine/src/renderer.rs:80` | **no `Application` hook.** Reached through `PlatformWindow::with_renderer` and `PlatformWindow::present`, so it is swapped by supplying a `Platform` | none |
+| `SceneRenderer` | `crates/gpui_engine/src/renderer.rs:118` | **no `Application` hook.** Reached through `PlatformWindow::with_renderer` and `PlatformWindow::present`, so it is swapped by supplying a `Platform` | none |
 
 The bootstrap signatures are in `crates/gpui_runtime/src/application.rs:42-125`.
 
@@ -65,7 +65,7 @@ By concern, because one of the seams is a project rather than a trait.
 | [`rendering/`](rendering/README.md) | the render extension — the renderer seam and the two primitives — with [its own index](rendering/README.md) and chapter order |
 | [`authoring/`](authoring/gpu-canvas.md) | the authoring surface an application meets. `GpuCanvas` today; anything else that is a *surface* rather than an interface |
 | [`input/`](input/input-policy-seam.md) | the input work that is parked: the policy seam, and [`pointer-lock.md`](input/pointer-lock.md), the relative pointer a 3D camera wants |
-| [`rendering-project/`](rendering-project/README.md) | all the rendering work at one path: grouped symlinks to every document it needs, wherever it lives |
+| [`rendering-project/`](rendering-project/README.md) | the render extension as a project: the built import milestone at the top, and under `todo/` the two follow-on projects — events across a surface, and rendering GPUI into a foreign renderer |
 
 ## Seams
 

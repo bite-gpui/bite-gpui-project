@@ -10,8 +10,8 @@
 
 ## 1. Every `Window` field is `pub(crate)`
 
-`pub struct Window<'frame>` (`crates/gpui_authoring/src/window.rs:1430`) has `pub(crate) core`
-(`:1433`) and `pub(crate) frame_state` (`:1435`); the frame's `dirty_views` is `pub(crate)` (`:1229`);
+`pub struct Window<'frame>` (`crates/gpui_authoring/src/window.rs:1481`) has `pub(crate) core`
+(`:1484`) and `pub(crate) frame_state` (`:1486`); the frame's `dirty_views` is `pub(crate)` (`:1280`);
 and `WindowInvalidator`, which holds the notified set, is a `pub(crate)` type whose `take_views`
 (`:289`) is `pub` on it.
 
@@ -24,7 +24,7 @@ asked: not "how large is the diff" but "is the published surface sufficient".
 
 `Application` is a thin wrapper — every `with_*` is a `set_*` on `App` through `self.0.borrow_mut()`
 (`crates/gpui_runtime/src/application.rs:13`, with the existing setters at
-`crates/gpui_authoring/src/app.rs:2931` and `:2937`). So a bootstrap for retention costs a method on
+`crates/gpui_authoring/src/app.rs:2941` and `:2947`). So a bootstrap for retention costs a method on
 `Application`, a `set_view_retention_factory` beside the two already there, and a field on `App`.
 
 So the **seam cannot be out of tree**: it is authoring types, `Window` methods and an `App` field.

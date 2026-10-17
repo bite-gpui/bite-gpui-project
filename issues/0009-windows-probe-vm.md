@@ -15,7 +15,7 @@
 ## The problem
 
 W5's probes — **P5** (the fence loop), **P6** (adapter LUID matching) and **P9** (device loss) — and
-the PR-2 sufficiency test need a **real** Direct3D device. The fork's `windows-latest` CI has none: it
+the same-device sufficiency test need a **real** Direct3D device. The fork's `windows-latest` CI has none: it
 runs WARP, which `probe-p6-adapter-luid.md` §5 says is *"recorded but … not representative of
 hardware"*, and P6 in particular wants a **two-GPU** machine. So the Windows half of W5 has nowhere
 to run, and this box is Linux. A QEMU guest with the discrete GPU passed through is the answer.
@@ -349,11 +349,11 @@ Windows then BSODs at boot. The same disk booted with
 errors at all. So `run --no-gpu --gvt` now applies that CPU model automatically -- it is not
 optional, and it is exactly the string `gvt` prints.
 
-### The packed probe passes on the vGPU -- P6, P5, P9 and the PR-2 sufficiency test (2026-10-06/07)
+### The packed probe passes on the vGPU -- P6, P5, P9 and the same-device sufficiency test (2026-10-06/07)
 
 [`../script/interop-probe`](../script/interop-probe) is the packed W5 checklist: P6 asks whether DXGI
 and wgpu agree on one adapter LUID, P5 runs a D3D12 -> D3D11 shared-texture fence loop, P9 loses the
-producer device while a surface is held, recovers, and re-negotiates, and the PR-2 test paints an
+producer device while a surface is held, recovers, and re-negotiates, and the same-device test paints an
 `ID3D11Texture2D`'s SRV through one device. Run against the GVT-g adapter over SSH, all pass on
 **hardware**:
 
@@ -381,13 +381,16 @@ producer device while a surface is held, recovers, and re-negotiates, and the PR
     readback: source [192, 96, 32, 255] == target [192, 96, 32, 255] == expected BGRA; 0/4096 off
     PR-2 sufficiency: PASS — byte-exact through one device, no bridge
 
+*(The probe printed `PR-2 sufficiency` for the last block when it ran; the check is the same-device
+one, renamed when this plan renumbered its PRs.)*
+
 So P6's answer -- **DXGI and wgpu name the same adapter by the same LUID** -- is recorded on a *real*
 adapter, which is the datum that freezes `gpui-interop`'s `attach`/`Adapter` API
 ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4). P5's loop is byte-exact through the
 GPU-side `ID3D11Fence::Wait`. P9 stages a *real* device removal -- a PnP restart of the adapter --
-and the pool **tears down and re-negotiates on a fresh device without crashing**. The **PR-2
+and the pool **tears down and re-negotiates on a fresh device without crashing**. The **same-device
 sufficiency test** closes the fourth item: an `ID3D11Texture2D` cleared to a known colour, sampled
-through its SRV in one draw on **one device**, reads back byte-exact -- so PR 2 and the `d3d11_device()`
+through its SRV in one draw on **one device**, reads back byte-exact -- so PR 3 and the `d3d11_device()`
 accessor are sufficient for the same-device case
 ([`interop-scaffold.md`](../spi/rendering/interop-scaffold.md) §7). The one staging P9 cannot use here
 is a driver timeout, for a structural reason:
@@ -460,7 +463,7 @@ The environment works; it is not yet reusable. The gaps, in order:
   guest instead of booting a silently different one. What persists across a reboot, and what does
   not, is tabulated in [`../script/README.md`](../script/README.md).
 - **Run the probe -- all four packed items done.** [`../script/interop-probe`](../script/interop-probe)
-  was run against the adapter and **P6 (both gates), P5, P9 and the PR-2 sufficiency test pass** ("The
+  was run against the adapter and **P6 (both gates), P5, P9 and the same-device sufficiency test pass** ("The
   packed probe passes" above), so **P6's answer is recorded -- the datum that freezes `gpui-interop`'s
   API** ([`interop-crate.md`](../spi/rendering/interop-crate.md) §4). P9 stages a real device removal
   (a PnP restart) and re-negotiates; only a driver *timeout* is unavailable here (see "P9's real reset

@@ -18,13 +18,13 @@ Each is independent of the ones below it unless the table says otherwise.
 
 | # | workstream | crates / entry points | done when |
 | --- | --- | --- | --- |
-| **W1** | **Core hygiene — done.** `PixelBuffer`, and `render_scene` split from `read_pixels` | `crates/gpui_engine/src/renderer.rs:19`, `:102`, `:110` | upstream PR 1 lands; the rows in [`verification.md`](verification.md) §2 pass |
-| **W2** | **Windows surface arm — done.** RGBA/BGRA only. Extend `SurfaceSource` with the DirectX variant and implement `draw_surfaces` | `crates/gpui_authoring/src/elements/surface.rs:13`; `crates/gpui_windows/src/directx_renderer.rs:852` (retarget `:862`) | an **RGBA/BGRA** SRV composites through `surface()` on `windows-latest`; upstream PR 2. YCbCr is deliberately out (P4) |
+| **W1** | **Core hygiene — done.** `PixelBuffer`, and `render_scene` split from `read_pixels` | `crates/gpui_engine/src/renderer.rs:57`, `:140`, `:148` | upstream PR 6 lands; the rows in [`verification.md`](verification.md) §2 pass |
+| **W2** | **Windows surface arm — done.** RGBA/BGRA only. Extend `SurfaceSource` with the DirectX variant and implement `draw_surfaces` | `crates/gpui_engine/src/scene.rs:851`; `crates/gpui_windows/src/directx_renderer.rs:918` (retarget `:1125`) | an **RGBA/BGRA** SRV composites through `surface()` on `windows-latest`; upstream PR 3. YCbCr is deliberately out (P4) |
 | **W3** | **Linux surface arm — done.** The `DmaBuf` variant, its import, the per-frame import cache, the demo and the tests | `crates/gpui_engine/src/dmabuf.rs`; `crates/gpui_wgpu/src/dmabuf.rs` (the import and the `DmaBufTextureCache`); `crates/gpui_wgpu/src/wgpu_renderer.rs` (`draw_surfaces`); `crates/gpui_wgpu/examples/surface_dmabuf.rs` (the demo); `crates/gpui_wgpu/tests/surface_dmabuf.rs` (the tests); `gpui_linux` | a dma-buf composites on a Linux host with an adapter — **verified end to end through `surface()` in a mounted view: RGBA byte-exact, `NV12` converted by the shader** — and the imported textures are cached across frames, the dma-buf counterpart of the Metal arm's `CVMetalTextureCache`, with a producer's `sync_file` waited on (bounded, host-side) before sampling; the buffer must be uncompressed and self-describing under its modifier, and `NV12` is sampled as two plane textures — **P3 cleared** |
 | **W4** | **`GpuCanvas` — done.** The authoring surface; `gpu_canvas(callback)` hands a `GpuCanvasContext`, whose `paint_surface` carries the Path A `SurfaceSource` and whose `paint_texture` the same-device handle | `crates/gpui_authoring` beside `canvas` | the hand-rolled demo becomes the element on all three platforms — Windows through `paint_surface`/`SurfaceSource`, Linux/macOS through `paint_texture` |
 | **W5** | **`gpui-interop` — Host Mode.** Adapter matching and the cross-device bridge, on all three OS transports: Windows (LUID match, NT-handle export/import D3D12/`wgpu` → D3D11, the `ID3D12Fence`↔`ID3D11Fence` bridge), macOS (`IOSurface` into wgpu, `MTLSharedEvent`), Linux (dma-buf + dma-fence) — Windows first | new downstream crate | the bridge composites with a producer on a second device on each platform whose probe has passed, and survives the renderer losing its device — gated on **P2, P5, P6, P9** |
 | **W6** | **Guest runner.** Headless GPUI on a worker thread | the offscreen contract + a runner | a foreign loop drives GPUI and samples the frame — gated on **P1, P7** |
-| **W7** | **Path B — fork-carried, not an upstream PR.** | `crates/gpui_engine/src/custom_render.rs:41` (`Inline`) | no dependency on W2–W6; independent; upstream declined the callback primitive ([`upstream-prs.md`](upstream-prs.md) §5) |
+| **W7** | **Path B — fork-carried, not an upstream PR.** | `crates/gpui_engine/src/custom_render.rs:41` (`Inline`) | no dependency on W2–W6; independent; upstream declined the callback primitive ([`upstream/README.md`](upstream/README.md) §3) |
 
 > **Hazard when running the Linux demo on a two-GPU machine.** The headless renderer chooses its
 > own adapter, and a userspace fault while GPU work is in flight can wedge a discrete GPU: an
@@ -58,9 +58,11 @@ Each is independent of the ones below it unless the table says otherwise.
 > rather than forked around — the limitation and the `wgpu-hal` change that would lift it are in
 > [`../../issues/0008-dmabuf-tiled-modifiers-wgpu.md`](../../issues/0008-dmabuf-tiled-modifiers-wgpu.md).
 
-**W1 and W2 are the upstream pair**, and the reason the unification is worth the retarget: they are
-PRs upstream will take, not a fork. W3–W6 are ours; W5 and W6 are one crate, planned in
-[`interop-crate.md`](interop-crate.md).
+**Most of these workstreams are upstreamable now**, which is the reason the unification is worth the
+retarget: W1, W2, W3 and W4 become core PRs upstream will take — the offscreen, Windows, Linux and
+`GpuCanvas` entries of [`upstream/README.md`](upstream/README.md) §2 — not a fork. The bridge (W5) and
+the guest runner (W6) stay downstream, one crate, planned in [`interop-crate.md`](interop-crate.md);
+Path B (W7) is fork-carried.
 
 Two things the first draft of this table got wrong, and the reasons. **P4 does not gate W2**: the
 Windows PR ships as a plain RGBA/BGRA surface pass, and YCbCr/NV12 is an *additive* pass after it, so

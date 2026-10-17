@@ -62,7 +62,7 @@ Two of the costs are worth separating, because only one is real:
 without defining a whole custom element": a `Canvas<T>` (`:23`) taking a prepaint and a
 paint callback, already `Styled`, already consuming its callbacks with `FnOnce` and
 `.take()` so it is single-use per frame, and already exported
-(`crates/gpui_authoring/src/elements/mod.rs:18`). `GpuCanvas` belongs **beside `canvas`
+(`crates/gpui_authoring/src/elements/mod.rs:19`). `GpuCanvas` belongs **beside `canvas`
 and on `div`**, not as a hand-written `Element`.
 
 ## 3. The design: compose a `div()`, delegate, then paint
@@ -109,7 +109,7 @@ Four things follow from that shape, and each is the reason for it:
 methods to the inner `Div`, with `RequestLayoutState` and `PrepaintState` bound to
 `<Div as Element>`'s. That is what makes `.id()` work: it returns
 `Stateful<GpuCanvas>`, which is an element only because `GpuCanvas: Element`
-(`crates/gpui_authoring/src/elements/div.rs:4078`, `:4143`), and it is another reason the
+(`crates/gpui_authoring/src/elements/div.rs:4086`, `:4151`), and it is another reason the
 delegation is the design.
 
 ## 4. The public API
@@ -184,7 +184,7 @@ no counterpart in this fork:
   `(&mut self, window: &mut Window, cx: &mut Context<Self>)`
   (`crates/gpui_authoring/src/element.rs:164`, `:180`).
 - **Painting is a `Window` capability, not a `cx` one.** `paint_quad`
-  (`crates/gpui_authoring/src/window.rs:5032`) and `paint_image` (`:5423`) both insert
+  (`crates/gpui_authoring/src/window.rs:5086`) and `paint_image` (`:5477`) both insert
   into the frame's scene, and the surface hooks sit beside them in the same phase —
   `GpuCanvasContext::paint_surface`/`paint_texture` for a canvas, and the crate-internal
   `Window::paint_imported_texture` under them. The drafts' separate

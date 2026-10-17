@@ -2,14 +2,14 @@
 
 - **Opened:** 2026-10-01
 - **Status:** open
-- **Touches:** the `bite-gpui` facade `crates/gpui/src/gpui.rs:43`, the re-export at
+- **Touches:** the `bite-gpui` facade `crates/gpui/src/gpui.rs:19`, the re-export at
   `crates/gpui_authoring/src/gpui_authoring.rs:124`, and the published usage claim on
   `bite-gpui.github.io`
 
 ## The problem
 
 `use gpui::*;` is not a harmless glob. The facade re-exports `gpui_authoring`'s whole
-surface (`crates/gpui/src/gpui.rs:43`), which includes the `test` **attribute macro**
+surface (`crates/gpui/src/gpui.rs:19`), which includes the `test` **attribute macro**
 (`crates/gpui_authoring/src/gpui_authoring.rs:124`). Importing it as a glob pulls
 `test` into the macro namespace, where it **shadows the builtin `#[test]`**.
 

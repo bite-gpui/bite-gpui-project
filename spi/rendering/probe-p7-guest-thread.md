@@ -20,7 +20,7 @@ rather than a plan:
   ([`producer-reach.md`](producer-reach.md) §2; [`verification.md`](verification.md) §1's
   thread-affinity row).
 - **The offscreen contract returns bytes, not a surface.** `render_scene` renders into a target and
-  `read_pixels` copies it to the CPU (`crates/gpui_engine/src/renderer.rs:80`, `:102`, `:110`);
+  `read_pixels` copies it to the CPU (`crates/gpui_engine/src/renderer.rs:118`, `:140`, `:148`);
   [`surfaces.md`](surfaces.md) §4 says the GPU path hands back a *surface* instead — and whether the
   contract has a method for that is the open bit.
 

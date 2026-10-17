@@ -1,14 +1,14 @@
 - **Opened:** 2026-10-01
 - **Status:** open
-- **Touches:** `bite-gpui/bite-gpui` (two upstream PRs and the Windows/Linux arms), a new `gpui-interop` repository, [`../decisions/0005-external-rendering-unifies-under-surface.md`](../decisions/0005-external-rendering-unifies-under-surface.md), [`../spi/rendering/surfaces.md`](../spi/rendering/surfaces.md), [`../spi/rendering/surface-plan.md`](../spi/rendering/surface-plan.md)
+- **Touches:** `bite-gpui/bite-gpui` (the upstream PR sequence and the Windows/Linux arms), a new `gpui-interop` repository, [`../decisions/0005-external-rendering-unifies-under-surface.md`](../decisions/0005-external-rendering-unifies-under-surface.md), [`../spi/rendering/surfaces.md`](../spi/rendering/surfaces.md), [`../spi/rendering/surface-plan.md`](../spi/rendering/surface-plan.md)
 
 # The surface implementation, across repositories
 
 ## The problem
 
-The surface work has no single branch to live on. It is two upstream pull requests, two out-of-tree
-renderer arms, a downstream companion crate, and a set of probes that decide whether that crate is
-worth writing at all. No one branch can own it, which is why it is here.
+The surface work has no single branch to live on. It is a sequence of upstream pull requests, two
+out-of-tree renderer arms, a downstream companion crate, and a set of probes that decide whether that
+crate is worth writing at all. No one branch can own it, which is why it is here.
 
 The decision is [`0005`](../decisions/0005-external-rendering-unifies-under-surface.md), the design is
 [`surfaces.md`](../spi/rendering/surfaces.md), and the order and the probes are
@@ -24,7 +24,7 @@ not restate them. The downstream crate it names is planned in
 [`probe-p9-device-loss.md`](../spi/rendering/probe-p9-device-loss.md),
 [`probe-p4-video-formats.md`](../spi/rendering/probe-p4-video-formats.md) and
 [`probe-p7-guest-thread.md`](../spi/rendering/probe-p7-guest-thread.md). The pull requests the upstream
-half becomes are described in [`../spi/rendering/upstream-prs.md`](../spi/rendering/upstream-prs.md), and the
+half becomes are described in [`../spi/rendering/upstream/README.md`](../spi/rendering/upstream/README.md), and the
 downstream crate's scaffold in [`../spi/rendering/interop-scaffold.md`](../spi/rendering/interop-scaffold.md).
 
 ## What is already built
@@ -32,7 +32,7 @@ downstream crate's scaffold in [`../spi/rendering/interop-scaffold.md`](../spi/r
 The offscreen contract — `PixelBuffer`, and `render_scene` split from `read_pixels` — is W1 and is
 built; the three renderer arms, the canvas device door (`device::<R>()`), and the runnable demo are on
 the canonical ref. What the unification adds is the *entry point* (W2–W4) and the *bridge* (W5–W6), not
-the engine. So the two upstream PRs are additive, and nothing here blocks a release of the current line.
+the engine. So the upstream PRs are additive, and nothing here blocks a release of the current line.
 
 ## The questions to settle
 
@@ -60,6 +60,6 @@ the engine. So the two upstream PRs are additive, and nothing here blocks a rele
 
 ## What would close it
 
-The two upstream PRs merged; `gpui-interop` published and reachable from the facade; the probes filed
+The upstream PRs merged; `gpui-interop` published and reachable from the facade; the probes filed
 as evidence; and [`milestones.md`](../spi/rendering/milestones.md) §4's M5–M7 checked off. Until then
 this issue tracks the cross-repository half that no branch owned.

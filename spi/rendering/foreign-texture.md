@@ -28,7 +28,7 @@ composites that texture into the window in the same pass as the UI quads. No byt
 PCIe into system memory, and no second window.
 
 The important finding is that this is **not a new primitive**. `PaintSurface`
-(`crates/gpui_engine/src/scene.rs:784`) is already "content produced outside GPUI,
+(`crates/gpui_engine/src/scene.rs:908`) is already "content produced outside GPUI,
 composited into the window" — at that ref its payload was the single field below:
 
 ```rust
@@ -42,20 +42,20 @@ pub struct PaintSurface {
 }
 ```
 
-It is a variant of the scene's primitive enum (`crates/gpui_engine/src/scene.rs:238`), with
-its own batch (`crates/gpui_engine/src/scene.rs:508`) and its own accumulation list
-(`crates/gpui_engine/src/scene.rs:50`, pushed at `:134`) — and when this path was built it was
+It is a variant of the scene's primitive enum (`crates/gpui_engine/src/scene.rs:244`), with
+its own batch (`crates/gpui_engine/src/scene.rs:514`) and its own accumulation list
+(`crates/gpui_engine/src/scene.rs:50`, pushed at `:139`) — and when this path was built it was
 **macOS-only video**. Its only payload was a `CVPixelBuffer`, behind `#[cfg(target_os = "macos")]`
-(`crates/gpui_engine/src/scene.rs:784`); its only producer was
-`MacWindowExt::paint_surface` (`crates/gpui_authoring/src/window/mac.rs:21`), the per-platform
-hooks since collapsed into `GpuCanvasContext::paint_surface`; it was drawn by
+(`crates/gpui_engine/src/scene.rs:908`); its only producer was
+`GpuCanvasContext::paint_surface` (`crates/gpui_authoring/src/elements/gpu_canvas.rs:46`), the per-platform
+hooks it replaced; it was drawn by
 **one** renderer rather than two — DirectX's `draw_surfaces` returned an explicit unsupported
-error (`crates/gpui_windows/src/directx_renderer.rs:852`) and wgpu's arm was `{}` under the
+error (`crates/gpui_windows/src/directx_renderer.rs:918`) and wgpu's arm was `{}` under the
 comment that surfaces "are macOS-only for video playback and are not implemented by the WGPU
-renderer" (`crates/gpui_wgpu/src/wgpu_renderer.rs:1872`) — and that one rendered **YCbCr**,
+renderer" (`crates/gpui_wgpu/src/wgpu_renderer.rs:1960`) — and that one rendered **YCbCr**,
 not RGBA: Metal's `surface_fragment` returns `ycbcrToRGBTransform * ycbcr`
 (`crates/gpui_apple/src/shaders.metal:885`), and wgpu's `fs_surface` does the same over two
-planes, `t_y` and `t_cb_cr` (`crates/gpui_wgpu/src/shaders.wgsl:1390`). The surface's Windows and
+planes, `t_y` and `t_cb_cr` (`crates/gpui_wgpu/src/shaders.wgsl:1423`). The surface's Windows and
 Linux arms have since landed ([`surfaces.md`](surfaces.md) §1).
 
 So the proposal **reuses that variant's machinery — its batch, its ordering, its content-mask
@@ -83,7 +83,7 @@ Producer and consumer must be the **same device**, not merely the same API:
 The last row landed. It was *impossible*, on the reading that wgpu offers
 neither a shareable resource nor a way to adopt one; the second half was wrong, so the row was
 reachable rather than closed. GPUI's Windows renderer is Direct3D 11
-(`crates/gpui_windows/src/directx_renderer.rs:2206`) while wgpu is Direct3D 12, and a
+(`crates/gpui_windows/src/directx_renderer.rs:2583`) while wgpu is Direct3D 12, and a
 D3D12 resource is invisible to a D3D11 device unless it was created shareable —
 `D3D12_HEAP_FLAG_SHARED`, a *heap* flag set at creation, which wgpu never sets
 (`wgpu-hal-29.0.4/src/dx12/device.rs:104`). What wgpu *will* do is adopt a resource the
@@ -179,7 +179,7 @@ once, here:
 | `CustomRenderPrimitive::Texture` | unchanged | it is a texture; the payload is what is imported |
 
 **Bounds are `ScaledPixels`**, like `PaintSurface`'s
-(`crates/gpui_engine/src/scene.rs:230`), not `Pixels`; the element converts at paint time. **The
+(`crates/gpui_engine/src/scene.rs:236`), not `Pixels`; the element converts at paint time. **The
 radii are `ScaledPixels` too**, and a `Corners` rather than a `CornerRadii` struct: a renderer is
 handed scaled pixels and has no scale factor of its own, so the element converts the radii the way
 it converts the bounds, as `paint_quad` does, and typing them `ScaledPixels` is what makes the
@@ -243,7 +243,7 @@ property of the view, and the usage flags must include `TextureUsages::TEXTURE_B
 
 **Not a Windows special case, after all.** The surface format is the renderer's choice, and the
 wgpu renderer picks a non-sRGB one on every platform — `preferred_formats = [Bgra8Unorm,
-Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:453`) — so a Windows window running
+Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:519`) — so a Windows window running
 `WgpuRenderer` shows the same `*_UNORM` surface convention the rule above states, and the default
 `DirectXRenderer`'s `B8G8R8A8_UNORM` target
 (`crates/gpui_windows/src/directx_renderer.rs:34`) is that convention on the renderer that supports
@@ -289,7 +289,7 @@ reference implementation created a second device (`wgpu::Instance::default()`,
 `request_adapter`, `request_device`) and handed over a view from it. That fails wgpu's
 device check. The device to render on is the one the window's renderer was built with,
 which the factory has: `WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>`
-(`crates/gpui_wgpu/src/wgpu_renderer.rs:173`; the canonical ref still spells the alias
+(`crates/gpui_wgpu/src/wgpu_renderer.rs:233`; the canonical ref still spells the alias
 `GpuContext`), whose `WgpuContext` exposes
 `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
 (`crates/gpui_wgpu/src/wgpu_context.rs:14`). Two notes for whoever writes the guide: the
@@ -327,7 +327,7 @@ shares the encoder itself.
 | --- | --- |
 | `WgpuRenderer` | **built** on the canonical ref, three rows that run locally only. The arm is a batch of its own rather than `PrimitiveBatch::Surfaces` — that one's items are YCbCr video with a `CVPixelBuffer` behind them — and its fragment re-encodes, because the view is sRGB and the target is not |
 | `MetalRenderer` | **built** beside it: `draw_imported_textures` beside `draw_surfaces`, which stays the YCbCr path. Its fragment re-encodes through `linear_to_srgb_exact`, because the ≈2.2 approximation that file otherwise uses is not reversible on a producer's bytes (§4). Two rows run on `macos-14` |
-| `DirectXRenderer` | **built** on the canonical ref, three rows on CI; its `draw_surfaces` (`crates/gpui_windows/src/directx_renderer.rs:852`) used to return an unsupported error. Its view is the texture's non-sRGB counterpart where wgpu's is sRGB, so there is no transfer function to cancel: this shader file has only `linear_to_srgb`'s ≈2.2 approximation, which would not cancel one exactly. It also owns the consumer half of `DirectXSource::Shared` — `OpenSharedResource1`, the SRV and the `ID3D11Fence` wait, cached per handle |
+| `DirectXRenderer` | **built** on the canonical ref, three rows on CI; its `draw_surfaces` (`crates/gpui_windows/src/directx_renderer.rs:918`) used to return an unsupported error. Its view is the texture's non-sRGB counterpart where wgpu's is sRGB, so there is no transfer function to cancel: this shader file has only `linear_to_srgb`'s ≈2.2 approximation, which would not cancel one exactly. It also owns the consumer half of `DirectXSource::Shared` — `OpenSharedResource1`, the SRV and the `ID3D11Fence` wait, cached per handle |
 
 Two things the arms share and one they do not. Each reuses the quads' instance record and vertex
 entry point — `CustomRenderPrimitive::to_quad_record` is the engine's encode into it — so the

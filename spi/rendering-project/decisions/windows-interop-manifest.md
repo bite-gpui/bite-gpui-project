@@ -1,0 +1,1 @@
+../../../decisions/windows-interop-manifest.md

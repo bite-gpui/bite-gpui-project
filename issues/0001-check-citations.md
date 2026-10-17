@@ -6,7 +6,7 @@
 
 ## The problem
 
-`.meta` cites the source rather than quoting it — `crates/gpui_authoring/src/app.rs:2791`
+`.meta` cites the source rather than quoting it — `crates/gpui_authoring/src/app.rs:2801`
 — because a citation is what lets a reader check a claim in seconds. Line numbers drift,
 and nothing checks them.
 
@@ -34,13 +34,13 @@ a line number there would be noise.
 ## What the checker has to handle
 
 1. **Two citation forms.** A repo-relative path
-   (`crates/gpui_authoring/src/window.rs:4294`) and a bare filename (`app.rs:654`) that
+   (`crates/gpui_authoring/src/window.rs:4348`) and a bare filename (`app.rs:654`) that
    relies on the reader's context. Bare names are ambiguous across crates: `window.rs`
    resolves to `gpui_authoring` or `gpui_platform`, and `lib.rs` and `frame.rs` appear in
    several crates. The checker resolves a bare name under `gpui_authoring/src`, and
    anything from another crate has to say so — which is the rule `check-citations`
    enforces by reporting the rest as unresolved.
-2. **Ranges.** `app.rs:2798-2810`, which is a claim about a span rather than a line.
+2. **Ranges.** `app.rs:2808-2820`, which is a claim about a span rather than a line.
 3. **Targets outside the repository.** Five citations point at a third-party crate's
    published source — `tracy-client-0.18.3` read from the cargo registry, not from any
    `bite_*` branch. Those need a second resolver or an explicit marker so they are not
