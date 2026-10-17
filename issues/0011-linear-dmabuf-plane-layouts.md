@@ -104,7 +104,7 @@ image, and a mismatch refuses the surface; the image's memory requirement is the
 dma-buf's own size. Offsets rather than pitches, because the 930M gives a plain `NV12` a pitch of 64 and
 an exportable one 128 at the same offsets. `GpuDevice::linear_layout` publishes that layout (`native`)
 and the size to allocate (`required`), so a producer-pushed buffer declares what the device lays out
-instead of guessing.
+instead of guessing. Landed as [bite-gpui/bite-gpui#12](https://github.com/bite-gpui/bite-gpui/pull/12).
 
 Measured on the pair this issue measured on:
 
