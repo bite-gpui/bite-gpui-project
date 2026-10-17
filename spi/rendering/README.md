@@ -41,6 +41,7 @@ its own folder, because it is a surface an application meets rather than part of
 | [`producer-seam.md`](producer-seam.md) | the seam's other half: `SurfaceProducer`, the internal producer trait — why it is neither `gpui-interop`'s nor an SPI, where the video shapes stay, and the two ways a producer gets a dma-buf |
 | [`surface-input.md`](surface-input.md) | input over a surface: the gateway `gpui-interop` owns so a producer meets events without depending on `gpui`, the engine's drag that carries the gesture, and pass-through; the pointer lock a *camera* would need instead is [`../input/pointer-lock.md`](../input/pointer-lock.md), parked |
 | [`frame-formats.md`](frame-formats.md) | the comprehensive video frame-format vocabulary — the dimensions, the formats video needs, the cross-platform mapping, and what is built |
+| [`zero-copy-import.md`](zero-copy-import.md) | the importer as a whole — the semantic/physical split, the three producer-consumer contracts, the zero-VRAM layout guard (offsets, not pitches), the colour pipeline, and the multi-GPU rules |
 | [`probe-p1-reverse-bridge.md`](probe-p1-reverse-bridge.md) | the probe that gates W6's reverse route — a Direct3D 11 producer into a `wgpu` consumer (Host Mode's direction is already measured) |
 | [`probe-p2-macos-adoption.md`](probe-p2-macos-adoption.md) | the probe that gates its macOS module — adopting an `IOSurface` into wgpu |
 | [`probe-p3-dmabuf-import.md`](probe-p3-dmabuf-import.md) | the probe that gates the Linux surface arm — importing a dma-buf |
