@@ -38,9 +38,11 @@ pub enum GpuId {
     /// The PCI identity Linux and Windows report.
     Pci { vendor_id: Option<u32>, device_id: u32 },
     /// A DXGI adapter LUID, packed from `Luid.HighPart`/`LowPart` — the identity GPUI's Direct3D
-    /// device and a DX12 producer both carry.
+    /// device and a DX12 producer both carry. It is valid only for the adapter's lifetime: it
+    /// changes on reboot, driver upgrade, or device disable/enable.
     Luid(u64),
-    /// A Metal device registry id, the only stable identity Metal exposes.
+    /// A Metal device registry id, the only stable identity Metal exposes — and an IOKit registry
+    /// entry id, so it too is valid only until the machine reboots.
     Metal { registry_id: u64 },
 }
 ```
@@ -58,15 +60,37 @@ the same adapter.
   for a producer that shares a texture. The probe measured that DXGI's LUID and wgpu's DX12 LUID are
   the same number ([`windows-adapter-luid-probe.md`](windows-adapter-luid-probe.md) §2), so the LUID
   is also the identity `gpui_interop` matches on.
-- macOS has no PCI identity. `MTLDevice::registryID` is unique for the device's lifetime (not across
-  reboots), which is the right scope for a startup choice.
+- macOS has no PCI identity. `MTLDevice::registryID` is global to all tasks, but it is an IOKit
+  registry entry id, which Apple documents as valid only until reboot — the right scope for a
+  startup choice, not for a saved one.
 - **Rejected:** keep `GpuId` PCI-only and force `Custom` on macOS. That leaves `Device` unusable
   exactly where a preferences panel wants it, and makes the identity field lie.
 
-Persisting a `Device(GpuId)` across launches is therefore session-scoped: LUIDs and registry ids are
-per boot. A config should store a `Custom` predicate or a name/PCI criterion and re-resolve it through
-`enumerate_gpus`; 0008 already rejects names as identities *inside* the process, which this does not
-change.
+Persisting a `Device(GpuId)` across launches is therefore session-scoped, and the platform
+documentation says so explicitly:
+
+| identifier | documented lifetime | source |
+| --- | --- | --- |
+| PCI vendor/device (`DXGI_ADAPTER_DESC1.VendorId`/`DeviceId`, Linux PCI) | hardware ids; stable across restarts, but two identical cards share them | [`DXGI_ADAPTER_DESC1`](https://learn.microsoft.com/en-us/windows/win32/api/dxgi/ns-dxgi-dxgi_adapter_desc1) |
+| Windows PnP **device instance id** (`PCI\VEN_…\1&08`) | "persistent across system restarts" | [Device instance ID](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/device-instance-ids) |
+| DXGI LUID / DXCore `InstanceLuid` | "changes on reboot, driver upgrade, or device disablement/enablement" | [`DXCoreAdapterProperty`](https://learn.microsoft.com/en-us/windows/win32/api/dxcore_interface/ne-dxcore_interface-dxcoreadapterproperty), [MS-DTYP LUID](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/48cbee2a-0790-45f2-8269-931d7083b2c3) |
+| Metal `registryID` | "global to all tasks" — it is an IOKit registry entry id, and those are "valid only until the machine reboots" | [`registryID`](https://developer.apple.com/documentation/metal/mtldevice/registryid), [`IORegistryEntryGetRegistryEntryID`](https://developer.apple.com/documentation/iokit/1514719-ioregistryentrygetregistryentryi) |
+| Metal device `name` | not an identity: two identical cards share it | 0008 |
+
+**Recommendation.** Keep `GpuId` session-scoped and persist a *criterion*, not a `GpuId`:
+
+- `LowPower`/`HighPerformance` are stable semantics and are the right thing for a default or a
+  remembered simple choice.
+- "This model of card" is `Pci { vendor_id, device_id }`, stable across restarts on Linux and
+  Windows but ambiguous when two identical cards are present.
+- "This exact card" needs the Windows PnP device instance id — the one documented persistent
+  per-adapter identity — which DXGI does not expose; it would be a `GpuId::Pnp(String)` read through
+  SetupAPI, a later addition. macOS has **no** documented persistent per-adapter identity; a saved
+  choice there is a type or a name, and therefore best-effort.
+
+So a preferences panel can offer "remember this GPU" without the platform promising more than the
+OS does: store the criterion, re-resolve it through `enumerate_gpus` at startup, and fall back to
+`Auto` when it no longer matches.
 
 ## 3. Selection: one ranking, `Auto` is the backend's own order
 
@@ -268,9 +292,11 @@ already overrides every backend.
 1. **DXCore feature.** `Win32_Graphics_DxCore` needs adding to the workspace `windows`
    features, and `IsIntegrated` needs Windows 10 2004+. Is that floor acceptable, or should the first
    cut report `Other` and defer classification?
-2. **Session-scoped identities.** LUIDs and Metal registry ids are per boot; a saved
-   `Device(GpuId)` cannot survive one. Do we expose a stable serialisation, or is `Device` explicitly
-   a session API with `Custom` for config? (The draft assumes the latter.)
+2. **Session-scoped identities — resolved in principle.** The platform docs confirm that LUIDs and
+   Metal registry ids do not survive a reboot (§2). The draft now recommends a persisted *criterion*
+   (type, PCI vendor/device, or name) resolved through `enumerate_gpus`, with `Device(GpuId)` a
+   session API. The only open part is whether to add the Windows PnP device instance id as a
+   first-class `GpuId`, which would let "this exact card" survive a restart on Windows.
 3. **`GpuBackend::Dx11`.** Adding the variant is a public enum change. Is the Windows renderer's API
    correctly called Direct3D 11 rather than 12, or should the field stay coarse?
 4. **Where the Windows text-system swap lives.** `DirectWriteTextSystem::handle_gpu_lost` already
