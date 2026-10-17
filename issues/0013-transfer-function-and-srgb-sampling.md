@@ -35,7 +35,7 @@ is already correct as it stands, and `Full`/`Limited` must not change.
 ## Where it bites
 
 The Linux importer maps an imported RGB dma-buf to a **linear** Vulkan format — `B8G8R8A8_UNORM`
-(`crates/gpui_wgpu/src/dmabuf.rs:89`) and `R8G8B8A8_UNORM` (`:92`) — and the format vocabulary has no
+(`crates/gpui_wgpu/src/dmabuf.rs:100`) and `R8G8B8A8_UNORM` (`:103`) — and the format vocabulary has no
 sRGB field either: `SurfaceFormat` (`crates/gpui_engine/src/surface_format.rs:114`) carries model,
 subsampling, layout, orders, depth, container and alpha, and `SurfaceFormatKind::bgra8`
 (`crates/gpui_engine/src/surface_format.rs:291`) is "8-bit blue/green/red/alpha, straight alpha — the

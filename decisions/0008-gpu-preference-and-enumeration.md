@@ -1,8 +1,10 @@
 # 0008 — The GPU is process-wide, chosen before the first window from an application preference
 
 - **Decided:** 2026-10-17
-- **Status:** decided — **not implemented**. The types, the Linux plumbing and the `ZED_DEVICE_ID` lowering
-  are the next slice; enumeration and capability negotiation follow it.
+- **Status:** decided — step 1 implemented on the working tree: the types (`GpuPreference`, `GpuId`,
+  `GpuAdapterInfo`), `Application::with_gpu_preference`, the `Platform` hook, the Linux plumbing and the
+  `ZED_DEVICE_ID` lowering, with a unit-tested ranking. Enumeration (step 2) and capability negotiation
+  (step 3) are not.
 - **Evidence:** [`../issues/0010-application-gpu-preference.md`](../issues/0010-application-gpu-preference.md)
   (the preference) and [`../issues/0012-gpu-enumeration-and-negotiation.md`](../issues/0012-gpu-enumeration-and-negotiation.md)
   (enumeration and the device scope); the measured pair in
@@ -18,7 +20,7 @@
 1. **One GPU per process, chosen once.** The device is already process-wide (`WgpuContext` is shared by
    every window, [`0006`](0006-renderer-owned-device.md)), so the preference is **application-level**,
    not a per-window argument. It is applied where the adapter is selected —
-   `select_adapter_and_device` (`crates/gpui_wgpu/src/wgpu_context.rs:604`) — before the first window makes a surface
+   `select_adapter_and_device` (`crates/gpui_wgpu/src/wgpu_context.rs:589`) — before the first window makes a surface
    current.
 2. **The application states a `GpuPreference`.** `Application::with_gpu_preference(…, GpuPreference)`,
    carried on the platform and read at selection. The variants:
@@ -29,8 +31,9 @@
    - `Custom(Arc<dyn Fn(&GpuAdapterInfo) -> Option<usize> + Send + Sync>)` — **deferred** until
      enumeration exists (decision 5), because a predicate needs a shape to consume.
 3. **`ZED_DEVICE_ID` becomes `Device`, not a separate tier.** The variable is parsed in the platform,
-   beside the compositor hint, and lowered onto `GpuPreference::Device`; it stops being an `env::var`
-   read inside `gpui_wgpu` (`crates/gpui_wgpu/src/wgpu_context.rs:321`). One precedence order then lives in one place. The
+   beside the compositor hint, and lowered onto `GpuPreference::Device`; the one read is
+   `GpuPreference::from_env` (`crates/gpui_platform/src/gpu.rs:88`), not an `env::var` inside
+   `gpui_wgpu`. One precedence order then lives in one place. The
    **headless** path is the exception: `new_headless` has no platform, so it keeps reading the variable
    as `Auto`'s explicit override. The env var names a device id only, so the lowered `GpuId` leaves the
    vendor unconstrained.
@@ -62,7 +65,7 @@ The measured topology makes the choice load-bearing rather than cosmetic
 on the dGPU on every memory type, so the producer and the renderer must be the same card; the panel is
 wired to the iGPU; and a `GM108` discrete part has no decoder at all. Today the only control is a
 debugger's environment variable read deep in the renderer, and the chosen GPU is observable only after
-a window exists (`crates/gpui_wgpu/src/wgpu_renderer.rs:1236`, and only inside a `gpu_canvas` through
+a window exists (`crates/gpui_wgpu/src/wgpu_renderer.rs:1255`, and only inside a `gpu_canvas` through
 `Adapter::gpu_id`, [`../issues/0012-gpu-enumeration-and-negotiation.md`](../issues/0012-gpu-enumeration-and-negotiation.md)), so an
 application cannot decide, cannot ask, and cannot change its mind.
 

@@ -6,27 +6,26 @@
 
 ## What is wrong
 
-`import_luma_chroma` builds the plane layouts from the handle
-(`crates/gpui_wgpu/src/dmabuf.rs:141`) and the `VkImageDrmFormatModifierExplicitCreateInfoEXT` that
-carries them (`crates/gpui_wgpu/src/dmabuf.rs:149`) — then **drops them
-when the modifier is linear**:
+At the revision this was opened against, `import_luma_chroma` built the plane layouts from the handle
+(`crates/gpui_wgpu/src/dmabuf.rs`) and the `VkImageDrmFormatModifierExplicitCreateInfoEXT` that
+carried them — then **dropped them when the modifier was linear**:
 
 ```rust
-let tiled = handle.modifier != DmaBufHandle::LINEAR;          // crates/gpui_wgpu/src/dmabuf.rs:137
+let tiled = handle.modifier != DmaBufHandle::LINEAR;
 …
-.tiling(if tiled { DRM_FORMAT_MODIFIER_EXT } else { LINEAR })  // crates/gpui_wgpu/src/dmabuf.rs:163
-let image_info = if tiled { image_info.push_next(&mut modifier_layout) } else { image_info };  // crates/gpui_wgpu/src/dmabuf.rs:171
+.tiling(if tiled { DRM_FORMAT_MODIFIER_EXT } else { LINEAR })
+let image_info = if tiled { image_info.push_next(&mut modifier_layout) } else { image_info };
 ```
 
-`import_plane` does the same for a single plane (`crates/gpui_wgpu/src/dmabuf.rs:377`). So for a
+`import_plane` did the same for a single plane. So for a
 **linear** buffer the
 `VkImage` carries no explicit layout, the driver supplies its own — `vkGetImageSubresourceLayout` — and
-the plane offsets the `DmaBufHandle` declares are ignored. The function's own doc says the opposite
-("the buffer is a single object at the two planes' offsets",
-`crates/gpui_wgpu/src/dmabuf.rs:120`), which is true of the
+the plane offsets the `DmaBufHandle` declares are ignored. The function's own doc said the opposite
+("the buffer is a single object at the two planes' offsets"), which is true of the
 *producer's* object and not of the image the driver builds.
 
-(Line numbers are from `bite_v1.23.x`.)
+(Quoted without line numbers: the lines moved when the fix landed. The behaviour is described as it
+was at `f256e93171^`.)
 
 ## Measured
 

@@ -101,7 +101,7 @@ independent of range, and every combination occurs: limited BT.709 video, full B
 full sRGB UI assets.
 
 The importer maps an imported RGB dma-buf to a **linear** format — `B8G8R8A8_UNORM` and
-`R8G8B8A8_UNORM` (`crates/gpui_wgpu/src/dmabuf.rs:89`, `:92`) — and `SurfaceFormat` has no field that
+`R8G8B8A8_UNORM` (`crates/gpui_wgpu/src/dmabuf.rs:100`, `:103`) — and `SurfaceFormat` has no field that
 could say otherwise (`crates/gpui_engine/src/surface_format.rs:114`; `SurfaceFormatKind::bgra8` at
 `:291`). So an sRGB producer is sampled as linear, losing contrast in shadows and midtones; sRGB and
 BT.709 share primaries, so this is a gamma mismatch, not a gamut one. [`0013`](../../issues/0013-transfer-function-and-srgb-sampling.md)

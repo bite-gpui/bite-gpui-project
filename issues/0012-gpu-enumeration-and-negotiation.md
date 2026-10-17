@@ -8,7 +8,7 @@
 
 The chosen GPU — and anything about what it can do — is observable only *after* a window exists:
 
-- `window.gpu_specs()` (`crates/gpui_wgpu/src/wgpu_renderer.rs:1236`) — a name, a device type and
+- `window.gpu_specs()` (`crates/gpui_wgpu/src/wgpu_renderer.rs:1255`) — a name, a device type and
   driver strings, after the
   window, and nothing about what the device can *do*;
 - `Adapter::gpu_id` (`gpui_interop`'s `adapter.rs`) — inside a `gpu_canvas`,
@@ -44,15 +44,15 @@ The shape this round suggests: `WaylandClient`/`X11Client` own a single `WgpuCon
 device, queue) and hand a clone into each window's `WgpuRenderer`, so nothing is duplicated; the
 *preference* is then configuration on `Application`/`PlatformOptions`, not a per-window argument.
 Adapter creation is already lazy — `select_adapter_and_device`
-(`crates/gpui_wgpu/src/wgpu_context.rs:604`) verifies a
+(`crates/gpui_wgpu/src/wgpu_context.rs:589`) verifies a
 compatible surface before choosing — which is why the preference must reach that point rather than the
 renderer's construction.
 
 ## Who picks the GPU
 
 1. **The OS/DE** — the compositor hint (`Compositor GPU hint`,
-   `crates/gpui_linux/src/linux/platform.rs:1313`), tier 2 of `sort_adapters`
-   (`crates/gpui_wgpu/src/wgpu_context.rs:690`) today.
+   `crates/gpui_linux/src/linux/platform.rs:1297`), tier 2 of `sort_adapters`
+   (`crates/gpui_wgpu/src/wgpu_context.rs:679`) today.
 2. **The application, at startup** — a preference, possibly derived from capabilities (shape 1).
 3. **At runtime** — the expensive one, and per the scope above not a per-window operation.
 
@@ -75,3 +75,15 @@ tiled, what must be linear, and which of them fails today — are measured in
 
 The enumerate and active accessors and the factory plumbing they need; a decision on runtime switching,
 or its explicit refusal recorded; and the process-wide-versus-per-window device ruling written down.
+
+## Update, 2026-10-17 — the rulings are recorded; the reach is not
+
+[`../decisions/0008-gpu-preference-and-enumeration.md`](../decisions/0008-gpu-preference-and-enumeration.md)
+settles the device scope (process-wide, chosen once), the preference API, the default (`LowPower`) and
+the refusal of runtime switching. Step 1 landed with it: `GpuPreference`, `GpuId` and `GpuAdapterInfo` on
+`gpui_platform`; `Application::with_gpu_preference`; the `Platform` hook; the Linux plumbing beside
+`CompositorGpuHint`; and `ZED_DEVICE_ID` lowered to `Device` in the platform, with the ranking unit-tested.
+
+What this issue still owes is the enumeration itself: `enumerate_gpus`/`active_gpu` on the app, the
+`Device`/`Custom` variants made usable, and the mapping to the producer-facing
+`gpui_interop::GpuId` — plus the capability tier `0008` defers.
