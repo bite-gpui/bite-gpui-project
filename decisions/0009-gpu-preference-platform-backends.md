@@ -1,9 +1,10 @@
 # 0009 — GPU preference on the Windows and macOS backends
 
 - **Drafted:** 2026-10-18
-- **Status:** draft — design only, not decided and not implemented. The Linux arm is in place
-  ([`0008`](0008-gpu-preference-and-enumeration.md) steps 1–2); `gpui_windows` and `gpui_apple` still
-  inherit the no-op/empty defaults of `set_gpu_preference`, `enumerate_gpus` and `active_gpu`.
+- **Status:** draft — step 1 (the identity contract and the shared ranking) landed on
+  `bite_v1.23.x` (`f81511afe8`) and is validated; the design as a whole is not yet decided, and
+  `gpui_windows`/`gpui_apple` still inherit the no-op/empty defaults of `set_gpu_preference`,
+  `enumerate_gpus` and `active_gpu`.
 - **Evidence:** [`0008`](0008-gpu-preference-and-enumeration.md) (the seam and the process-wide
   ruling), [`0010`](../issues/0010-application-gpu-preference.md) / [`0012`](../issues/0012-gpu-enumeration-and-negotiation.md)
   (the application API), [`windows-adapter-luid-probe.md`](windows-adapter-luid-probe.md) (the LUID is
@@ -36,7 +37,8 @@ The identity is two facts, not one:
   restart;
 - **session** — what the backend can actually match *now*: a LUID, a registry id, a DRM node.
 
-This refines 0008's `GpuId` (a PCI pair) into that contract; the code still carries the old shape.
+This refines 0008's `GpuId` (a PCI pair) into that contract; the code carries the new shape since
+step 1 (`f81511afe8`).
 
 The earlier draft had one tagged `GpuId`. The documentation research below shows why one is not
 enough: every per-process handle is per boot, and every stable handle is ambiguous between two
@@ -80,8 +82,8 @@ pub enum PermanentGpuId {
 /// The handle the backend matches in this process.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SessionGpuId {
-    /// A DRM render node (Linux), from `VK_EXT_physical_device_drm`; the node number is assigned
-    /// per boot and is not a hardware id.
+    /// A DRM render node (Linux), resolved from the PCI bus id through udev's `/dev/dri/by-path`
+    /// link; the node number is assigned per boot and is not a hardware id.
     Drm { render_minor: u32 },
     /// A DXGI adapter LUID (Windows), packed from `Luid.HighPart`/`LowPart`. It lasts for the
     /// adapter's lifetime and changes on reboot, driver upgrade, or device disable/enable.
@@ -108,7 +110,7 @@ startup. The per-backend values are:
 
 | backend | `permanent` | `session` |
 | --- | --- | --- |
-| Linux | `Pci { vendor, device }` | `Drm { render_minor }`, falling back to the PCI pair where the extension is absent |
+| Linux | `Pci { vendor, device }` | `Drm { render_minor }`, resolved from wgpu's PCI bus id through udev's `/dev/dri/by-path/pci-…-render` link, falling back to the PCI pair where the link is absent |
 | Windows | `Pci { vendor, device, subsys, revision }`; later `Pnp` | `Luid` |
 | macOS | `Name` (or `Single` where `all()` is unavailable) | `Metal { registry_id }` |
 | one GPU / no enumeration | `Single` | `Default` |
@@ -150,10 +152,9 @@ The contract a caller can rely on:
 
 ## 3. Selection: one ranking, `Auto` is the backend's own order
 
-The pure selection code currently lives in `gpui_wgpu` —
-[`custom_choice`](crates/gpui_wgpu/src/wgpu_context.rs), [`adapter_key`](crates/gpui_wgpu/src/wgpu_context.rs),
-`type_priority` — and would otherwise be copied three times. Move it beside the types in
-`gpui_platform`:
+The pure selection code lived in `gpui_wgpu` — `custom_choice`, `adapter_key`, `type_priority` —
+and would otherwise be copied three times. Step 1 moved it beside the types in `gpui_platform`
+(`rank` and `custom_choice`):
 
 ```rust
 pub fn rank(
@@ -378,8 +379,9 @@ already overrides every backend.
 - **Single-GPU fallback**: a platform that cannot enumerate reports one
   `Single`/`Default` adapter; `enumerate_gpus` is non-empty, `Device(Single)` selects it, and an
   unrelated `Device` falls back to it rather than failing.
-- **Linux regression**: `gpui_wgpu`'s and `gpui_va`'s `surface_dmabuf` suites (8/8 and 14/14 on
-  Intel and the NVIDIA 930M) after `gpui_wgpu` switches to the shared rank; `ZED_DEVICE_ID` unchanged.
+- **Linux regression**: `gpui_wgpu`'s and `gpui_va`'s `surface_dmabuf` suites (8/8 and 14/14) pass
+  on Intel HD 520 (`1916`) and the NVIDIA 930M (`1346`) with the shared rank and the new identity in
+  place; `ZED_DEVICE_ID` unchanged. Confirmed in step 1.
 - **Cross-backend**: one `Custom` predicate ("the adapter named *NVIDIA*", or "the one with the
   video capability") compiles and selects on every backend; a session from one backend never matches
   another, and the permanent variant is part of the match.
@@ -392,9 +394,12 @@ already overrides every backend.
 2. **Persistent identity — in the contract.** `GpuId` now carries both parts (§2); `permanent` is
    serialised, `session` is not. The only open part is whether the Windows PnP device instance id
    (`PermanentGpuId::Pnp`) ships in the first Windows slice or later; the draft assumes later.
-3. **Linux session handle.** `SessionGpuId::Drm` reads `VK_EXT_physical_device_drm` through the wgpu
-   HAL. Is it available on every adapter the Linux renderer can expose, and is the PCI fallback
-   enough where it is not? (The measured pair exposes it.)
+3. **Linux session handle — settled.** `SessionGpuId::Drm` does not read
+   `VK_EXT_physical_device_drm` through the wgpu HAL, which does not expose it: the PCI bus id wgpu
+   reports is resolved through udev's `/dev/dri/by-path/pci-…-render` symlink. Where that link is
+   absent (a GL adapter, a system without udev) the PCI pair is the session handle — still valid for
+   the current process, but not unique between two identical cards. The measured pair resolves both
+   nodes.
 4. **`GpuBackend::Dx11`.** Adding the variant is a public enum change. Is the Windows renderer's API
    correctly called Direct3D 11 rather than 12, or should the field stay coarse?
 5. **Where the Windows text-system swap lives.** `DirectWriteTextSystem::handle_gpu_lost` already
@@ -406,7 +411,9 @@ already overrides every backend.
 1. **Identity contract and shared ranking** in `gpui_platform`: `GpuId` with `PermanentGpuId` and
    `SessionGpuId`, serialisation that drops the session, the `Single`/`Default` fallback and the
    shared rank; migrate `gpui_wgpu` and `gpui_linux` to it with no behaviour change; add the pure
-   tests. This step is platform-neutral and can land first.
+   tests. This step is platform-neutral and can land first. **Landed** (`f81511afe8`): 19 pure tests,
+   the `gpui_wgpu` and `gpui_va` suites green on both measured GPUs, `gpui_interop` reading the
+   identity through the accessors.
 2. **Windows**: enumerate, select, apply at the first window, swap the text system's GPU state,
    implement `active_gpu`, and pass the preference through recovery. Validate on the Windows probe
    VM ([issue 0009](../issues/0009-windows-probe-vm.md)).
