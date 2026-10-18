@@ -53,7 +53,7 @@ display backends already render through `gpui_wgpu` — x11 constructs it at
 **So the extraction was not the work.** A renderer could already live in a crate of its
 own. What was missing was that the *type* was still concrete at every use site: a window
 held `WgpuRenderer`, `renderer::Renderer` (an alias for `MetalRenderer`,
-`crates/gpui_apple/src/metal_renderer.rs:52`) or `RefCell<DirectXRenderer>`, never a
+`crates/gpui_apple/src/metal_renderer.rs:54`) or `RefCell<DirectXRenderer>`, never a
 `dyn SceneRenderer`, and called backend-specific methods that were not on the trait. The
 seam is what changed that: every window field in the table above now holds a
 `Box<dyn PlatformRenderer>` (`crates/gpui_windows/src/window.rs:67`), and the
@@ -68,13 +68,13 @@ window wants from a renderer is a property any *onscreen* renderer has.
 | --- | --- |
 | `draw`, `sprite_atlas` | all (the trait) |
 | `update_drawable_size` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1335`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:1648`, web `crates/gpui_web/src/window.rs:988`, macos `crates/gpui_macos/src/window.rs:3117` |
-| `update_transparency` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1392`, macos `crates/gpui_macos/src/window.rs:1881` |
+| `update_transparency` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1392`, macos `crates/gpui_macos/src/window.rs:1883` |
 | `set_subpixel_layout` | x11 `crates/gpui_linux/src/linux/x11/window.rs:797`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:675` |
 | `max_texture_size` | x11 `crates/gpui_linux/src/linux/x11/window.rs:801`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:618` |
 | `destroy` | x11 `crates/gpui_linux/src/linux/x11/window.rs:906`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:867`, macos `crates/gpui_macos/src/window.rs:1406` |
 | `device_lost` / `recover` / `needs_redraw` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1783`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:2110`, windows `crates/gpui_windows/src/events.rs:1324` |
 | `gpu_specs` | x11 `crates/gpui_linux/src/linux/x11/window.rs:2007`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:2313`, web `crates/gpui_web/src/window.rs:1007`, windows `crates/gpui_windows/src/window.rs:1073` |
-| `layer`, `layer_ptr`, `set_presents_with_transaction` | macos `crates/gpui_macos/src/window.rs:3107` (defined `crates/gpui_apple/src/metal_renderer.rs:378`) |
+| `layer`, `layer_ptr`, `set_presents_with_transaction` | macos `crates/gpui_macos/src/window.rs:3109` (defined `crates/gpui_apple/src/metal_renderer.rs:506`) |
 | `set_background_appearance` | windows `crates/gpui_windows/src/window.rs:1064` |
 
 Everything above the macOS and Windows rows generalises *to an onscreen renderer*. Those

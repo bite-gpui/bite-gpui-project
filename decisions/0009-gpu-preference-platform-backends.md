@@ -1,11 +1,11 @@
 # 0009 — GPU preference on the Windows and macOS backends
 
 - **Drafted:** 2026-10-18
-- **Status:** draft — steps 1–2 are implemented on `bite_v1.23.x`: the identity contract and the
-  shared ranking (`f81511afe8`), and the Windows backend (`493947d8bc`), which is compile-checked on
-  both Windows targets but not yet run on the probe VM. macOS still inherits the no-op/empty
-  defaults of `set_gpu_preference`, `enumerate_gpus` and `active_gpu`; the design as a whole is not
-  yet decided.
+- **Status:** draft — steps 1–3 are implemented on `bite_v1.23.x`: the identity contract and the
+  shared ranking (`f81511afe8`), the Windows backend (`493947d8bc`, refined by `0a50dd08fe`), and the
+  macOS backend (`c6a6d4df6a`). Windows and macOS are compile-checked on their targets; the Windows
+  guest has not been booted and there is no macOS host here, so neither has been run. The design as
+  a whole is still not decided.
 - **Evidence:** [`0008`](0008-gpu-preference-and-enumeration.md) (the seam and the process-wide
   ruling), [`0010`](../issues/0010-application-gpu-preference.md) / [`0012`](../issues/0012-gpu-enumeration-and-negotiation.md)
   (the application API), [`windows-adapter-luid-probe.md`](windows-adapter-luid-probe.md) (the LUID is
@@ -283,6 +283,10 @@ stores the `Pci` (or later `Pnp`) permanent part and leaves the session out. The
 already resolves a Direct3D device to its adapter by LUID in `gpui_interop`'s Windows arm, so no new
 mapping is needed — only exposing both parts in `GpuAdapterInfo::id`.
 
+An absent `Device` leaves DXGI's order alone instead of taking the shared rank's discrete-first
+fallback (`0a50dd08fe`): DXGI's order is the OS's preference, and a stale config should behave like
+`Auto` rather than move the renderer to the discrete GPU.
+
 ## 5. macOS
 
 ### Enumeration
@@ -320,14 +324,21 @@ shortfall, and a device that cannot make a layer should fall through to the next
 [`new_renderer`](crates/gpui_apple/src/metal_renderer.rs) becomes fallible, and the default arm in
 [`Window::new`](crates/gpui_macos/src/window.rs) propagates it with `?`.
 
+**As implemented.** `MetalRenderer::new`/`new_headless` take the preference and return `Result`;
+`select_device` orders `MTLCopyAllDevices`' output and takes the first. `Auto` keeps the historical
+key; `LowPower`/`HighPerformance` use the shared rank; `Custom` resolves through `custom_choice`;
+`Device` puts the named device first and otherwise leaves `Auto`'s order untouched (the shared
+rank's unmatched order is discrete-first, which is not this backend's low-power default). Layer
+creation is infallible today, so the fall-through the design asks for has nothing to catch yet.
+
 `MacPlatformState` stores `gpu_preference`; [`set_gpu_preference`](crates/gpui_macos/src/platform.rs)
 writes it, and `Window::new` passes it to `new_renderer`. The custom `renderer_factory` path is a
 renderer of the embedder's own and is not steered by this preference; say so.
 
-`active_gpu` records the chosen `GpuAdapterInfo` when the renderer is built — the platform already
-holds the renderer context (`renderer::Context`), so a `selected_gpu` slot on `InstanceBufferPool`
-reaches `MacPlatform::active_gpu` without a new coupling. It is `None` until the first renderer
-exists.
+`active_gpu` records the chosen `GpuAdapterInfo` when the renderer is built. As implemented, the
+renderer writes it to the shared `InstanceBufferPool`, so `MacPlatform::active_gpu` reads it through
+the context it already holds; a window built by the embedder's own `renderer_factory` does not write
+it, and until a default-renderer window exists the answer is `None`.
 
 - **iOS/tvOS:** one GPU, `all()` unavailable. `enumerate_gpus` returns one synthesized entry with
   `PermanentGpuId::Single` and `SessionGpuId::Default`; every preference resolves to it (and an
@@ -385,9 +396,13 @@ already overrides every backend.
   `GpuId` (PCI permanent + LUID session), with the permanent-only PCI id from a config, and with
   `Custom`; assert `active_gpu`; assert a refused `Custom` fails the window with the shortfall. The
   **two-GPU** case remains unmeasured (P6 §4) and needs a hybrid laptop.
-- **macOS**, on Intel (integrated + discrete) and Apple Silicon: enumerate, select each by its
-  permanent `Name` and its session registry id, assert `active_gpu`, and assert the `Auto` choice is
-  unchanged. There is no macOS CI host today, so this stays a manual record until one exists.
+- **macOS** (implemented, not measured): enumerate, select in `select_device`, thread the preference
+  through `new_renderer`, record the active device on the buffer pool, make `new_renderer` fallible.
+  Type-checked for `aarch64-apple-darwin` (`gpui_apple`, `gpui_macos`, `gpui`) and clippy-clean; the
+  test binaries cannot be linked on this Linux host. The manual rows remain: on Intel (integrated +
+  discrete) and Apple Silicon, enumerate, select each by its permanent `Name` and its session
+  registry id, assert `active_gpu`, and assert the `Auto` choice is unchanged. There is no macOS CI
+  host today, so this stays a manual record until one exists.
 - **Single-GPU fallback**: a platform that cannot enumerate reports one
   `Single`/`Default` adapter; `enumerate_gpus` is non-empty, `Device(Single)` selects it, and an
   unrelated `Device` falls back to it rather than failing.
@@ -403,9 +418,11 @@ already overrides every backend.
 1. **DXCore feature — settled.** The feature is `Win32_Graphics_DXCore`, added to the workspace
    `windows` features. The Windows 10 2004 floor does not apply: the factory is loaded by hand, so an
    older system reports `Other` rather than failing to start (§4).
-2. **Persistent identity — in the contract.** `GpuId` now carries both parts (§2); `permanent` is
-   serialised, `session` is not. The only open part is whether the Windows PnP device instance id
-   (`PermanentGpuId::Pnp`) ships in the first Windows slice or later; the draft assumes later.
+2. **Persistent identity — in the contract, PnP deferred.** `GpuId` carries both parts (§2);
+   `permanent` is serialised, `session` is not. Windows ships the PCI part; `PermanentGpuId::Pnp`
+   (and the `SetupAPI` read it needs) stays for later, so a saved Windows choice names a model rather
+   than one of two identical cards. macOS has no documented persistent per-adapter id and uses
+   `Name`.
 3. **Linux session handle — settled.** `SessionGpuId::Drm` does not read
    `VK_EXT_physical_device_drm` through the wgpu HAL, which does not expose it: the PCI bus id wgpu
    reports is resolved through udev's `/dev/dri/by-path/pci-…-render` symlink. Where that link is
@@ -432,6 +449,7 @@ already overrides every backend.
    and compile-checked on both Windows targets; validate on the Windows probe VM
    ([issue 0009](../issues/0009-windows-probe-vm.md)).
 3. **macOS**: enumerate, select in `create_device`, thread the preference through `new_renderer`,
-   record the active device, make `new_renderer` fallible. Validate on a Mac.
+   record the active device, make `new_renderer` fallible. **Implemented** (`c6a6d4df6a`) and
+   type-checked for `aarch64-apple-darwin`; validate on a Mac.
 4. **Defaults and record**: settle §6 (amend 0008), note the session scope of `Device`, and point
    `gpui_interop` at the new identity in its docs only.
