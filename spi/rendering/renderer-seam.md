@@ -156,7 +156,7 @@ handles the renderer was built with, and the shared trait must not name `metal::
 to resolve by lifting the gate or dropping a duplicate. Neither is needed once the
 lifecycle is on `PlatformRenderer`: the test-gated method keeps its one caller
 (`crates/gpui_authoring/src/platform/test/window.rs:529`) and its one override
-(`crates/gpui_apple/src/metal_renderer.rs:1825`), and the production path gets the name
+(`crates/gpui_apple/src/metal_renderer.rs:1944`), and the production path gets the name
 it already has.
 
 ### 5.2 The native hooks stay on the platform
