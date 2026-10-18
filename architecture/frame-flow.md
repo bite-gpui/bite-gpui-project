@@ -93,7 +93,7 @@ producer's pixels are pushed during **`paint_roots`** — the element calls `sur
 `PaintSurface` into the frame's scene (`crates/gpui_engine/src/scene.rs:908`) with the bounds and
 content mask the element resolved. The scene orders it against its siblings, and when the frame
 reaches the renderer, `SceneRenderer::draw` hands that scene to the renderer, whose `draw_surfaces`
-samples the buffer (`crates/gpui_windows/src/directx_renderer.rs:918`). Nothing above the renderer
+samples the buffer (`crates/gpui_windows/src/directx_renderer.rs:919`). Nothing above the renderer
 needs a new stage and nothing below the pipeline changes: a surface is a primitive, and the primitive
 machinery is already the frame's.
 

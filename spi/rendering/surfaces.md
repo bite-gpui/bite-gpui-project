@@ -22,7 +22,7 @@
 (`crates/gpui_engine/src/scene.rs:244`, struct at `:908`), a `Surface` element and its `surface()`
 constructor (`crates/gpui_authoring/src/elements/surface.rs:21`, `:61`), the `GpuCanvasContext` it
 is pushed through (`crates/gpui_authoring/src/elements/gpu_canvas.rs`) and a `draw_surfaces` on every
-renderer (`crates/gpui_windows/src/directx_renderer.rs:918`,
+renderer (`crates/gpui_windows/src/directx_renderer.rs:919`,
 `crates/gpui_apple/src/metal_renderer.rs:1156`, and wgpu's at
 `crates/gpui_wgpu/src/wgpu_renderer.rs:2084`). It was macOS-only before the arms below landed:
 `SurfaceSource` (`crates/gpui_engine/src/scene.rs`, imported by the element) now carries the
@@ -155,7 +155,7 @@ The renderer's obligation is one method, `draw_surfaces`:
 - **Bind the surface and draw a quad through it.** The geometry, the content-mask clip and the
   corner SDF are the quad path's, not a second implementation — which is what
   `CustomRenderPrimitive::to_quad_record` (`crates/gpui_engine/src/custom_render.rs:101`) already
-  encodes, and what the Direct3D arm already reads (`crates/gpui_windows/src/directx_renderer.rs:1125`). The retarget keeps
+  encodes, and what the Direct3D arm already reads (`crates/gpui_windows/src/directx_renderer.rs:1126`). The retarget keeps
   it and moves the call.
 - **Straight-through, bit-exact sampling.** On Direct3D the surface's non-sRGB view is sampled
   straight to the `*_UNORM` backbuffer, with no transfer function to cancel — the finding
@@ -215,7 +215,7 @@ planned in [`interop-crate.md`](interop-crate.md).
 - **Kept verbatim:** `PixelBuffer` and the `render_scene`/`read_pixels` split
   (`crates/gpui_engine/src/renderer.rs:57`, `:140`, `:148`) — the record's upstream PR 6, already built; the quad-record
   encoding (`crates/gpui_engine/src/custom_render.rs:101`); the Direct3D arm's sampler and SRV path
-  (`crates/gpui_windows/src/directx_renderer.rs:1125`, `create_imported_texture_view` at `:2154`); and the renderer-owned device door (`GpuRenderer::device`, `crates/gpui_engine/src/renderer.rs:42`).
+  (`crates/gpui_windows/src/directx_renderer.rs:1126`, `create_imported_texture_view` at `:2154`); and the renderer-owned device door (`GpuRenderer::device`, `crates/gpui_engine/src/renderer.rs:42`).
 - **Retargeted:** `CustomRenderPrimitive::Texture` → `PaintSurface`; `paint_imported_texture`
   (`window.rs:5054`; now `pub(crate)`, reached through `GpuCanvasContext::paint_texture`) →
   `surface()`; the token builders (`ImportedTextureExt`, `DirectXTextureExt`,

@@ -9,7 +9,7 @@
 - **Built in the fork:** the commit group in [`README.md`](README.md) §7 — `bed0cd2ba4`,
   `b22b082fba`, `1abb3787fa`, `2c3e26e4aa`, `e654076fb2`, `744c237bec` (the Windows arm). By path: `crates/gpui_engine/src/scene.rs` (`SurfaceSource`, the `DirectXSource`
   texture/view pair, and `PaintSurface`); `crates/gpui_authoring/src/elements/surface.rs:147` (the
-  `corner_radii` stub); `crates/gpui_windows/src/directx_renderer.rs:918` (`draw_surfaces`) and
+  `corner_radii` stub); `crates/gpui_windows/src/directx_renderer.rs:919` (`draw_surfaces`) and
   `:1125` (the arm it takes over from); `crates/gpui_authoring/src/elements/gpu_canvas.rs:87` (the
   device door, `GpuCanvasContext::device::<R>`). The same-device arm runs in the example
   (`crates/gpui/examples/surface.rs`); the cross-device arm is downstream in the `gpui_interop`

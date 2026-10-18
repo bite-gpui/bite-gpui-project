@@ -1,10 +1,11 @@
 # 0009 — GPU preference on the Windows and macOS backends
 
 - **Drafted:** 2026-10-18
-- **Status:** draft — step 1 (the identity contract and the shared ranking) landed on
-  `bite_v1.23.x` (`f81511afe8`) and is validated; the design as a whole is not yet decided, and
-  `gpui_windows`/`gpui_apple` still inherit the no-op/empty defaults of `set_gpu_preference`,
-  `enumerate_gpus` and `active_gpu`.
+- **Status:** draft — steps 1–2 are implemented on `bite_v1.23.x`: the identity contract and the
+  shared ranking (`f81511afe8`), and the Windows backend (`493947d8bc`), which is compile-checked on
+  both Windows targets but not yet run on the probe VM. macOS still inherits the no-op/empty
+  defaults of `set_gpu_preference`, `enumerate_gpus` and `active_gpu`; the design as a whole is not
+  yet decided.
 - **Evidence:** [`0008`](0008-gpu-preference-and-enumeration.md) (the seam and the process-wide
   ruling), [`0010`](../issues/0010-application-gpu-preference.md) / [`0012`](../issues/0012-gpu-enumeration-and-negotiation.md)
   (the application API), [`windows-adapter-luid-probe.md`](windows-adapter-luid-probe.md) (the LUID is
@@ -236,6 +237,12 @@ slice and a low-end dGPU has a modest one, so any threshold is a magic number th
 Where DXCore cannot answer, `Other` is honest, and `LowPower`/`HighPerformance` fall back to the DXGI
 order — which is the OS's own preference — rather than guessing.
 
+**`dxcore.dll` is loaded by hand.** It only exists from Windows 10 2004, and a static import of
+`DXCoreCreateAdapterFactory` would put it in the executable's import table and stop the process from
+starting on anything older. The entry point is therefore resolved with `LoadLibraryW`/
+`GetProcAddress` once per process; an absent DLL, or an adapter whose `IsIntegrated` is unsupported,
+leaves `device_type` as `Other`.
+
 ### Selection and the text system
 
 `DirectXDevices::new(preference)` orders the enumerated pairs with the shared rank, then walks them
@@ -367,12 +374,17 @@ already overrides every backend.
   `Name`/`Single` or a `Metal` session. A `GpuId` serialises without its session and deserialises
   with `None`, then still matches after a simulated restart. The existing Linux ranking tests move
   with the code.
-- **Windows**, on the guest from [`0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md)
-  with `script/d3dprobe`: enumerate and assert the Intel HD 520 `[8086:1916]` and its LUID against
-  the probe printout ([`windows-adapter-luid-probe.md`](windows-adapter-luid-probe.md) §2); select it
-  with a full `GpuId` (PCI permanent + LUID session), with the permanent-only PCI id from a config,
-  and with `Custom`; assert `active_gpu`; assert a refused `Custom` fails the window with the
-  shortfall. The **two-GPU** case remains unmeasured (P6 §4) and needs a hybrid laptop.
+- **Windows** (implemented, not yet measured): enumerate, select, apply at the first window, swap
+  the text system's GPU state through the existing `handle_gpu_lost`, implement `active_gpu`, and
+  pass the preference through recovery. Step 2 cross-compiles for `x86_64-pc-windows-gnu` and
+  `x86_64-pc-windows-msvc` and passes clippy on both, with pure tests for the class mapping and the
+  LUID packing; the guest rows below are still outstanding. On the guest from
+  [`0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md) with `script/d3dprobe`: enumerate
+  and assert the Intel HD 520 `[8086:1916]` and its LUID against the probe printout
+  ([`windows-adapter-luid-probe.md`](windows-adapter-luid-probe.md) §2); select it with a full
+  `GpuId` (PCI permanent + LUID session), with the permanent-only PCI id from a config, and with
+  `Custom`; assert `active_gpu`; assert a refused `Custom` fails the window with the shortfall. The
+  **two-GPU** case remains unmeasured (P6 §4) and needs a hybrid laptop.
 - **macOS**, on Intel (integrated + discrete) and Apple Silicon: enumerate, select each by its
   permanent `Name` and its session registry id, assert `active_gpu`, and assert the `Auto` choice is
   unchanged. There is no macOS CI host today, so this stays a manual record until one exists.
@@ -388,9 +400,9 @@ already overrides every backend.
 
 ## 9. Open questions
 
-1. **DXCore feature.** `Win32_Graphics_DxCore` needs adding to the workspace `windows`
-   features, and `IsIntegrated` needs Windows 10 2004+. Is that floor acceptable, or should the first
-   cut report `Other` and defer classification?
+1. **DXCore feature — settled.** The feature is `Win32_Graphics_DXCore`, added to the workspace
+   `windows` features. The Windows 10 2004 floor does not apply: the factory is loaded by hand, so an
+   older system reports `Other` rather than failing to start (§4).
 2. **Persistent identity — in the contract.** `GpuId` now carries both parts (§2); `permanent` is
    serialised, `session` is not. The only open part is whether the Windows PnP device instance id
    (`PermanentGpuId::Pnp`) ships in the first Windows slice or later; the draft assumes later.
@@ -400,11 +412,12 @@ already overrides every backend.
    absent (a GL adapter, a system without udev) the PCI pair is the session handle — still valid for
    the current process, but not unique between two identical cards. The measured pair resolves both
    nodes.
-4. **`GpuBackend::Dx11`.** Adding the variant is a public enum change. Is the Windows renderer's API
-   correctly called Direct3D 11 rather than 12, or should the field stay coarse?
-5. **Where the Windows text-system swap lives.** `DirectWriteTextSystem::handle_gpu_lost` already
-   rebuilds `GPUState`; reuse it, or add an explicit `handle_device_change` so the recovery and
-   preference paths do not read as the same event?
+4. **`GpuBackend::Dx11` — settled.** The variant is added; `gpui_windows`' renderer is Direct3D 11
+   and the field should say so. `Dx12` stays for `wgpu`.
+5. **Where the Windows text-system swap lives — settled.** Reuse `handle_gpu_lost`: it already
+   rebuilds `GPUState` against another device, and applying the preference happens before the first
+   window, so no glyph exists yet. A separate `handle_device_change` would hide that the two events
+   share one operation.
 
 ## 10. Plan
 
@@ -415,8 +428,9 @@ already overrides every backend.
    the `gpui_wgpu` and `gpui_va` suites green on both measured GPUs, `gpui_interop` reading the
    identity through the accessors.
 2. **Windows**: enumerate, select, apply at the first window, swap the text system's GPU state,
-   implement `active_gpu`, and pass the preference through recovery. Validate on the Windows probe
-   VM ([issue 0009](../issues/0009-windows-probe-vm.md)).
+   implement `active_gpu`, and pass the preference through recovery. **Implemented** (`493947d8bc`)
+   and compile-checked on both Windows targets; validate on the Windows probe VM
+   ([issue 0009](../issues/0009-windows-probe-vm.md)).
 3. **macOS**: enumerate, select in `create_device`, thread the preference through `new_renderer`,
    record the active device, make `new_renderer` fallible. Validate on a Mac.
 4. **Defaults and record**: settle §6 (amend 0008), note the session scope of `Device`, and point

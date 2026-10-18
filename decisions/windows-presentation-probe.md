@@ -36,7 +36,7 @@ Three things follow, and the first is the one that would have cost a patch:
   the `HWND` finds the DX12 adapter, configures, acquires a frame and presents it.
 - **A DirectComposition tree on the same `HWND` does not stop it.** Committing a target,
   visual and composition swap chain the way `gpui_windows` does
-  (`crates/gpui_windows/src/directx_renderer.rs:1377`) and then presenting from wgpu on the
+  (`crates/gpui_windows/src/directx_renderer.rs:1378`) and then presenting from wgpu on the
   same window was accepted. What that does not show is which of the two is *visible* — the
   probe never presents the composition swap chain — so it is "they coexist", not "the
   window can keep both".

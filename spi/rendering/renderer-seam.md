@@ -38,7 +38,7 @@ six implementations:
 | `MetalRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1727` | `crates/gpui_macos/src/window.rs:668` |
 | `MetalHeadlessRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1817` | `crates/gpui_apple/src/metal_renderer.rs:1802` |
 | `WgpuRenderer` | `gpui_wgpu` | `crates/gpui_wgpu/src/wgpu_renderer.rs:3383` | `crates/gpui_linux/src/linux/x11/window.rs:273` |
-| `DirectXRenderer` | `gpui_windows` | `crates/gpui_windows/src/directx_renderer.rs:2583` | `crates/gpui_windows/src/window.rs:67` |
+| `DirectXRenderer` | `gpui_windows` | `crates/gpui_windows/src/directx_renderer.rs:2584` | `crates/gpui_windows/src/window.rs:67` |
 | `HeadlessRenderer` | `gpui_linux` | `crates/gpui_linux/src/linux/headless/window.rs:258` | `crates/gpui_linux/src/linux/headless/window.rs:57` |
 | `TestRenderer` | `gpui_authoring` | `crates/gpui_authoring/src/platform/test/window.rs:585` | `crates/gpui_authoring/src/platform/test/window.rs:25` |
 
@@ -347,7 +347,7 @@ resize or a device loss. Two consequences:
   (`WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>`,
   `crates/gpui_wgpu/src/wgpu_renderer.rs:233`): the first window to notice rebuilds it
   with `WgpuContext::new_rejecting_software`
-  (`crates/gpui_wgpu/src/wgpu_context.rs:195`) and the rest adopt what it left. The same
+  (`crates/gpui_wgpu/src/wgpu_context.rs:242`) and the rest adopt what it left. The same
   protocol is needed on all four platforms — macOS and Windows lose devices too — and it
   is one protocol implemented three times, not a Linux-only concern.
 
