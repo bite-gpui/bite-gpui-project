@@ -47,9 +47,10 @@ has the distinction.
 returns whether it presented, and `PlatformWindow::present` hands that result back to
 the backend, which uses it to pace its own frame loop. That is the capability a
 `FramePipeline` cannot reach — no swapchain, no vblank, no timestamp, and
-`Window::present` is private to `gpui_authoring` — which is why presentation belongs
-below the pipeline rather than in a decorator on it. The whole flow is drawn in
-[`../architecture/frame-flow.md`](../architecture/frame-flow.md).
+`Window::present` is a doc-hidden runtime method that reaches the platform's renderer
+(public for a host-embedded loop, not part of the authoring API) — which is why
+presentation belongs below the pipeline rather than in a decorator on it. The whole flow
+is drawn in [`../architecture/frame-flow.md`](../architecture/frame-flow.md).
 
 One more link in the chain is worth knowing before measuring any of this: the frame
 source throttles *before* a pipeline is consulted — an unfocused window to

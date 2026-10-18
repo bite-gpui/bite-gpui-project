@@ -184,7 +184,7 @@ no counterpart in this fork:
   `(&mut self, window: &mut Window, cx: &mut Context<Self>)`
   (`crates/gpui_authoring/src/element.rs:164`, `:180`).
 - **Painting is a `Window` capability, not a `cx` one.** `paint_quad`
-  (`crates/gpui_authoring/src/window.rs:5086`) and `paint_image` (`:5477`) both insert
+  (`crates/gpui_authoring/src/window.rs:5097`) and `paint_image` (`:5490`) both insert
   into the frame's scene, and the surface hooks sit beside them in the same phase —
   `GpuCanvasContext::paint_surface`/`paint_texture` for a canvas, and the crate-internal
   `Window::paint_imported_texture` under them. The drafts' separate

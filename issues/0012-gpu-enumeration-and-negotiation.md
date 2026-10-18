@@ -129,3 +129,15 @@ What stays open is out of this issue's scope: Windows/macOS import capability re
 D3D11 texture / IOSurface, not modifiers), runtime switching (refused by `0008`), and the
 producer-facing convenience of asking the same question through `gpui_interop::Adapter` instead of
 carrying the report from `App`.
+
+## Update, 2026-10-18 — the decoder's capability joins the choice
+
+`gpui_va` answers the one capability the adapter list cannot: `supports_adapter(&GpuAdapterInfo,
+Codec)` maps an enumerated adapter's DRM session handle to its render node and asks libva for a `VLD`
+entrypoint, and `decode_preference(Codec)` is the `GpuPreference::Custom` one-liner built from it. That
+is what lets an application choose a GPU for **functionality** rather than device type — the `GM108`
+case, where the discrete part has a VA driver and no decoder at all, so `HighPerformance` or a name
+match can pick the one card that cannot play the stream. `gpui_interop::GpuId::from_adapter` now takes
+the render node from the platform's session handle when one is present, so the producer-facing mapping
+is exact and costs no Vulkan instance. The import-capability report (`App::dmabuf_capabilities`) is
+unchanged and remains the renderer's side of the negotiation.

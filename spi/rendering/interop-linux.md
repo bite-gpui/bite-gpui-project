@@ -62,7 +62,10 @@ it does not get to choose the shapes.
 [`producer-seam.md`](producer-seam.md) §5 draws the line, and it is the same one here:
 
 - **VA-API exports directly.** `vaExportSurfaceHandle` hands back fd, modifier and planes; `gpui_va`
-  builds the `DmaBufHandle` and needs none of this module.
+  builds the `DmaBufHandle` and needs none of this module. It checks the descriptor first — the
+  fourcc, the two layer formats, and that both planes fit inside the exported object — so a driver
+  returning another format (or a malformed layout) is a named refusal rather than a mislabeled
+  `NV12` surface the importer would sample from the wrong place.
 - **A general producer must export its own.** A `wgpu` or 3D producer, or another process, has no
   driver-level export. It allocates a shareable image and exports the fd itself — `VK_KHR_external_memory_fd`
   or `EGL_LINUX_DMA_BUF_EXT` — which is **this module**.
@@ -241,6 +244,18 @@ canvas before it opens its decoder: `report_renderer_gpu` runs `attach(gpu.try_d
 answers (asking for one more animation frame to get there). The frame's own `surface()` with its
 `object_fit` is untouched; only the pre-report frame uses the canvas. Off Linux the element is
 unchanged.
+
+**Choosing the decoder's GPU before the window.** Following the renderer was only half the question:
+the application still had to pick a renderer that can decode, and a device type cannot answer that
+(the `GM108` has a VA driver and no decoder). `gpui_va::supports_adapter` asks it on the enumeration
+seam — it maps the adapter's DRM session handle to its render node and queries libva for a `VLD`
+entrypoint — and `decode_preference` wraps that in `GpuPreference::Custom`, so an application states
+"a GPU that decodes H.264" before the first window:
+`Application::with_gpu_preference(decode_preference(Codec::H264))`. If no adapter answers, the custom
+selector returns `None` and the window names the shortfall; a caller that would rather play in
+software keeps `LowPower`/`Auto` and the CPU read-back path. `GpuId::from_adapter` now takes the
+render node from the platform's session handle when one is present, so the producer-facing mapping
+costs no Vulkan instance.
 
 **Verified on a real window, and seeded in tests.** Running `gpui_video`'s `player` example with
 tracing shows the sequence — `reported=false` → `report_renderer_gpu: device=true` → `GpuId { name:

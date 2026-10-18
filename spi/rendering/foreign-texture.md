@@ -243,7 +243,7 @@ property of the view, and the usage flags must include `TextureUsages::TEXTURE_B
 
 **Not a Windows special case, after all.** The surface format is the renderer's choice, and the
 wgpu renderer picks a non-sRGB one on every platform — `preferred_formats = [Bgra8Unorm,
-Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:475`) — so a Windows window running
+Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:486`) — so a Windows window running
 `WgpuRenderer` shows the same `*_UNORM` surface convention the rule above states, and the default
 `DirectXRenderer`'s `B8G8R8A8_UNORM` target
 (`crates/gpui_windows/src/directx_renderer.rs:34`) is that convention on the renderer that supports

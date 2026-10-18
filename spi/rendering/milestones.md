@@ -127,9 +127,12 @@ only the Windows Guest Mode direction.
 [`0010`](../../issues/0010-application-gpu-preference.md) are implemented: `GpuPreference` on
 `Application`, `ZED_DEVICE_ID` read only in the Linux platform (`gpu_preference_from_env`), `LowPower`
 by default, and `App::enumerate_gpus` / `active_gpu` with `Custom` naming one adapter. Issue
-[`0012`](../../issues/0012-gpu-enumeration-and-negotiation.md) added the capability tier and is
+**[`0012`](../../issues/0012-gpu-enumeration-and-negotiation.md) added the capability tier and is
 closed: `App::dmabuf_capabilities` reports, per format, the DRM modifiers the renderer's device will
-import. Runtime switching stays refused, as recorded.
+import. Runtime switching stays refused, as recorded. The producer's own capability joined the
+choice too: `gpui_va::supports_adapter` asks whether an enumerated adapter has a hardware decoder and
+`decode_preference` turns that into a `GpuPreference::Custom`, so a device type cannot choose the
+one GPU that cannot play the stream.
 
 **M9 — the surface's transfer function. Done.** Issue
 [`0013`](../../issues/0013-transfer-function-and-srgb-sampling.md): the traced answer is that GPUI's
