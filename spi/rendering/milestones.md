@@ -38,8 +38,8 @@ canonical ref carries Path A.
 | the surface vocabulary: `SurfaceSource` (`crates/gpui_engine/src/scene.rs:851`), `DirectXSource` (`:802`) and `PaintSurface` (`:908`) | [`surfaces.md`](surfaces.md) | the canonical ref | the three arms below |
 | `draw_surfaces` on all three renderers (`crates/gpui_wgpu/src/wgpu_renderer.rs:2084`, `crates/gpui_apple/src/metal_renderer.rs:1156`, `crates/gpui_windows/src/directx_renderer.rs:919`) and the `surface()` element (`crates/gpui_authoring/src/elements/surface.rs:61`) | [`surfaces.md`](surfaces.md) | the canonical ref | [`surface-plan.md`](surface-plan.md) W2/W3; [`verification.md`](verification.md) §2 |
 | `GpuCanvas` (`crates/gpui_authoring/src/elements/gpu_canvas.rs:135`) and its context (`:37`): `paint_surface` (`:46`), `paint_texture` (`:64`), `device::<R>()` (`:87`) | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the canonical ref | the hand-rolled demos became the element |
-| the Linux dma-buf importer: `DmaBufHandle` (`crates/gpui_engine/src/dmabuf.rs:154`), `DmaBufTextureCache` (`crates/gpui_wgpu/src/dmabuf.rs:692`) and the native-layout guard (`crates/gpui_wgpu/src/dmabuf.rs:163`) | [`zero-copy-import.md`](zero-copy-import.md) | the canonical ref | [`optimus-dmabuf-topologies.md`](../../decisions/optimus-dmabuf-topologies.md); the `surface_dmabuf` suites on both GPUs |
-| the GPU preference and enumeration: `GpuPreference` (`crates/gpui_platform/src/gpu.rs:219`), `with_gpu_preference` (`crates/gpui_runtime/src/application.rs:94`), the shared `rank` (`crates/gpui_platform/src/gpu.rs:397`), and `enumerate_gpus` / `active_gpu` (`crates/gpui_authoring/src/app.rs:2116`, `:2124`) over `GpuAdapterInfo` (`crates/gpui_platform/src/gpu.rs:314`) | [`zero-copy-import.md`](zero-copy-import.md) and [`upstream/README.md`](upstream/README.md) PR 5 | the canonical ref | [`0008`](../../decisions/0008-gpu-preference-and-enumeration.md); issue [`0010`](../../issues/0010-application-gpu-preference.md) closed; the capability tier is `0012` |
+| the Linux dma-buf importer: `DmaBufHandle` (`crates/gpui_engine/src/dmabuf.rs:154`), `DmaBufTextureCache` (`crates/gpui_wgpu/src/dmabuf.rs:785`) and the native-layout guard (`crates/gpui_wgpu/src/dmabuf.rs:256`) | [`zero-copy-import.md`](zero-copy-import.md) | the canonical ref | [`optimus-dmabuf-topologies.md`](../../decisions/optimus-dmabuf-topologies.md); the `surface_dmabuf` suites on both GPUs |
+| the GPU preference and enumeration: `GpuPreference` (`crates/gpui_platform/src/gpu.rs:219`), `with_gpu_preference` (`crates/gpui_runtime/src/application.rs:94`), the shared `rank` (`crates/gpui_platform/src/gpu.rs:397`), and `enumerate_gpus` / `active_gpu` (`crates/gpui_authoring/src/app.rs:2116`, `:2124`) over `GpuAdapterInfo` (`crates/gpui_platform/src/gpu.rs:314`) | [`zero-copy-import.md`](zero-copy-import.md) and [`upstream/README.md`](upstream/README.md) PR 5 | the canonical ref | [`0008`](../../decisions/0008-gpu-preference-and-enumeration.md); issue [`0010`](../../issues/0010-application-gpu-preference.md) and [`0012`](../../issues/0012-gpu-enumeration-and-negotiation.md) closed; `App::dmabuf_capabilities` is the capability tier |
 | the superseded route: `CustomRenderPrimitive::Texture`, `ImportedTextureHandle` and `paint_imported_texture` | [`foreign-texture.md`](foreign-texture.md) | the canonical ref, superseded by `0005`; the surface path is the public one | `crates/gpui_engine/src/custom_render.rs:41`, `:14`; Path B's `Inline` is unbuilt |
 | the wgpu arm, the offscreen target and the readback | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 3 rows — the sRGB round trip, the ordering, the device identity — skipped with a logged warning where the machine has no adapter |
 | the Metal arm | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 2 rows on `macos-14` — the colour round trip and the boundary check — plus the shader compile the `macos` job already did |
@@ -120,13 +120,14 @@ Mode's, so it keeps a probe of its own ([`interop-crate.md`](interop-crate.md)).
 `guest` module, but the worker-thread runner that hosts GPUI inside a foreign loop is not measured
 (P1, P7).
 
-**M8 — GPU preference and enumeration. Done, but for the capability tier.** Decision
+**M8 — GPU preference and enumeration. Done.** Decision
 [`0008`](../../decisions/0008-gpu-preference-and-enumeration.md) and issue
 [`0010`](../../issues/0010-application-gpu-preference.md) are implemented: `GpuPreference` on
 `Application`, `ZED_DEVICE_ID` read only in the Linux platform (`gpu_preference_from_env`), `LowPower`
-by default, and `App::enumerate_gpus` / `active_gpu` with `Custom` naming one adapter. What remains is
-what issue [`0012`](../../issues/0012-gpu-enumeration-and-negotiation.md) still tracks — what a chosen
-device can import or export, and the recorded refusal of runtime switching.
+by default, and `App::enumerate_gpus` / `active_gpu` with `Custom` naming one adapter. Issue
+[`0012`](../../issues/0012-gpu-enumeration-and-negotiation.md) added the capability tier and is
+closed: `App::dmabuf_capabilities` reports, per format, the DRM modifiers the renderer's device will
+import. Runtime switching stays refused, as recorded.
 
 **M9 — the surface's transfer function. Open.** Issue
 [`0013`](../../issues/0013-transfer-function-and-srgb-sampling.md): the colour pipeline models a
@@ -195,7 +196,7 @@ evidence beside the decision it produced. A probe still running lives with the w
   [`0007`](../../decisions/0007-dmabuf-importer-native-layout-guard.md), decided and implemented. It
   is why a linear dma-buf is refused unless the driver produces its layout.
 - **The GPU decision** (M8): [`0008`](../../decisions/0008-gpu-preference-and-enumeration.md), decided
-  and implemented for the preference and enumeration; capability negotiation follows issue `0012`.
+  and implemented for the preference, enumeration and the dma-buf import capability report.
 - **The bridge decision** (M6): 0002 deferred it; 0005 schedules it in a downstream crate, and
   [`surface-plan.md`](surface-plan.md) P1/P5/P6 are the probes that decide whether the direction
   worth having works at all.

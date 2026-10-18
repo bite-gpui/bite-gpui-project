@@ -35,7 +35,7 @@ make a demand on the OS window that an element cannot make.
 property of the OS window, and GPUI owns the window — a producer has none to lock. The engine's whole
 pointer surface is three calls and a query:
 
-- `Platform::set_cursor_style(CursorStyle)` — `crates/gpui_platform/src/platform.rs:261`
+- `Platform::set_cursor_style(CursorStyle)` — `crates/gpui_platform/src/platform.rs:272`
 - `Platform::hide_cursor_until_mouse_moves()` and `Platform::is_cursor_visible()` — `:265`, `:268`
 - `PlatformWindow::mouse_position() -> Point<Pixels>` —
   `crates/gpui_platform/src/platform_window.rs:98`

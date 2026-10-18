@@ -347,7 +347,7 @@ resize or a device loss. Two consequences:
   (`WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>`,
   `crates/gpui_wgpu/src/wgpu_renderer.rs:233`): the first window to notice rebuilds it
   with `WgpuContext::new_rejecting_software`
-  (`crates/gpui_wgpu/src/wgpu_context.rs:242`) and the rest adopt what it left. The same
+  (`crates/gpui_wgpu/src/wgpu_context.rs:251`) and the rest adopt what it left. The same
   protocol is needed on all four platforms — macOS and Windows lose devices too — and it
   is one protocol implemented three times, not a Linux-only concern.
 

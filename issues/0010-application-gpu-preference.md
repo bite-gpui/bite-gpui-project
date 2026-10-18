@@ -17,7 +17,7 @@ Adapter selection is a fixed ranking inside the renderer — `sort_adapters`
 
 The only application-facing control is tier 1, and it was a **`std::env::var` read** — `device_id_filter`
 — deep inside the renderer's context, not an argument. (After `0008` the one read is in the Linux
-platform, `gpu_preference_from_env`, `crates/gpui_linux/src/linux/platform.rs:158`.) So:
+platform, `gpu_preference_from_env`, `crates/gpui_linux/src/linux/platform.rs:163`.) So:
 
 - an application that knows which GPU it wants can only *be launched with an environment variable*, a
   shell-level accident rather than an application decision, and one the program itself cannot see;

@@ -1,10 +1,11 @@
 # 0008 — The GPU is process-wide, chosen before the first window from an application preference
 
 - **Decided:** 2026-10-17
-- **Status:** decided — steps 1 and 2 implemented on the working tree: the types (`GpuPreference`,
+- **Status:** decided — steps 1–3 implemented on `bite_v1.23.x`: the types (`GpuPreference`,
   `GpuId`, `GpuAdapterInfo`), `Application::with_gpu_preference`, the `Platform` hook, the Linux
   plumbing, the `ZED_DEVICE_ID` lowering and a unit-tested ranking; `App::enumerate_gpus` /
-  `App::active_gpu` and the `Custom` variant. Capability negotiation (step 3) is not.
+  `App::active_gpu` and the `Custom` variant; and the capability tier, `App::dmabuf_capabilities`,
+  reporting the formats and DRM modifiers the renderer's device will import (`fcbab02913`).
 - **Evidence:** [`../issues/0010-application-gpu-preference.md`](../issues/0010-application-gpu-preference.md)
   (the preference) and [`../issues/0012-gpu-enumeration-and-negotiation.md`](../issues/0012-gpu-enumeration-and-negotiation.md)
   (enumeration and the device scope); the measured pair in
@@ -20,7 +21,7 @@
 1. **One GPU per process, chosen once.** The device is already process-wide (`WgpuContext` is shared by
    every window, [`0006`](0006-renderer-owned-device.md)), so the preference is **application-level**,
    not a per-window argument. It is applied where the adapter is selected —
-   `select_adapter_and_device` (`crates/gpui_wgpu/src/wgpu_context.rs:589`) — before the first window makes a surface
+   `select_adapter_and_device` (`crates/gpui_wgpu/src/wgpu_context.rs:708`) — before the first window makes a surface
    current.
 2. **The application states a `GpuPreference`.** `Application::with_gpu_preference(…, GpuPreference)`,
    carried on the platform and read at selection. The variants:
@@ -35,7 +36,7 @@
      named rather than silently picking another. The chosen adapter is tried first and the rest keep
      `Auto`'s order as fallbacks.
 3. **`ZED_DEVICE_ID` becomes `Device`, not a separate tier.** The variable is read in the Linux
-   (`gpu_preference_from_env`, `crates/gpui_linux/src/linux/platform.rs:158`) and lowered
+   (`gpu_preference_from_env`, `crates/gpui_linux/src/linux/platform.rs:163`) and lowered
    onto `GpuPreference::Device`; no crate in the renderer, and nothing in `gpui_platform`, reads the
    environment. One precedence order then lives in one place. The **headless** path has no platform
    instance, so `current_headless_renderer` asks the platform crate for the same value
@@ -48,13 +49,19 @@
    `Auto` remains available for a caller that wants today's ranking.
 5. **Enumeration is a synchronous accessor on the app, and capability is a second tier.**
    - `App::enumerate_gpus() -> Vec<GpuAdapterInfo>` and `App::active_gpu() -> Option<GpuAdapterInfo>`,
-     implemented by the platform (a default empty list for a backend that cannot).
-   - `GpuAdapterInfo` carries what a choice needs: `name`, `device_type`, `vendor_id`, `device_id`,
-     `backend`, and whether the adapter is software. It deliberately does **not** carry
-     `wgpu::Features` or a dma-buf format/modifier list yet: both need a device, and a capability probe
-     creates one. Proving what a device will **import** is the interop crate's question
-     (`GpuDevice::linear_layout`, `SharedBuffer`), and belongs beside it rather than in the adapter
-     list.
+     implemented by the platform (a backend that cannot enumerate reports one synthesized adapter).
+   - `GpuAdapterInfo` carries what a choice needs: `name`, `device_type`, `backend`, `is_software`,
+     and the two-part `id`. It deliberately does **not** carry `wgpu::Features` or a dma-buf
+     format/modifier list: both need a device, and a capability probe creates one. Proving what a
+     device will **import** is the interop crate's question (`GpuDevice::linear_layout`,
+     `SharedBuffer`), and belongs beside it rather than in the adapter list.
+   - **Capability, once a device exists**: `App::dmabuf_capabilities()` (over
+     `Platform::dmabuf_capabilities`) reports, per surface format, every DRM modifier the renderer's
+     importer will bind — the formats it handles with linear always and the driver's own modifiers
+     where the device took `VK_EXT_image_drm_format_modifier`. Asked on the device the renderer
+     already made, so nothing is created; `None` before the first window and on a platform whose
+     transport is not a dma-buf. It is a *negotiation* input, not a reservation: the linear layout
+     guard still checks a buffer's plane offsets at import.
    - `GpuId` here is the selection identity: a **permanent** part (PCI vendor_id/device_id, a
      Windows PnP id, or a name) and a **session** handle (a LUID, a Metal registry id, a DRM node),
      with the permanent part being what a config stores — see [`0009`](0009-gpu-preference-platform-backends.md)
@@ -117,4 +124,7 @@ application cannot decide, cannot ask, and cannot change its mind.
    need a different identity and a device the platform has already created, are designed in
    [`0009`](0009-gpu-preference-platform-backends.md) (draft).
 3. **Capability negotiation.** What a chosen device will import/export, asked on a device the caller
-   already has — the interop crate's report, surfaced through the application seam.
+   already has — the interop crate's report, surfaced through the application seam. **Implemented**
+   (`fcbab02913`) for the dma-buf import direction: `DmaBufCapabilities` in the engine,
+   `gpui_wgpu::dmabuf_capabilities`, and `App::dmabuf_capabilities`. Measured on both GPUs; the
+   export direction is the producer's own `GpuDevice` and `linear_layout`, not a platform report.

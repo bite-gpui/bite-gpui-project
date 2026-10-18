@@ -19,7 +19,7 @@
 ## 1. The seam already exists; the backends do not implement it
 
 `Platform` already carries the three methods (`crates/gpui_platform/src/platform.rs:119`,
-`:129`, `:138`) and `gpui_linux` implements all three. On Windows and macOS they are the trait
+`:131`, `:149`) and `gpui_linux` implements all three. On Windows and macOS they are the trait
 defaults: the preference is ignored, enumeration is empty and the active GPU is `None`. This design
 fills them in without moving the seam.
 

@@ -1,5 +1,5 @@
 - **Opened:** 2026-10-16
-- **Status:** open
+- **Status:** closed
 - **Touches:** `bite-gpui/crates/gpui_wgpu/src/wgpu_context.rs`, `bite-gpui/crates/gpui_wgpu/src/wgpu_renderer.rs`, `bite-gpui/crates/gpui_linux/src/linux/platform.rs`, the renderer factory in `bite-gpui/crates/gpui_engine/src/renderer.rs`, `spi/rendering/`
 
 # No GPU enumeration, capability negotiation, or renderer switch before a window exists
@@ -44,7 +44,7 @@ The shape this round suggests: `WaylandClient`/`X11Client` own a single `WgpuCon
 device, queue) and hand a clone into each window's `WgpuRenderer`, so nothing is duplicated; the
 *preference* is then configuration on `Application`/`PlatformOptions`, not a per-window argument.
 Adapter creation is already lazy — `select_adapter_and_device`
-(`crates/gpui_wgpu/src/wgpu_context.rs:589`) verifies a
+(`crates/gpui_wgpu/src/wgpu_context.rs:708`) verifies a
 compatible surface before choosing — which is why the preference must reach that point rather than the
 renderer's construction.
 
@@ -98,5 +98,34 @@ Step 2 landed next:
 - `gpui_interop::GpuId::from_adapter` maps the same adapter onto the producer-facing identity (name
   and DRM render node), and `matches_adapter` is the name join a `Custom` selector can use.
 
-What this issue still owes is the capability tier `0008` defers: what a chosen device will import or
-export, asked on a device the caller already has.
+What this issue still owed after step 2 was the capability tier `0008` defers: what a chosen device
+will import or export, asked on a device the caller already has.
+
+## Update, 2026-10-18 — the capability tier lands, and the issue closes
+
+The import direction is implemented on `bite_v1.23.x` (`fcbab02913`):
+
+- `DmaBufCapabilities` (in `gpui_engine`, beside the surface-format vocabulary) is a per-format list
+  of the DRM modifiers the importer will bind. `supports(format, modifier)` is the question a
+  producer asks; `modifiers(format)` is the list it hands an allocator.
+- `gpui_wgpu::dmabuf_capabilities(device)` answers from the renderer's own device with
+  `vkGetPhysicalDeviceFormatProperties`: no device is created and no memory is allocated. The
+  formats are the importer's closed set (`Bgra8`, `Rgba8`, `Nv12`, `Nv21`); linear appears when the
+  format's linear tiling samples, and driver modifiers only when the device took
+  `VK_EXT_image_drm_format_modifier` (otherwise the importer refuses tiled buffers).
+- `Platform::dmabuf_capabilities` and `App::dmabuf_capabilities` surface it on the application seam,
+  `None` before the first window and on Windows/macOS, whose transports are not dma-bufs.
+- Measured on the pair: the Intel HD 520 reports `X_TILED`, `Y_TILED` and `Y_TILED_CCS` for all four
+  formats; the NVIDIA 930M reports six block-linear modifiers for the packed RGB pair and only
+  `LINEAR` for `NV12`/`NV21`. The suite asserts the closed set and linear support on both, and the
+  driver's list is a shape check, not a hardware assertion.
+
+The remaining direction, **export**, is the producer's own device: `GpuDevice::linear_layout`
+answers the native linear layout and `SharedBuffer` reports the modifier it exported under, both on
+`gpui_interop`. A platform-level export report would duplicate the producer's own query, so it is
+not part of this seam.
+
+What stays open is out of this issue's scope: Windows/macOS import capability reports (shared
+D3D11 texture / IOSurface, not modifiers), runtime switching (refused by `0008`), and the
+producer-facing convenience of asking the same question through `gpui_interop::Adapter` instead of
+carrying the report from `App`.

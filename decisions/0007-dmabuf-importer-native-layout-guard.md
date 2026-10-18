@@ -19,7 +19,7 @@
 **A linear handle is imported only if the plane layout it declares is one the driver itself produces.**
 
 On the `LINEAR` path, where the explicit layout is now gated on `explicit` rather than on the modifier
-(`crates/gpui_wgpu/src/dmabuf.rs:329`, `:337`; the single-plane path at `:558`, `:566`), the importer:
+(`crates/gpui_wgpu/src/dmabuf.rs:422`, `:430`; the single-plane path at `:651`, `:659`), the importer:
 
 1. **Shapes the guard around the driver's own layout.** It builds a plain, **unbound** `LINEAR` image of the
    handle's format and extent and reads back the **plane offsets** the driver gives it. The handle's
