@@ -126,6 +126,11 @@ Three shapes are the point, and each follows from a decision already taken:
   available on the probe machine, so the default resolves one and this stays an escape rather than the
   primary path ([evidence](../../decisions/windows-adapter-luid-probe.md)); the two-GPU choice is the
   case still open.
+- **The guest is the inverse, and is not a `SurfacePool`.** A pool serves a producer that renders on
+  its own device and hands GPUI targets; the guest serves a host that wants GPUI's view tree and
+  presents it. `Guest::request_frame` asks the headless context for one frame and returns the
+  renderer's own shareable surface; `Guest::update` carries work back. There is no `acquire`/`submit`
+  ring because the host owns the cadence and the guest owns the only renderer.
 
 **Device loss is part of the contract, not an edge.** A Windows driver resets on sleep, a monitor
 unplug, a DPI change or a GPU timeout (TDR), and GPUI recreates its device; every handle, fence and
