@@ -100,6 +100,7 @@ Implemented on `bite_v1.23.x` (`386d6a53d9`):
   and `surface_dmabuf` is 10/10 on both.
 
 What remains outside this issue: the exact BT.601/BT.709 OETF distinction (the two curves are the same,
-so `Bt709` covers both and video passes through unchanged), a producer-side `SharedBuffer` that
-carries the declaration (the `gpui_interop` arm still defaults to `Srgb` for RGB), and the Windows
-Direct3D shared-texture and macOS CoreVideo arms, whose formats have their own sRGB/linear choice.
+so `Bt709` covers both and video passes through unchanged), and the Windows Direct3D shared-texture
+and macOS CoreVideo arms, whose formats have their own sRGB/linear choice. The producer-side
+declaration landed in `gpui_interop` (`58be5d867e`): `SharedBuffer::with_transfer` carries
+`Linear` (or any other curve) onto the handle a renderer samples.
