@@ -105,7 +105,7 @@ stack are in the `gpui_interop` and `gpui_video` repositories (`guest.rs`, `adap
 | [`rendering/probe-p1-reverse-bridge.md`](../rendering/probe-p1-reverse-bridge.md) | the probe that gates the reverse route |
 | [`rendering/probe-p2-macos-adoption.md`](../rendering/probe-p2-macos-adoption.md) | the probe that gates the macOS module |
 | [`rendering/probe-p4-video-formats.md`](../rendering/probe-p4-video-formats.md) | the inventory behind the additive YCbCr pass |
-| [`rendering/probe-p7-guest-thread.md`](../rendering/probe-p7-guest-thread.md) | the probe that gates the guest runner |
+| [`rendering/probe-p7-guest-thread.md`](../rendering/probe-p7-guest-thread.md) | ran — the frame crosses a thread as a shareable surface; the runner itself is not built |
 
 ### 3. Path B — drawing into the window's own pass
 

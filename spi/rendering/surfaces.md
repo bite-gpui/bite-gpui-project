@@ -24,7 +24,7 @@ constructor (`crates/gpui_authoring/src/elements/surface.rs:21`, `:61`), the `Gp
 is pushed through (`crates/gpui_authoring/src/elements/gpu_canvas.rs`) and a `draw_surfaces` on every
 renderer (`crates/gpui_windows/src/directx_renderer.rs:919`,
 `crates/gpui_apple/src/metal_renderer.rs:1156`, and wgpu's at
-`crates/gpui_wgpu/src/wgpu_renderer.rs:2086`). It was macOS-only before the arms below landed:
+`crates/gpui_wgpu/src/wgpu_renderer.rs:2087`). It was macOS-only before the arms below landed:
 `SurfaceSource` (`crates/gpui_engine/src/scene.rs`, imported by the element) now carries the
 `CoreVideo`/`DirectX`/`DmaBuf` variants, and every renderer implements `draw_surfaces`.
 
@@ -188,7 +188,9 @@ supported shape is **headless rendering on a worker thread**:
 - the two hops a host needs (translated input in, sampled frame out) are ordinary platform work, not
   a new seam.
 
-The offscreen contract is built and its rows are asserted ([`verification.md`](verification.md) §2);
+The offscreen contract is built and its rows are asserted ([`verification.md`](verification.md) §2),
+and it now hands a worker thread's frame to a host as a shareable surface as well as bytes
+(`SceneRenderer::offscreen_surface_handle`, [`../decisions/guest-thread-probe.md`](../../decisions/guest-thread-probe.md));
 what is unbuilt is the runner that ties the loop together, and it belongs with the interop crate.
 
 ## 5. The boundary: what core does *not* do

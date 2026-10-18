@@ -23,7 +23,7 @@ Each is independent of the ones below it unless the table says otherwise.
 | **W3** | **Linux surface arm — done.** The `DmaBuf` variant, its import, the per-frame import cache, the demo and the tests | `crates/gpui_engine/src/dmabuf.rs`; `crates/gpui_wgpu/src/dmabuf.rs` (the import and the `DmaBufTextureCache`); `crates/gpui_wgpu/src/wgpu_renderer.rs` (`draw_surfaces`); `crates/gpui_wgpu/examples/surface_dmabuf.rs` (the demo); `crates/gpui_wgpu/tests/surface_dmabuf.rs` (the tests); `gpui_linux` | a dma-buf composites on a Linux host with an adapter — **verified end to end through `surface()` in a mounted view: RGBA byte-exact, `NV12` converted by the shader** — and the imported textures are cached across frames, the dma-buf counterpart of the Metal arm's `CVMetalTextureCache`, with a producer's `sync_file` waited on (bounded, host-side) before sampling; the buffer must be uncompressed and self-describing under its modifier, and `NV12` is sampled as two plane textures — **P3 cleared** |
 | **W4** | **`GpuCanvas` — done.** The authoring surface; `gpu_canvas(callback)` hands a `GpuCanvasContext`, whose `paint_surface` carries the Path A `SurfaceSource` and whose `paint_texture` the same-device handle | `crates/gpui_authoring` beside `canvas` | the hand-rolled demo becomes the element on all three platforms — Windows through `paint_surface`/`SurfaceSource`, Linux/macOS through `paint_texture` |
 | **W5** | **`gpui-interop` — Host Mode.** Adapter matching and the cross-device bridge, on all three OS transports: Windows (LUID match, NT-handle export/import D3D12/`wgpu` → D3D11, the `ID3D12Fence`↔`ID3D11Fence` bridge), macOS (`IOSurface` into wgpu, `MTLSharedEvent`), Linux (dma-buf + dma-fence) — Windows first | new downstream crate | the bridge composites with a producer on a second device on each platform whose probe has passed, and survives the renderer losing its device — gated on **P2, P5, P6, P9** |
-| **W6** | **Guest runner.** Headless GPUI on a worker thread | the offscreen contract + a runner | a foreign loop drives GPUI and samples the frame — gated on **P1, P7** |
+| **W6** | **Guest runner.** Headless GPUI on a worker thread | the offscreen contract + a runner | a foreign loop drives GPUI and samples the frame — **P7 passed** (the surface handle crosses); **P1** (the reverse transport) remains |
 | **W7** | **Path B — fork-carried, not an upstream PR.** | `crates/gpui_engine/src/custom_render.rs:41` (`Inline`) | no dependency on W2–W6; independent; upstream declined the callback primitive ([`upstream/README.md`](upstream/README.md) §3) |
 
 > **Hazard when running the Linux demo on a two-GPU machine.** The headless renderer chooses its
@@ -133,8 +133,10 @@ hazard is the choice. **This is the answer the crate's shape needed,** which is 
 **P7 — guest thread viability (gates W6).** The renderer factory is `!Send` by construction (an
 `Rc`), and the offscreen path must hand back a *shareable* surface, not only bytes. *Harness:* run
 the offscreen contract on a worker thread and sample its surface from the host loop. *Pass:* the
-executors tick and the frame is read. The full specification is
-[`probe-p7-guest-thread.md`](probe-p7-guest-thread.md).
+executors tick and the frame is read. **Ran** on both GPUs: the renderer stays pinned, the frame
+crosses as a handle, and the host samples it on the same device; the contract gained
+`SceneRenderer::offscreen_surface_handle` ([`../../decisions/guest-thread-probe.md`](../../decisions/guest-thread-probe.md)).
+The full specification is [`probe-p7-guest-thread.md`](probe-p7-guest-thread.md).
 
 **P8 — the two-GPU Mac (a corner of the macOS producer route).** The producer probe established a
 wgpu adapter *is* the `MetalRenderer`'s `MTLDevice` under every power preference on a single-GPU Mac;
@@ -172,7 +174,7 @@ flowchart TD
 
 **P3 is the cheap probe to run first** — it can change W3's shape before it is written. **P6 should
 run early too**, because its answer *is* the crate's API ([`interop-crate.md`](interop-crate.md) §4).
-P5 and P9 gate W5; P1 and P7 gate W6; and none of them is on the W2/W4 path, which is what keeps the
+P5 and P9 gate W5; P1 gates W6 and P7 has passed; and none of them is on the W2/W4 path, which keeps the
 upstream PR unblocked.
 
 ## 4. Gates

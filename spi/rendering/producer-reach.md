@@ -52,7 +52,7 @@ rule, and they serve different producers:
 | **app → gpui** | the application creates the device and installs a renderer that adopts it | wgpu only, and only through a factory |
 
 `WgpuContextSlot` is a shared `Rc` rather than a field for the second reason:
-`WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>` (`crates/gpui_wgpu/src/wgpu_renderer.rs:233`),
+`WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>` (`crates/gpui_wgpu/src/wgpu_renderer.rs:234`),
 whose `WgpuContext` exposes `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
 (`crates/gpui_wgpu/src/wgpu_context.rs:12`). An application that owns the slot and returns
 `WgpuRenderer::new(context, …)` from its own factory ends up holding the device the renderer

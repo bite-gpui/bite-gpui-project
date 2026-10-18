@@ -1,5 +1,6 @@
 - **Opened:** 2026-10-01
-- **Status:** open — the crate and its home are settled; what remains is shipping (upstreaming, publishing, the unmeasured probes).
+- **Status:** open — the crate and its home are settled; what remains is shipping (upstreaming,
+  publishing, P1 and P2).
 - **Touches:** `bite-gpui/bite-gpui` (the upstream PR sequence and the Windows/Linux arms), the `gpui_interop` repository, [`../decisions/0005-external-rendering-unifies-under-surface.md`](../decisions/0005-external-rendering-unifies-under-surface.md), [`../spi/rendering/surfaces.md`](../spi/rendering/surfaces.md), [`../spi/rendering/surface-plan.md`](../spi/rendering/surface-plan.md)
 
 # The surface implementation, across repositories
@@ -54,6 +55,9 @@ half becomes are described in
   [`../spi/rendering/upstream/README.md`](../spi/rendering/upstream/README.md): rebase
   `bite_v1.23.x` onto `v1.24`, `v1.25-pre` and `main`; carry the rendering commits onto a branch off
   `main`; then open the PRs. Nothing is executed yet.
+- **P7 is measured (question 5).** A worker thread's offscreen frame crosses as a shareable surface;
+  the contract gained `SceneRenderer::offscreen_surface_handle`, and the row passes on both GPUs
+  ([`../decisions/guest-thread-probe.md`](../decisions/guest-thread-probe.md)).
 
 ## What remains — and why this issue is open
 
@@ -66,20 +70,22 @@ half becomes are described in
 - **The published payload types (question 2) wait on that release.** The crate names the `windows` and
   `wgpu` types directly and pins them in its manifest; which crate publishes the core's payloads, and
   at which version, is settled only when the core is released and the paths become versions.
-- **The probes are only partly filed (question 5).** P3, P5, P6 and P9 have evidence records
+- **The probes are only partly filed (question 5).** P3, P5, P6, P7 and P9 have evidence records
   ([`../decisions/linux-dmabuf-probe.md`](../decisions/linux-dmabuf-probe.md),
   [`../decisions/windows-fence-loop-probe.md`](../decisions/windows-fence-loop-probe.md),
   [`../decisions/windows-adapter-luid-probe.md`](../decisions/windows-adapter-luid-probe.md),
-  [`../decisions/windows-device-loss-probe.md`](../decisions/windows-device-loss-probe.md)); P1, P2
-  and P7 have specifications but no record, and P4 is an inventory.
-- **M6 and M7 are not complete.** The Windows Host Mode bridge is built; the macOS module waits on P2,
-  and the guest runner is not measured (P1, P7).
-- **The org indexes are only partly updated.** `repositories.md` and `references.md` carry
-  `gpui_interop`; `online-resources.md` still lists the nine pre-interop repositories and has no entry
-  for it or for `gpui_video`.
+  [`../decisions/guest-thread-probe.md`](../decisions/guest-thread-probe.md),
+  [`../decisions/windows-device-loss-probe.md`](../decisions/windows-device-loss-probe.md)); P1 and
+  P2 have specifications but no record, and P4 is an inventory.
+- **M6 and M7 are not complete.** The Windows Host Mode bridge is built; the macOS module waits on P2.
+  M7's P7 is measured and the offscreen surface handle is built; the runner around it — executors,
+  cadence, input in — remains, as does P1's reverse transport.
+- **The org indexes are updated.** `repositories.md`, `references.md` and `online-resources.md` carry
+  all eleven repositories, including `gpui_interop` and `gpui_video`, whose GitHub descriptions,
+  topics and homepage are now set (2026-10-18).
 
 ## What would close it
 
-The upstream PRs merged; `gpui_interop` published and depending on a released `gpui`; P1, P2 and P7
+The upstream PRs merged; `gpui_interop` published and depending on a released `gpui`; P1 and P2
 measured and filed as evidence; and M6's macOS module and M7's guest runner built. The home, the name
-and the crate itself no longer gate closure.
+and the crate itself no longer gate closure, and P7 no longer does either.

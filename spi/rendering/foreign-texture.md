@@ -243,7 +243,7 @@ property of the view, and the usage flags must include `TextureUsages::TEXTURE_B
 
 **Not a Windows special case, after all.** The surface format is the renderer's choice, and the
 wgpu renderer picks a non-sRGB one on every platform — `preferred_formats = [Bgra8Unorm,
-Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:474`) — so a Windows window running
+Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:475`) — so a Windows window running
 `WgpuRenderer` shows the same `*_UNORM` surface convention the rule above states, and the default
 `DirectXRenderer`'s `B8G8R8A8_UNORM` target
 (`crates/gpui_windows/src/directx_renderer.rs:34`) is that convention on the renderer that supports
@@ -289,7 +289,7 @@ reference implementation created a second device (`wgpu::Instance::default()`,
 `request_adapter`, `request_device`) and handed over a view from it. That fails wgpu's
 device check. The device to render on is the one the window's renderer was built with,
 which the factory has: `WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>`
-(`crates/gpui_wgpu/src/wgpu_renderer.rs:233`; the canonical ref still spells the alias
+(`crates/gpui_wgpu/src/wgpu_renderer.rs:234`; the canonical ref still spells the alias
 `GpuContext`), whose `WgpuContext` exposes
 `pub device: Arc<wgpu::Device>` and `pub queue: Arc<wgpu::Queue>`
 (`crates/gpui_wgpu/src/wgpu_context.rs:12`). Two notes for whoever writes the guide: the

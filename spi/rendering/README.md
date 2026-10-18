@@ -49,7 +49,7 @@ its own folder, because it is a surface an application meets rather than part of
 | [`probe-p6-adapter-luid.md`](probe-p6-adapter-luid.md) | the probe that gates W5's adapter selection — and, run first, the crate API |
 | [`probe-p9-device-loss.md`](probe-p9-device-loss.md) | the probe that gates W5's device-loss contract |
 | [`probe-p4-video-formats.md`](probe-p4-video-formats.md) | the inventory behind the additive YCbCr pass — what decoders actually emit |
-| [`probe-p7-guest-thread.md`](probe-p7-guest-thread.md) | the probe that gates W6 — the offscreen contract across the worker-thread boundary |
+| [`probe-p7-guest-thread.md`](probe-p7-guest-thread.md) | ran — the offscreen contract crosses the worker-thread boundary as a shareable surface; the runner remains |
 | [`player.md`](player.md) | the runnable player end of the surface path — the release invariant that keeps biting, what the decoder had to add (containers, plain-baseline H.264), the two upstream bugs it found, and where a frame's time goes |
 | [`upstream/README.md`](upstream/README.md) | the upstreaming plan — the sequence, the PRs and their order, and the commits behind each; read with the upstream Discussion |
 | [`upstream/pr-vocabulary-and-spi.md`](upstream/pr-vocabulary-and-spi.md) | the body for PR 1 — the renderer seam, the surface vocabulary and `GpuCanvas` |

@@ -37,7 +37,7 @@ six implementations:
 | --- | --- | --- | --- |
 | `MetalRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1727` | `crates/gpui_macos/src/window.rs:668` |
 | `MetalHeadlessRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1817` | `crates/gpui_apple/src/metal_renderer.rs:1802` |
-| `WgpuRenderer` | `gpui_wgpu` | `crates/gpui_wgpu/src/wgpu_renderer.rs:3409` | `crates/gpui_linux/src/linux/x11/window.rs:273` |
+| `WgpuRenderer` | `gpui_wgpu` | `crates/gpui_wgpu/src/wgpu_renderer.rs:3571` | `crates/gpui_linux/src/linux/x11/window.rs:273` |
 | `DirectXRenderer` | `gpui_windows` | `crates/gpui_windows/src/directx_renderer.rs:2584` | `crates/gpui_windows/src/window.rs:67` |
 | `HeadlessRenderer` | `gpui_linux` | `crates/gpui_linux/src/linux/headless/window.rs:258` | `crates/gpui_linux/src/linux/headless/window.rs:57` |
 | `TestRenderer` | `gpui_authoring` | `crates/gpui_authoring/src/platform/test/window.rs:585` | `crates/gpui_authoring/src/platform/test/window.rs:25` |
@@ -340,12 +340,12 @@ resize or a device loss. Two consequences:
   (`crates/gpui_linux/src/linux/x11/window.rs:797`).
 - **`recover` has to rebuild from what the renderer already holds.** Its shape at this
   ref is the model: `WgpuRenderer::recover<W>(&mut self, window: &W)`
-  (`crates/gpui_wgpu/src/wgpu_renderer.rs:2647`), called from `present` guarded by
+  (`crates/gpui_wgpu/src/wgpu_renderer.rs:2648`), called from `present` guarded by
   `device_lost()` on x11 (`crates/gpui_linux/src/linux/x11/window.rs:1780`, `:1778`) and
   wayland (`crates/gpui_linux/src/linux/wayland/window.rs:2107`, `:2105`). The subtle
   part is that windows share one GPU context
   (`WgpuContextSlot = Rc<RefCell<Option<WgpuContext>>>`,
-  `crates/gpui_wgpu/src/wgpu_renderer.rs:233`): the first window to notice rebuilds it
+  `crates/gpui_wgpu/src/wgpu_renderer.rs:234`): the first window to notice rebuilds it
   with `WgpuContext::new_rejecting_software`
   (`crates/gpui_wgpu/src/wgpu_context.rs:251`) and the rest adopt what it left. The same
   protocol is needed on all four platforms — macOS and Windows lose devices too — and it
@@ -386,7 +386,7 @@ platform commit carries its own, rather than one commit enabling both for the ot
 
 **Factory footprint: ~180 LOC across four backends, plus the wgpu implementation.** The
 dual-path primitives are *not* in this budget: Path A adds a fragment path and a pipeline to
-two renderers — wgpu's batch arm is empty today (`crates/gpui_wgpu/src/wgpu_renderer.rs:1794`)
+two renderers — wgpu's batch arm is empty today (`crates/gpui_wgpu/src/wgpu_renderer.rs:1795`)
 and the only surface fragment that samples a non-atlas texture is a YCbCr one
 (`crates/gpui_wgpu/src/shaders.wgsl:1425`) — and Path B adds pause/restore to each. Neither is
 a change to a `window.rs`, and keeping the two budgets separate is what the drafts' single

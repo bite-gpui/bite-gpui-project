@@ -26,7 +26,7 @@ platform, `gpu_preference_from_env`, `crates/gpui_linux/src/linux/platform.rs:16
 - the variable is a debugger's (it is named for an editor's builds) doing duty as a product API.
 
 Nothing on `Application` or `PlatformOptions` reaches this. The chosen GPU is readable only *after* a
-window exists — `window.gpu_specs()` (`crates/gpui_wgpu/src/wgpu_renderer.rs:1257`), or inside a
+window exists — `window.gpu_specs()` (`crates/gpui_wgpu/src/wgpu_renderer.rs:1258`), or inside a
 `gpu_canvas` through `Adapter::gpu_id` (`gpui_interop`'s `adapter.rs`) — which is 0012's subject.
 
 ## Proposal

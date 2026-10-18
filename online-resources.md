@@ -24,7 +24,7 @@ Read it before editing anything public, because the two halves behave differentl
   version. Everything below is therefore current state, not a plan; where a field is
   wrong for the next publish, it is marked in [Sync state](#sync-state).
 
-Reviewed 2026-09-27, against `gh` 2.46.0 (account `Vanuan`) and the crates.io API.
+Reviewed 2026-10-18, against `gh` 2.46.0 (account `Vanuan`) and the crates.io API.
 
 ## The organisation
 
@@ -34,7 +34,7 @@ Reviewed 2026-09-27, against `gh` 2.46.0 (account `Vanuan`) and the crates.io AP
 | admin | `Vanuan` (John Yani) — the only admin, and the crates.io owner of every package below |
 | org description | *bite-gpui rearchitects Zed's GPUI into a clean stack of layer crates and publishes them to crates.io so forks can install rather than vendor* |
 | site | <https://bite-gpui.github.io> — the org's Pages root, served from `bite-gpui.github.io`, and the profile's Website field |
-| repositories | 8 public, 1 private (`tools`) |
+| repositories | 10 public, 1 private (`bite-tools`) |
 
 The upstream this is a fork of is not a bite-gpui resource: `zed-industries/zed` is
 where GPUI comes from, and `gpui-ce/gpui-ce` is the community lineage the `bite_ce_main`
@@ -127,8 +127,7 @@ publish. On GitHub they point at the site now (see [Sync state](#sync-state)).
 ## github.com
 
 Eleven repositories in `bite-gpui`: nine carry the project, one is the site, one is a
-consumer. The state below is after the 2026-09-27 sync for the original nine;
-`gpui_interop` and `gpui_video` were created later and have not been through that pass.
+consumer. The state below is after the 2026-10-18 pass, which covers all eleven.
 How it was set and what cannot be changed this way is in [Sync state](#sync-state).
 
 | repository | visibility | description | topics | homepage |
@@ -139,10 +138,10 @@ How it was set and what cannot be changed this way is in [Sync state](#sync-stat
 | `gpui_parley` | public | A Parley-backed TextSystem for GPUI | gpui, gui, parley, rust, text-shaping | <https://bite-gpui.github.io/> |
 | `gpui_morphorm` | public | A morphorm-backed LayoutEngine for GPUI | gpui, gui, layout, morphorm, rust | <https://bite-gpui.github.io/> |
 | `gpui_pass` | public | A throttling, self-accounting FramePipeline for GPUI | frame-pipeline, gpui, gui, profiling, rust, throttling | <https://bite-gpui.github.io/> |
-| `distribution` | public | Rewrites the bite-gpui layer stack into publishable crates and releases them to crates.io: naming, staging and versioning | crates-io, gpui, publishing, release-engineering, rust | <https://bite-gpui.github.io/> |
-| `tools` | private | The tooling that applies the bite-gpui architecture to a target: replay onto a new upstream, conflict settlement, per-target carves and measurement | gpui, migration, rebase, rust, tooling | <https://bite-gpui.github.io/> |
-| `gpui_interop` | public | — | — | — |
-| `gpui_video` | public | GPUI's video stack: the `gpui_video` element, the `gpui_video_platform` seam, and the `gpui_va` VA-API producer | — | — |
+| `bite-distribution` | public | Rewrites the bite-gpui layer stack into publishable crates and releases them to crates.io: naming, staging and versioning | crates-io, gpui, publishing, release-engineering, rust | <https://bite-gpui.github.io/> |
+| `bite-tools` | private | The tooling that applies the bite-gpui architecture to a target: replay onto a new upstream, conflict settlement, per-target carves and measurement | gpui, migration, rebase, rust, tooling | <https://bite-gpui.github.io/> |
+| `gpui_interop` | public | GPUI's downstream interop crate: zero-copy surface sharing between GPUI and foreign producers (dma-buf, shared textures, IOSurface), the GPU rendezvous, and the input gateway | dma-buf, gpui, gui, interop, rust, texture-sharing, zero-copy | <https://bite-gpui.github.io/> |
+| `gpui_video` | public | GPUI's video stack: the `gpui_video` element, the `gpui_video_platform` seam, and the `gpui_va` VA-API producer | gpui, gui, rust, va-api, video, zero-copy | <https://bite-gpui.github.io/> |
 | `bite_gpui_scroll_demo` | public | A scroll-and-motion demo built on the published bite-gpui crates, with the frame cost of each effect | benchmarking, demo, gpui, rust, scroll | <https://bite-gpui.github.io/demos> |
 
 What each is, in the project's own framing:
@@ -155,8 +154,8 @@ What each is, in the project's own framing:
 | `gpui_parley` | `gpui_parley` — the `TextSystem` swap, and the crate's published home | its `README.md`, `benchmarks/` |
 | `gpui_morphorm` | `gpui_morphorm` — the `LayoutEngine` swap | its `README.md`, `benchmarks/` |
 | `gpui_pass` | `gpui_pass` — the `FramePipeline` wrap (throttle + ledger) | its `README.md`, `benchmarks/` |
-| `distribution` | the distribution engine: staging branches into publishable crates and releasing them (`.dist/`) | `DESIGN.md`, `docs/` |
-| `tools` | the migration tooling: replay onto a new upstream, conflict settlement, per-target carves and measurement (`.tools/`) | `docs/workflows.md`, `docs/architecture.md`, `docs/rebase-handoff.md` |
+| `bite-distribution` | the distribution engine: staging branches into publishable crates and releasing them (`.dist/`) | `DESIGN.md`, `docs/` |
+| `bite-tools` | the migration tooling: replay onto a new upstream, conflict settlement, per-target carves and measurement (`.tools/`) | `docs/workflows.md`, `docs/architecture.md`, `docs/rebase-handoff.md` |
 | `gpui_interop` | the downstream bridge and input crate: the cross-device surface bridge, the input gateway, and the Linux/macOS/Windows arms | its `README.md`, `crates/gpui_interop/` |
 | `gpui_video` | the video stack: `gpui_va` (VA-API decode), `gpui_video` (the element), `gpui_video_platform` (the seam) | no `README.md` yet; `crates/` |
 | `bite_gpui_scroll_demo` | a consumer: the scroll-and-motion demo built on the published crates | its `README.md`, `benchmarks/` |
@@ -171,7 +170,7 @@ Two tag conventions are in use, and no repository publishes a GitHub Release —
 is the record. `bite-gpui` tags each branch release (`bite_<version>`, pre-releases
 included); each out-of-tree crate tags the version it published (`v1.21.1`, `v1.21.2`,
 `v1.21.3`) and its release workflow reads that tag as the version to upload;
-`distribution` carries no tags and tags from a run when a target is released. The
+`bite-distribution` carries no tags and tags from a run when a target is released. The
 version each tag names is `.dist`'s to specify, not this file's.
 
 ## github.io

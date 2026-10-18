@@ -90,7 +90,7 @@ gpui-interop/
     windows.rs        // D3D12 -> D3D11 NT handle, and the fence bridge (P5, P6)
     macos.rs          // an MTLTexture over an IOSurface, adopted into wgpu (P2)
     linux.rs          // dma-buf import (P3)
-    guest.rs          // the headless worker-thread runner (P1, P7)
+    guest.rs          // the headless worker-thread runner (P1; P7 passed)
   tests/
     cross_device_surface.rs   // the crate's own test — P5-gated
     linux_dmabuf_readback.rs  // the hatch composited and read back — opt-in (`readback-test`)
@@ -154,7 +154,7 @@ Three things to hold to, all from the design: **`attach` is fallible and `Adapte
 | `windows` | `SharedSurface` (D3D12 allocate → `CreateSharedHandle` → `OpenSharedResource1` → SRV), `Fence` (`ID3D12Fence`↔`ID3D11Fence`) | **P5**, **P6** (P9 for the pool) |
 | `macos` | `AdoptedSurface` (an `MTLTexture` over an `IOSurface` built with `objc2-metal`, adopted into wgpu) | **P2** |
 | `linux` | `DmaBufSurface` (fd + fourcc + modifier → `VkImage`) | **P3** |
-| `guest` | `Guest` (a headless worker thread; a `Frame` out) | **P1**, **P7** |
+| `guest` | `Guest` (a headless worker thread; a `Frame` out) | **P1**; **P7** passed (the surface handle crosses) |
 
 Every module is written only if its probe passes; that is the whole reason the probes come first
 ([`surface-plan.md`](surface-plan.md) §2).

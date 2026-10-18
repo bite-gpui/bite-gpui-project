@@ -1,8 +1,9 @@
 # P7: guest thread viability
 
-- **Status:** proposed — **not run.** Gates W6, the guest runner
-  ([`surface-plan.md`](surface-plan.md) W6, [`surfaces.md`](surfaces.md) §4). It lives with the work it
-  gates and becomes a `decisions/` evidence record when it runs.
+- **Status:** **ran** — 2026-10-18, on the Intel HD 520 and the NVIDIA 930M. See
+  [`../../decisions/guest-thread-probe.md`](../../decisions/guest-thread-probe.md). The contract did
+  not expose a shareable surface and now does (`SceneRenderer::offscreen_surface_handle`); W6's GPU
+  path is buildable.
 - **Question:** can the offscreen contract run on a worker thread and hand a **shareable surface** to
   a foreign loop — across the `!Send` boundary the renderer is built on?
 - **Gates:** W6.
@@ -74,3 +75,6 @@ A printout, filed as a `decisions/` evidence record beside
 [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) — the W6 shape, and (if it
 turns out to be missing) an `offscreen_surface_handle` addition to `SceneRenderer` for
 [`surface-plan.md`](surface-plan.md) W6.
+
+**Filed:** [`../../decisions/guest-thread-probe.md`](../../decisions/guest-thread-probe.md) — the
+handle was missing, and the record documents the addition.
