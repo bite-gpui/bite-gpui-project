@@ -59,7 +59,7 @@ its own folder, because it is a surface an application meets rather than part of
 | [`milestones.md`](milestones.md) | the handoff: what is built and where, what is next in what order, and the gates a resumer runs |
 | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the authoring surface, so an application never meets `Element` |
 
-Eleven documents outside this folder are part of the work rather than of the design:
+Twelve documents outside this folder are part of the work rather than of the design:
 [`../../decisions/0002-render-extension-device-model.md`](../../decisions/0002-render-extension-device-model.md)
 decides which devices a producer may use,
 [`../../decisions/0004-producer-device-rendezvous.md`](../../decisions/0004-producer-device-rendezvous.md)
@@ -69,8 +69,9 @@ decides that the two are one primitive, a `PaintSurface`,
 [`../../decisions/0007-dmabuf-importer-native-layout-guard.md`](../../decisions/0007-dmabuf-importer-native-layout-guard.md)
 decides that a linear dma-buf is imported only at a layout the driver itself produces, and
 [`../../decisions/0008-gpu-preference-and-enumeration.md`](../../decisions/0008-gpu-preference-and-enumeration.md)
-decides that the GPU is process-wide and chosen once from an application preference. The
-measurements they rest on are
+decides that the GPU is process-wide and chosen once from an application preference, and
+[`../../decisions/0009-gpu-preference-platform-backends.md`](../../decisions/0009-gpu-preference-platform-backends.md)
+drafts how the preference and enumeration reach Windows and macOS. The measurements they rest on are
 [`../../decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md), what 0002's
 Windows clause rests on,
 [`../../decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md),

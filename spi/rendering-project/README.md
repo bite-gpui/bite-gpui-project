@@ -46,7 +46,8 @@ prose.
 | [`decisions/0005-external-rendering-unifies-under-surface.md`](../../decisions/0005-external-rendering-unifies-under-surface.md) | decision 0005 — external pixels unify under the existing `PaintSurface`, not a second primitive |
 | [`decisions/0006-renderer-owned-device.md`](../../decisions/0006-renderer-owned-device.md) | decision 0006 — the renderer owns the device and the canvas lends it; supersedes 0004 |
 | [`decisions/0007-dmabuf-importer-native-layout-guard.md`](../../decisions/0007-dmabuf-importer-native-layout-guard.md) | decision 0007 — a linear dma-buf is imported only at a layout the driver itself produces; closes 0011 |
-| [`decisions/0008-gpu-preference-and-enumeration.md`](../../decisions/0008-gpu-preference-and-enumeration.md) | decision 0008 — the GPU is process-wide, chosen once from an application `GpuPreference`; decided, not implemented |
+| [`decisions/0008-gpu-preference-and-enumeration.md`](../../decisions/0008-gpu-preference-and-enumeration.md) | decision 0008 — the GPU is process-wide, chosen once from an application `GpuPreference`; steps 1–2 implemented (the preference and enumeration), capability negotiation remains |
+| [`decisions/0009-gpu-preference-platform-backends.md`](../../decisions/0009-gpu-preference-platform-backends.md) | decision 0009 (draft) — how the preference and enumeration reach Windows and macOS: a two-part `GpuId`, DXGI/DXCore and `MTLCopyAllDevices`, and a per-backend default; steps 1–3 in force, neither backend run on hardware yet |
 | [`decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) | the first measurement 0002 rests on |
 | [`decisions/shared-surface.md`](../../decisions/shared-surface.md) | the shared-buffer probe that reopens 0002 — Windows adoption and the macOS pool, token and fence measured; macOS adoption open |
 | [`decisions/windows-presentation-probe.md`](../../decisions/windows-presentation-probe.md) | the measurement 0002's Windows clause rests on |
@@ -60,6 +61,7 @@ prose.
 | [`issues/0008-dmabuf-tiled-modifiers-wgpu.md`](../../issues/0008-dmabuf-tiled-modifiers-wgpu.md) | closed — the Linux arm is linear-only (accepted); tiled modifiers are future `wgpu-hal` work |
 | [`issues/0009-windows-probe-vm.md`](../../issues/0009-windows-probe-vm.md) | closed — the probe VM gives the Windows devices CI has not got |
 | [`issues/0011-linear-dmabuf-plane-layouts.md`](../../issues/0011-linear-dmabuf-plane-layouts.md) | closed — a linear dma-buf was sampled at the driver's plane layout, not the handle's |
+| [`issues/0012-gpu-enumeration-and-negotiation.md`](../../issues/0012-gpu-enumeration-and-negotiation.md) | closed — the preference and enumeration landed, and the capability tier reports the dma-buf formats and modifiers the renderer's device imports |
 
 ## Not done — gaps in the built path
 
@@ -67,11 +69,10 @@ These are not new projects: they are holes in the path this milestone built.
 
 | here | is |
 | --- | --- |
-| [`issues/0012-gpu-enumeration-and-negotiation.md`](../../issues/0012-gpu-enumeration-and-negotiation.md) | open — enumeration and the application preference are in; what a chosen device can import or export is not |
 | [`issues/0013-transfer-function-and-srgb-sampling.md`](../../issues/0013-transfer-function-and-srgb-sampling.md) | open — the surface path has no transfer function, so an sRGB producer is sampled as linear |
 
-The settled direction is decision `0008` (above): process-wide, chosen once, `LowPower` by default.
-The preference and enumeration are implemented; the capability tier is the next slice.
+The GPU selection work is settled and built (`0008`, `0012`), with `0009` carrying the Windows and
+macOS halves. The transfer function (`0013`) is what remains.
 
 ## Follow-on work — in its own repositories
 
