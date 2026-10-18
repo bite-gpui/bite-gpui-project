@@ -28,46 +28,104 @@ The observable contracts stay those of 0008:
 - runtime switching is refused;
 - a `Custom` selector names one adapter, and an invalid choice fails the window naming the shortfall.
 
-## 2. Identity: one `GpuId`, tagged by backend
+## 2. Identity: a permanent part and a session handle
 
-The current [`GpuId`](crates/gpui_platform/src/gpu.rs) is a PCI pair, which is exactly Linux's and
-Windows' identity and nothing like macOS's. Proposal:
+The identity is two facts, not one:
+
+- **permanent** — what a config can store, and what should still name the same hardware after a
+  restart;
+- **session** — what the backend can actually match *now*: a LUID, a registry id, a DRM node.
+
+This refines 0008's `GpuId` (a PCI pair) into that contract; the code still carries the old shape.
+
+The earlier draft had one tagged `GpuId`. The documentation research below shows why one is not
+enough: every per-process handle is per boot, and every stable handle is ambiguous between two
+identical cards. So the persistent part is part of the contract, and the session part carries the
+handle:
 
 ```rust
-pub enum GpuId {
-    /// The PCI identity Linux and Windows report.
-    Pci { vendor_id: Option<u32>, device_id: u32 },
-    /// A DXGI adapter LUID, packed from `Luid.HighPart`/`LowPart` — the identity GPUI's Direct3D
-    /// device and a DX12 producer both carry. It is valid only for the adapter's lifetime: it
-    /// changes on reboot, driver upgrade, or device disable/enable.
+/// The identity of an adapter.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuId {
+    /// What survives a restart, where the platform has anything that does.
+    pub permanent: PermanentGpuId,
+    /// The backend's handle for this adapter in this process. A config cannot know it, so the
+    /// field is skipped on serialisation and reads back as `None`.
+    #[serde(skip)]
+    pub session: Option<SessionGpuId>,
+}
+
+/// The stable part of an identity. Every adapter `enumerate_gpus` reports carries one.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum PermanentGpuId {
+    /// PCI vendor/device, plus the subsystem/revision that distinguishes board variants. Stable
+    /// across restarts; two identical cards share it. `None` is a wildcard — `ZED_DEVICE_ID` names
+    /// a device only.
+    Pci {
+        vendor_id: Option<u32>,
+        device_id: u32,
+        subsys_id: Option<u32>,
+        revision: Option<u32>,
+    },
+    /// The Windows PnP device instance id — the one documented persistent per-adapter identity.
+    /// DXGI does not expose it; a later `SetupAPI` read fills it in.
+    Pnp(String),
+    /// The adapter/driver name, where the platform has nothing better. Best-effort: two identical
+    /// cards share it.
+    Name(String),
+    /// A platform with one GPU, or a backend that cannot enumerate: there is only "the GPU".
+    Single,
+}
+
+/// The handle the backend matches in this process.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionGpuId {
+    /// A DRM render node (Linux), from `VK_EXT_physical_device_drm`; the node number is assigned
+    /// per boot and is not a hardware id.
+    Drm { render_minor: u32 },
+    /// A DXGI adapter LUID (Windows), packed from `Luid.HighPart`/`LowPart`. It lasts for the
+    /// adapter's lifetime and changes on reboot, driver upgrade, or device disable/enable.
     Luid(u64),
-    /// A Metal device registry id, the only stable identity Metal exposes — and an IOKit registry
-    /// entry id, so it too is valid only until the machine reboots.
+    /// A Metal registry id (macOS) — an IOKit registry entry id, valid only until reboot.
     Metal { registry_id: u64 },
+    /// A platform with one GPU, or a backend whose enumeration cannot name one.
+    Default,
 }
 ```
 
-[`GpuAdapterInfo`](crates/gpui_platform/src/gpu.rs) gains `pub ids: Vec<GpuId>` (or a
-`SmallVec<[GpuId; 2]>`), because an adapter can have more than one identity: Linux has `Pci`, macOS
-has `Metal`, and Windows has **both** `Pci` and `Luid`. `vendor_id`/`device_id` become accessors
-(`Option<u32>`, `None` where the backend has no PCI identity). `GpuId::matches_adapter` compares the
-tag as well as the value and accepts an adapter when **any** of its ids matches — so a Linux `Pci`
-preference can never select a Metal device, and a Windows `Device(Pci)` and `Device(Luid)` both name
-the same adapter.
+[`GpuAdapterInfo`](crates/gpui_platform/src/gpu.rs) carries one `pub id: GpuId`, filled with a
+`session` by `enumerate_gpus` and `active_gpu`. `vendor_id`/`device_id` become accessors reading the
+`Pci` permanent part (`None` where the backend has no PCI identity). Matching is:
 
-- `ZED_DEVICE_ID` still lowers to `Pci { vendor_id: None, device_id }`, and stays a Linux read.
-- Windows gets two identities because it needs both: PCI for `Device(GpuId::Pci(…))` and the LUID
-  for a producer that shares a texture. The probe measured that DXGI's LUID and wgpu's DX12 LUID are
-  the same number ([`windows-adapter-luid-probe.md`](windows-adapter-luid-probe.md) §2), so the LUID
-  is also the identity `gpui_interop` matches on.
+- a `GpuId` **with** a session matches only the adapter with that session — the exact card in this
+  process;
+- a `GpuId` **without** one (a config, or a caller that only knows the model) matches the permanent
+  part, with `None` as a wildcard for the PCI fields; two identical cards both match and the first
+  is chosen.
+
+The same `GpuId` therefore round-trips through a config as its permanent part and re-resolves at
+startup. The per-backend values are:
+
+| backend | `permanent` | `session` |
+| --- | --- | --- |
+| Linux | `Pci { vendor, device }` | `Drm { render_minor }`, falling back to the PCI pair where the extension is absent |
+| Windows | `Pci { vendor, device, subsys, revision }`; later `Pnp` | `Luid` |
+| macOS | `Name` (or `Single` where `all()` is unavailable) | `Metal { registry_id }` |
+| one GPU / no enumeration | `Single` | `Default` |
+
+- `ZED_DEVICE_ID` lowers to `GpuId { permanent: Pci { vendor_id: None, device_id, .. }, session: None }`
+  and stays a Linux read.
+- Windows carries the LUID because it is the identity a producer that shares a texture matches on;
+  the PCI pair is what a config stores. The probe measured that DXGI's LUID and wgpu's DX12 LUID are
+  the same number ([`windows-adapter-luid-probe.md`](windows-adapter-luid-probe.md) §2).
 - macOS has no PCI identity. `MTLDevice::registryID` is global to all tasks, but it is an IOKit
-  registry entry id, which Apple documents as valid only until reboot — the right scope for a
-  startup choice, not for a saved one.
-- **Rejected:** keep `GpuId` PCI-only and force `Custom` on macOS. That leaves `Device` unusable
-  exactly where a preferences panel wants it, and makes the identity field lie.
+  registry entry id, which Apple documents as valid only until reboot — hence the `Name` permanent
+  part and the registry id as the session handle.
+- **Rejected:** one tagged id that is both stored and matched. It either cannot survive a restart
+  (a LUID or registry id) or cannot name one of two identical cards (a PCI pair), and the caller
+  cannot tell which promise it is getting.
 
-Persisting a `Device(GpuId)` across launches is therefore session-scoped, and the platform
-documentation says so explicitly:
+The platform documentation says why the split is required:
 
 | identifier | documented lifetime | source |
 | --- | --- | --- |
@@ -77,20 +135,18 @@ documentation says so explicitly:
 | Metal `registryID` | "global to all tasks" — it is an IOKit registry entry id, and those are "valid only until the machine reboots" | [`registryID`](https://developer.apple.com/documentation/metal/mtldevice/registryid), [`IORegistryEntryGetRegistryEntryID`](https://developer.apple.com/documentation/iokit/1514719-ioregistryentrygetregistryentryi) |
 | Metal device `name` | not an identity: two identical cards share it | 0008 |
 
-**Recommendation.** Keep `GpuId` session-scoped and persist a *criterion*, not a `GpuId`:
+The contract a caller can rely on:
 
-- `LowPower`/`HighPerformance` are stable semantics and are the right thing for a default or a
-  remembered simple choice.
-- "This model of card" is `Pci { vendor_id, device_id }`, stable across restarts on Linux and
-  Windows but ambiguous when two identical cards are present.
-- "This exact card" needs the Windows PnP device instance id — the one documented persistent
-  per-adapter identity — which DXGI does not expose; it would be a `GpuId::Pnp(String)` read through
-  SetupAPI, a later addition. macOS has **no** documented persistent per-adapter identity; a saved
-  choice there is a type or a name, and therefore best-effort.
-
-So a preferences panel can offer "remember this GPU" without the platform promising more than the
-OS does: store the criterion, re-resolve it through `enumerate_gpus` at startup, and fall back to
-`Auto` when it no longer matches.
+- `Device(GpuId)` with a session is "this exact adapter, this run"; with only a permanent part it is
+  "this model of card, this boot", re-resolved through `enumerate_gpus` and falling back to `Auto`
+  when nothing matches.
+- A preferences panel stores the permanent part, not the session.
+- "This exact card across restarts" needs `Pnp` on Windows and has no documented equivalent on
+  macOS; a saved macOS choice is a type or a name, and is best-effort.
+- On a platform with one GPU, or one whose enumeration is not implemented, `enumerate_gpus` returns
+  one synthesized entry with `PermanentGpuId::Single` and `SessionGpuId::Default`; any `Device`
+  preference resolves to it (or falls back to `Auto`), and the contract that every reported adapter
+  has both parts still holds.
 
 ## 3. Selection: one ranking, `Auto` is the backend's own order
 
@@ -103,7 +159,7 @@ The pure selection code currently lives in `gpui_wgpu` —
 pub fn rank(
     adapter: &GpuAdapterInfo,
     preference: &GpuPreference,
-    compositor: Option<&GpuId>,
+    compositor: Option<&PermanentGpuId>,
 ) -> GpuRank;
 
 pub fn custom_choice(
@@ -113,8 +169,34 @@ pub fn custom_choice(
 ```
 
 - `LowPower`, `HighPerformance`, `Device` and `Custom` are portable: device type, the id match, the
-  chosen index. `Custom`'s chosen adapter is tried first and the rest keep their order as fallbacks;
-  an invalid index or `None` is an error naming the shortfall.
+  chosen index. `Device(GpuId)` matches the session when it has one and the permanent part otherwise
+  (§2). `Custom`'s chosen adapter is tried first and the rest keep their order as fallbacks; an
+  invalid index or `None` is an error naming the shortfall.
+- **`Custom` is the application's runtime query.** It receives the whole list — `permanent` and
+  `session` ids, `device_type`, `backend`, `is_software`, and the capability fields 0012 adds — and
+  returns one index. That covers both `GpuPreference` shapes the application needs: "take the first
+  adapter by a stable id order" is a `Custom` that sorts on `permanent`, and "the adapter that can
+  decode video / drive the 3D engine" is a `Custom` that reads the capability report. Nothing is
+  hardcoded in the platform for either.
+
+  ```rust
+  // The first adapter by a stable order, without user interaction.
+  GpuPreference::Custom(Arc::new(|gpus| {
+      gpus.iter()
+          .enumerate()
+          .min_by_key(|(_, gpu)| &gpu.id.permanent)
+          .map(|(index, _)| index)
+  }));
+
+  // The best adapter for the job, once 0012's capability report is on `GpuAdapterInfo`.
+  GpuPreference::Custom(Arc::new(|gpus| {
+      gpus.iter().position(|gpu| gpu.capabilities.supports_video_decode())
+  }));
+  ```
+
+  A `Custom` is not serialisable; an application that offers "remember this policy" stores its own
+  small enum and rebuilds the closure at startup. `Device(GpuId)` remains the serialisable path for
+  "this card".
 - `Auto` is not a cross-backend ranking. Each backend establishes its own order **first** — DXGI's
   on Windows, the existing `create_device` key on macOS, the compositor/type key on Linux — and the
   shared `rank` returns a constant under `Auto`, so the stable sort preserves that order. Only the
@@ -127,8 +209,8 @@ pub fn custom_choice(
   application derived from `App::enumerate_gpus` is the index the selector sees — before any sorting.
 
 `gpui_wgpu` loses its private copy and calls the shared functions; `gpui_linux` keeps
-`CompositorGpuHint` and converts it to `GpuId::Pci` for the tie-break. This is the one behaviour the
-Linux suites must confirm unchanged.
+`CompositorGpuHint` and converts it to `PermanentGpuId::Pci` for the tie-break. This is the one
+behaviour the Linux suites must confirm unchanged.
 
 ## 4. Windows
 
@@ -142,7 +224,8 @@ Map [`DXGI_ADAPTER_DESC1`](crates/gpui_windows/src/directx_devices.rs):
 | `GpuAdapterInfo` | source |
 | --- | --- |
 | `name` | `Description`, NUL-trimmed |
-| `ids` | `Pci { vendor_id: VendorId, device_id: DeviceId }` **and** `Luid(AdapterLuid)` |
+| `id.permanent` | `Pci { vendor_id: VendorId, device_id: DeviceId, subsys_id: Some(SubSysId), revision: Some(Revision) }`; `Pnp` later |
+| `id.session` | `Luid(AdapterLuid)` |
 | `is_software` | `Flags & DXGI_ADAPTER_FLAG_SOFTWARE`, or DXCore's `IsHardware == false`; the probe shows a Basic Render Driver both flagged and unflagged, so neither the flag alone nor the name is enough |
 | `device_type` | `Cpu` when software; otherwise `Integrated` or `Discrete` from DXCore's `IsIntegrated`, `Other` when DXCore cannot answer |
 | `backend` | a new `GpuBackend::Dx11`; `Dx12` stays for wgpu |
@@ -186,9 +269,11 @@ Every `DirectXDevices::new()` call that exists for device recovery
 ([`platform.rs`](crates/gpui_windows/src/platform.rs), [`directx_renderer.rs`](crates/gpui_windows/src/directx_renderer.rs))
 takes the applied preference, so a lost device returns on the same adapter.
 
-A LUID choice is `GpuPreference::Device(GpuId::Luid(…))`. The producer side already resolves a
-Direct3D device to its adapter by LUID in `gpui_interop`'s Windows arm, so no new mapping is needed —
-only exposing the LUID in `GpuAdapterInfo::ids`.
+A LUID choice is a `GpuId` whose `permanent` is the adapter's `Pci` part and whose `session` is
+`Some(SessionGpuId::Luid(…))`; that is the value `enumerate_gpus`/`active_gpu` hand back. A config
+stores the `Pci` (or later `Pnp`) permanent part and leaves the session out. The producer side
+already resolves a Direct3D device to its adapter by LUID in `gpui_interop`'s Windows arm, so no new
+mapping is needed — only exposing both parts in `GpuAdapterInfo::id`.
 
 ## 5. macOS
 
@@ -202,7 +287,8 @@ and there is one GPU; see below.
 | `GpuAdapterInfo` | source |
 | --- | --- |
 | `name` | `MTLDevice::name` |
-| `ids` | `Metal { registry_id: registryID }` |
+| `id.permanent` | `Name(MTLDevice::name)` (or `Single` where `all()` is unavailable) |
+| `id.session` | `Metal { registry_id: registryID }` |
 | `device_type` | `Integrated` when `has_unified_memory` or `is_low_power`; `Discrete` when `!is_low_power && !is_removable`; `Other` for a removable/eGPU |
 | `is_software` | `false` — Metal exposes no software device here |
 | `backend` | `Metal` |
@@ -235,9 +321,10 @@ holds the renderer context (`renderer::Context`), so a `selected_gpu` slot on `I
 reaches `MacPlatform::active_gpu` without a new coupling. It is `None` until the first renderer
 exists.
 
-- **iOS/tvOS:** one GPU, `all()` unavailable. `enumerate_gpus` returns the system default,
-  `set_gpu_preference` is a no-op, and `Device`/`Custom` are not usable. `Metal`'s current device is
-  already the only one.
+- **iOS/tvOS:** one GPU, `all()` unavailable. `enumerate_gpus` returns one synthesized entry with
+  `PermanentGpuId::Single` and `SessionGpuId::Default`; every preference resolves to it (and an
+  unmatched `Device` falls back to it), so the contract that a reported adapter has both parts still
+  holds. There is no user-visible choice.
 - **Interop:** macOS shares the renderer's `MTLDevice` directly, so the registry id is a preference
   identity only, not a transport identity. No `gpui_interop` change is implied.
 
@@ -266,47 +353,60 @@ already overrides every backend.
 - What a chosen device can **import or export** — 0012's capability tier, asked on a device the
   caller already has.
 - A compositor hint on Windows or macOS: there is no equivalent, so their tie-break is `None`.
-- wasm adapter choice, and iOS/tvOS beyond "there is one device".
+- A **capability DSL**. `Custom` is the query seam; 0012 supplies the capability data and the
+  platform does not interpret it.
+- wasm: a synthesized `Single`/`Default` adapter; there is no choice to make.
+- iOS/tvOS beyond that single synthesized adapter.
 
 ## 8. Validation
 
 - **Pure tests**, on synthetic `GpuAdapterInfo`s: each backend's descriptor mapping, the shared
-  `rank`, `Custom` choosing and refusing, and the tag mismatch (`Pci` never matches `Metal`). The
-  existing Linux ranking tests move with the code.
+  `rank`, `Custom` choosing and refusing, and the identity rules — a session matches only the same
+  session, a permanent-only id matches the permanent part, and a `Pci` id never matches a
+  `Name`/`Single` or a `Metal` session. A `GpuId` serialises without its session and deserialises
+  with `None`, then still matches after a simulated restart. The existing Linux ranking tests move
+  with the code.
 - **Windows**, on the guest from [`0009-windows-probe-vm.md`](../issues/0009-windows-probe-vm.md)
   with `script/d3dprobe`: enumerate and assert the Intel HD 520 `[8086:1916]` and its LUID against
   the probe printout ([`windows-adapter-luid-probe.md`](windows-adapter-luid-probe.md) §2); select it
-  with `Device(GpuId::Pci(…))`, `Device(GpuId::Luid(…))` and `Custom`; assert `active_gpu`; assert a refused `Custom`
-  fails the window with the shortfall. The **two-GPU** case remains unmeasured (P6 §4) and needs a
-  hybrid laptop.
-- **macOS**, on Intel (integrated + discrete) and Apple Silicon: enumerate, select each by registry
-  id, assert `active_gpu`, and assert the `Auto` choice is unchanged. There is no macOS CI host
-  today, so this stays a manual record until one exists.
+  with a full `GpuId` (PCI permanent + LUID session), with the permanent-only PCI id from a config,
+  and with `Custom`; assert `active_gpu`; assert a refused `Custom` fails the window with the
+  shortfall. The **two-GPU** case remains unmeasured (P6 §4) and needs a hybrid laptop.
+- **macOS**, on Intel (integrated + discrete) and Apple Silicon: enumerate, select each by its
+  permanent `Name` and its session registry id, assert `active_gpu`, and assert the `Auto` choice is
+  unchanged. There is no macOS CI host today, so this stays a manual record until one exists.
+- **Single-GPU fallback**: a platform that cannot enumerate reports one
+  `Single`/`Default` adapter; `enumerate_gpus` is non-empty, `Device(Single)` selects it, and an
+  unrelated `Device` falls back to it rather than failing.
 - **Linux regression**: `gpui_wgpu`'s and `gpui_va`'s `surface_dmabuf` suites (8/8 and 14/14 on
   Intel and the NVIDIA 930M) after `gpui_wgpu` switches to the shared rank; `ZED_DEVICE_ID` unchanged.
-- **Cross-backend**: one `Custom` predicate ("the adapter named *NVIDIA*") compiles and selects on
-  every backend; a `GpuId` from one backend never matches another.
+- **Cross-backend**: one `Custom` predicate ("the adapter named *NVIDIA*", or "the one with the
+  video capability") compiles and selects on every backend; a session from one backend never matches
+  another, and the permanent variant is part of the match.
 
 ## 9. Open questions
 
 1. **DXCore feature.** `Win32_Graphics_DxCore` needs adding to the workspace `windows`
    features, and `IsIntegrated` needs Windows 10 2004+. Is that floor acceptable, or should the first
    cut report `Other` and defer classification?
-2. **Session-scoped identities — resolved in principle.** The platform docs confirm that LUIDs and
-   Metal registry ids do not survive a reboot (§2). The draft now recommends a persisted *criterion*
-   (type, PCI vendor/device, or name) resolved through `enumerate_gpus`, with `Device(GpuId)` a
-   session API. The only open part is whether to add the Windows PnP device instance id as a
-   first-class `GpuId`, which would let "this exact card" survive a restart on Windows.
-3. **`GpuBackend::Dx11`.** Adding the variant is a public enum change. Is the Windows renderer's API
+2. **Persistent identity — in the contract.** `GpuId` now carries both parts (§2); `permanent` is
+   serialised, `session` is not. The only open part is whether the Windows PnP device instance id
+   (`PermanentGpuId::Pnp`) ships in the first Windows slice or later; the draft assumes later.
+3. **Linux session handle.** `SessionGpuId::Drm` reads `VK_EXT_physical_device_drm` through the wgpu
+   HAL. Is it available on every adapter the Linux renderer can expose, and is the PCI fallback
+   enough where it is not? (The measured pair exposes it.)
+4. **`GpuBackend::Dx11`.** Adding the variant is a public enum change. Is the Windows renderer's API
    correctly called Direct3D 11 rather than 12, or should the field stay coarse?
-4. **Where the Windows text-system swap lives.** `DirectWriteTextSystem::handle_gpu_lost` already
+5. **Where the Windows text-system swap lives.** `DirectWriteTextSystem::handle_gpu_lost` already
    rebuilds `GPUState`; reuse it, or add an explicit `handle_device_change` so the recovery and
    preference paths do not read as the same event?
 
 ## 10. Plan
 
-1. **Identity and shared ranking** in `gpui_platform`; migrate `gpui_wgpu` to it with no behaviour
-   change; add the pure tests. This step is platform-neutral and can land first.
+1. **Identity contract and shared ranking** in `gpui_platform`: `GpuId` with `PermanentGpuId` and
+   `SessionGpuId`, serialisation that drops the session, the `Single`/`Default` fallback and the
+   shared rank; migrate `gpui_wgpu` and `gpui_linux` to it with no behaviour change; add the pure
+   tests. This step is platform-neutral and can land first.
 2. **Windows**: enumerate, select, apply at the first window, swap the text system's GPU state,
    implement `active_gpu`, and pass the preference through recovery. Validate on the Windows probe
    VM ([issue 0009](../issues/0009-windows-probe-vm.md)).

@@ -27,7 +27,8 @@
    - `Auto` — today's ranking: compositor hint, then device type, then backend;
    - `LowPower` — the integrated adapter when there is one;
    - `HighPerformance` — the discrete adapter when there is one;
-   - `Device(GpuId)` — a named adapter, matched by PCI vendor/device;
+   - `Device(GpuId)` — a named adapter, matched by its permanent part and, when it carries one, its
+     session handle (the two-part identity is designed in [`0009`](0009-gpu-preference-platform-backends.md), draft);
    - `Custom(Arc<dyn Fn(&[GpuAdapterInfo]) -> Option<usize> + Send + Sync>)` — the closure receives
      the enumerated list and returns the index of the one adapter it wants. It **chooses** a GPU, it
      does not rank them; `None`, or an index outside the list, fails the window with the shortfall
@@ -54,9 +55,11 @@
      creates one. Proving what a device will **import** is the interop crate's question
      (`GpuDevice::linear_layout`, `SharedBuffer`), and belongs beside it rather than in the adapter
      list.
-   - `GpuId` here is the selection identity — PCI `vendor_id` (optional) and `device_id`. The
-     producer-facing identity (name + DRM render node) stays `gpui_interop::GpuId`; mapping one to the
-     other is part of the enumeration slice.
+   - `GpuId` here is the selection identity: a **permanent** part (PCI vendor_id/device_id, a
+     Windows PnP id, or a name) and a **session** handle (a LUID, a Metal registry id, a DRM node),
+     with the permanent part being what a config stores — see [`0009`](0009-gpu-preference-platform-backends.md)
+     (draft). The producer-facing identity (name + DRM render node) stays `gpui_interop::GpuId`;
+     mapping one to the other is part of the enumeration slice.
 6. **Runtime switching is refused for now, and the refusal is recorded.** Changing the renderer's GPU
    means destroying the `VkDevice`, closing `/dev/dri/*`, and recreating every render target — a
    multi-second, screen-blanking operation that device-lost recovery does not model (it *recreates* a
