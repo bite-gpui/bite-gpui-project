@@ -53,3 +53,26 @@ handle crosses, and the host samples it. What is still W6's work is the runner a
 executors' cadence, the command channel, and input translation in — and what is still unmeasured is
 the reverse transport (P1). Cross-device sampling is not this probe: the host uses the same device,
 which is the guest contract's rule.
+
+## What was built afterwards
+
+The runner is `gpui_interop::Guest` (`src/guest.rs`, feature `guest`). It opens one headless window
+on a worker thread, drives `Window::draw` + `Window::present` when the host asks, and wraps the
+window's renderer in a tap that reports `offscreen_surface_handle` after every presented frame. The
+host's `request_frame` blocks until that frame arrives, and `Guest::update` posts closures back to
+the guest thread, in order.
+
+Three seams had to exist for it, and are now part of the core:
+
+- `Window::present` is a public, doc-hidden runtime method beside `Window::draw` — the platform's
+  frame callback is not available to a host that owns its own loop.
+- The Linux headless window honours `WindowParams::renderer_factory` (it previously ignored it and
+  kept its discard renderer), and sizes the renderer's viewport in `present`.
+- `WgpuHeadlessRenderer` implements `PlatformRenderer`, answering the texture limit and adapter
+description from the device it already owns.
+
+The rows are `tests/guest_runner.rs` (feature `guest-test`): the host asks for a frame and samples a
+known red pixel on the same device; a resize changes the frame's size; an update posted before a
+request is visible in that frame; and a renderer with no shareable surface is a named refusal rather
+than a hang. Both rows pass on the Intel HD 520 and the NVIDIA 930M. What remains is the input
+adapter over `Guest::update`, and P1 for the Windows reverse transport.

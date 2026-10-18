@@ -115,11 +115,12 @@ and `bite-distribution` has no interop target. The reverse direction — a Direc
 `wgpu` consumer — is still unmeasured ([`producer-reach.md`](producer-reach.md) §6) and is Guest
 Mode's, so it keeps a probe of its own ([`interop-crate.md`](interop-crate.md)).
 
-**M7 — guest / headless. Partial.** The offscreen contract is built (M2), and P7 is measured: a
-worker thread's frame crosses as a shareable surface, and the contract has
-`SceneRenderer::offscreen_surface_handle` ([`../../decisions/guest-thread-probe.md`](../../decisions/guest-thread-probe.md)).
-What remains is the runner around it — executors, cadence, input in — and the reverse transport
-(P1).
+**M7 — guest / headless. Done.** The offscreen contract is built (M2), P7 is measured, and the
+runner is `gpui_interop::Guest` (feature `guest`): a headless window on a worker thread, host-paced
+`request_frame`, a shareable surface out, and `Guest::update` for work back in. Its rows pass on the
+Intel HD 520 and the NVIDIA 930M ([`../../decisions/guest-thread-probe.md`](../../decisions/guest-thread-probe.md)).
+What remains is the input adapter over `Guest::update` and the reverse transport (P1), which gates
+only the Windows Guest Mode direction.
 
 **M8 — GPU preference and enumeration. Done.** Decision
 [`0008`](../../decisions/0008-gpu-preference-and-enumeration.md) and issue

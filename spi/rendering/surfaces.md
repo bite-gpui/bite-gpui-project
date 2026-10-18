@@ -190,8 +190,13 @@ supported shape is **headless rendering on a worker thread**:
 
 The offscreen contract is built and its rows are asserted ([`verification.md`](verification.md) §2),
 and it now hands a worker thread's frame to a host as a shareable surface as well as bytes
-(`SceneRenderer::offscreen_surface_handle`, [`../decisions/guest-thread-probe.md`](../../decisions/guest-thread-probe.md));
-what is unbuilt is the runner that ties the loop together, and it belongs with the interop crate.
+(`SceneRenderer::offscreen_surface_handle`, [`../decisions/guest-thread-probe.md`](../../decisions/guest-thread-probe.md)).
+The runner that ties the loop together is built in the interop crate — `gpui_interop::Guest`, which
+opens a headless window on a worker thread, presents on the host's request, and hands the surface
+over. What remains from the two hops is the input half: the runner's work-back command
+(`Guest::update`) is the primitive, but translating a platform's input events into GPUI's is the
+application's work and is not yet a shipped adapter. The reverse transport (P1) is separate again and
+gates only the Windows Guest Mode direction.
 
 ## 5. The boundary: what core does *not* do
 

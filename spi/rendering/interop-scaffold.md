@@ -90,10 +90,12 @@ gpui-interop/
     windows.rs        // D3D12 -> D3D11 NT handle, and the fence bridge (P5, P6)
     macos.rs          // an MTLTexture over an IOSurface, adopted into wgpu (P2)
     linux.rs          // dma-buf import (P3)
-    guest.rs          // the headless worker-thread runner (P1; P7 passed)
+    guest.rs          // the headless worker-thread runner (built; P7 measured the crossing)
   tests/
     cross_device_surface.rs   // the crate's own test — P5-gated
     linux_dmabuf_readback.rs  // the hatch composited and read back — opt-in (`readback-test`)
+    surface_input.rs          // the input gateway through a test window — opt-in (`input-test`)
+    guest_runner.rs           // the guest hands frames to a host loop — opt-in (`guest-test`)
   examples/
     interop_linux.rs  // the Linux dma-buf path in a window — the crate's point, shown
 ```
@@ -139,6 +141,35 @@ impl SurfacePool {
 }
 
 pub struct Frame { /* backend-specific */ }
+
+/// The inverse direction: headless GPUI on a worker thread, for a host that owns the cadence.
+///
+/// It is deliberately **not** a `SurfacePool`. A pool is for a producer that renders on its own
+/// device and hands GPUI a ring of targets; a guest is for a host that wants GPUI's view tree and
+/// presents the result itself. So the guest has no `acquire`/`submit` — the host asks for a frame,
+/// the guest draws and presents it, and what comes back is the renderer's own shareable surface,
+/// opaque to this crate. Work travels the other way as a closure on the guest thread.
+impl Guest {
+    pub fn spawn(
+        options: GuestOptions,
+        renderer: impl Fn() -> Result<Box<dyn PlatformRenderer>> + Send + 'static,
+        build_root: impl FnOnce(&mut Window, &mut App) -> Entity<V> + Send + 'static,
+    ) -> Result<Guest>;
+
+    /// Draw and present one frame; `size` resizes the window first.
+    pub fn request_frame(&mut self, size: Option<Size<Pixels>>) -> Result<GuestFrame>;
+
+    /// Run work against the guest's window on the guest thread. Commands keep their order.
+    pub fn update(&self, update: impl FnOnce(&mut Window, &mut App) + Send + 'static) -> Result<()>;
+
+    /// Stop the loop and join the thread; dropping the runner does the same.
+    pub fn shutdown(self) -> Result<()>;
+}
+
+pub struct GuestFrame {
+    surface: Arc<dyn Any + Send + Sync>,
+    size: Size<DevicePixels>,
+}
 ```
 
 Three things to hold to, all from the design: **`attach` is fallible and `Adapter::wgpu` is
@@ -154,7 +185,7 @@ Three things to hold to, all from the design: **`attach` is fallible and `Adapte
 | `windows` | `SharedSurface` (D3D12 allocate → `CreateSharedHandle` → `OpenSharedResource1` → SRV), `Fence` (`ID3D12Fence`↔`ID3D11Fence`) | **P5**, **P6** (P9 for the pool) |
 | `macos` | `AdoptedSurface` (an `MTLTexture` over an `IOSurface` built with `objc2-metal`, adopted into wgpu) | **P2** |
 | `linux` | `DmaBufSurface` (fd + fourcc + modifier → `VkImage`) | **P3** |
-| `guest` | `Guest` (a headless worker thread; a `Frame` out) | **P1**; **P7** passed (the surface handle crosses) |
+| `guest` | `Guest` (a headless worker thread; a `Frame` out) | built — **P7** measured the crossing; **P1** gates only the reverse transport |
 
 Every module is written only if its probe passes; that is the whole reason the probes come first
 ([`surface-plan.md`](surface-plan.md) §2).

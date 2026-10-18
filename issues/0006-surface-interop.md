@@ -55,9 +55,12 @@ half becomes are described in
   [`../spi/rendering/upstream/README.md`](../spi/rendering/upstream/README.md): rebase
   `bite_v1.23.x` onto `v1.24`, `v1.25-pre` and `main`; carry the rendering commits onto a branch off
   `main`; then open the PRs. Nothing is executed yet.
-- **P7 is measured (question 5).** A worker thread's offscreen frame crosses as a shareable surface;
-  the contract gained `SceneRenderer::offscreen_surface_handle`, and the row passes on both GPUs
-  ([`../decisions/guest-thread-probe.md`](../decisions/guest-thread-probe.md)).
+- **P7 is measured (question 5), and its runner is built.** A worker thread's offscreen frame crosses
+  as a shareable surface; the contract gained `SceneRenderer::offscreen_surface_handle`, and the row
+  passes on both GPUs ([`../decisions/guest-thread-probe.md`](../decisions/guest-thread-probe.md)).
+  `gpui_interop::Guest` is the runner around it: a headless window on a worker thread, host-paced
+  frames, and `Guest::update` for work back in. Its test (`tests/guest_runner.rs`, feature
+  `guest-test`) passes on the Intel HD 520 and the NVIDIA 930M.
 
 ## What remains — and why this issue is open
 
@@ -77,9 +80,10 @@ half becomes are described in
   [`../decisions/guest-thread-probe.md`](../decisions/guest-thread-probe.md),
   [`../decisions/windows-device-loss-probe.md`](../decisions/windows-device-loss-probe.md)); P1 and
   P2 have specifications but no record, and P4 is an inventory.
-- **M6 and M7 are not complete.** The Windows Host Mode bridge is built; the macOS module waits on P2.
-  M7's P7 is measured and the offscreen surface handle is built; the runner around it — executors,
-  cadence, input in — remains, as does P1's reverse transport.
+- **M6 and M7.** The Windows Host Mode bridge is built; the macOS module waits on P2. M7's guest
+  runner is built and measured; what it leaves is the input adapter over `Guest::update`, and P1's
+  reverse transport for the Windows Guest Mode direction — neither gates the runner's threading or
+  its frame hand-off.
 - **The org indexes are updated.** `repositories.md`, `references.md` and `online-resources.md` carry
   all eleven repositories, including `gpui_interop` and `gpui_video`, whose GitHub descriptions,
   topics and homepage are now set (2026-10-18).
@@ -87,5 +91,5 @@ half becomes are described in
 ## What would close it
 
 The upstream PRs merged; `gpui_interop` published and depending on a released `gpui`; P1 and P2
-measured and filed as evidence; and M6's macOS module and M7's guest runner built. The home, the name
-and the crate itself no longer gate closure, and P7 no longer does either.
+measured and filed as evidence; and M6's macOS module and M7's input adapter built. The home, the name,
+the crate itself and P7 no longer gate closure, and neither does the guest runner's frame path.
