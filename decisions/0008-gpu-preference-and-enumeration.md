@@ -79,7 +79,7 @@ The measured topology makes the choice load-bearing rather than cosmetic
 on the dGPU on every memory type, so the producer and the renderer must be the same card; the panel is
 wired to the iGPU; and a `GM108` discrete part has no decoder at all. Today the only control is a
 debugger's environment variable read deep in the renderer, and the chosen GPU is observable only after
-a window exists (`crates/gpui_wgpu/src/wgpu_renderer.rs:1255`, and only inside a `gpu_canvas` through
+a window exists (`crates/gpui_wgpu/src/wgpu_renderer.rs:1257`, and only inside a `gpu_canvas` through
 `Adapter::gpu_id`, [`../issues/0012-gpu-enumeration-and-negotiation.md`](../issues/0012-gpu-enumeration-and-negotiation.md)), so an
 application cannot decide, cannot ask, and cannot change its mind.
 

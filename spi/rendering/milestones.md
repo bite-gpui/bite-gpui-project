@@ -36,9 +36,9 @@ canonical ref carries Path A.
 | the renderer seam: `PlatformRenderer`, the typed `RendererTarget`, the factory, the native hooks | [`renderer-seam.md`](renderer-seam.md) | the canonical ref | PR #4 |
 | the offscreen contract: the three methods ungated, `render_scene` split from `read_pixels`, `PixelBuffer` in place of `image::RgbaImage`, and all three renderers implementing it in the same shape | [`README.md`](README.md) | the canonical ref | `gpui_engine`'s 7 tests, ubuntu CI. Direct3D's "offscreen" is its window's swap chain — it has no headless constructor — so its `render_scene` is "rendered and not presented", which is what its rows already build a hidden window for |
 | the surface vocabulary: `SurfaceSource` (`crates/gpui_engine/src/scene.rs:851`), `DirectXSource` (`:802`) and `PaintSurface` (`:908`) | [`surfaces.md`](surfaces.md) | the canonical ref | the three arms below |
-| `draw_surfaces` on all three renderers (`crates/gpui_wgpu/src/wgpu_renderer.rs:2084`, `crates/gpui_apple/src/metal_renderer.rs:1156`, `crates/gpui_windows/src/directx_renderer.rs:919`) and the `surface()` element (`crates/gpui_authoring/src/elements/surface.rs:61`) | [`surfaces.md`](surfaces.md) | the canonical ref | [`surface-plan.md`](surface-plan.md) W2/W3; [`verification.md`](verification.md) §2 |
+| `draw_surfaces` on all three renderers (`crates/gpui_wgpu/src/wgpu_renderer.rs:2086`, `crates/gpui_apple/src/metal_renderer.rs:1156`, `crates/gpui_windows/src/directx_renderer.rs:919`) and the `surface()` element (`crates/gpui_authoring/src/elements/surface.rs:61`) | [`surfaces.md`](surfaces.md) | the canonical ref | [`surface-plan.md`](surface-plan.md) W2/W3; [`verification.md`](verification.md) §2 |
 | `GpuCanvas` (`crates/gpui_authoring/src/elements/gpu_canvas.rs:135`) and its context (`:37`): `paint_surface` (`:46`), `paint_texture` (`:64`), `device::<R>()` (`:87`) | [`../authoring/gpu-canvas.md`](../authoring/gpu-canvas.md) | the canonical ref | the hand-rolled demos became the element |
-| the Linux dma-buf importer: `DmaBufHandle` (`crates/gpui_engine/src/dmabuf.rs:154`), `DmaBufTextureCache` (`crates/gpui_wgpu/src/dmabuf.rs:785`) and the native-layout guard (`crates/gpui_wgpu/src/dmabuf.rs:256`) | [`zero-copy-import.md`](zero-copy-import.md) | the canonical ref | [`optimus-dmabuf-topologies.md`](../../decisions/optimus-dmabuf-topologies.md); the `surface_dmabuf` suites on both GPUs |
+| the Linux dma-buf importer: `DmaBufHandle` (`crates/gpui_engine/src/dmabuf.rs:175`), `DmaBufTextureCache` (`crates/gpui_wgpu/src/dmabuf.rs:785`) and the native-layout guard (`crates/gpui_wgpu/src/dmabuf.rs:256`) | [`zero-copy-import.md`](zero-copy-import.md) | the canonical ref | [`optimus-dmabuf-topologies.md`](../../decisions/optimus-dmabuf-topologies.md); the `surface_dmabuf` suites on both GPUs |
 | the GPU preference and enumeration: `GpuPreference` (`crates/gpui_platform/src/gpu.rs:219`), `with_gpu_preference` (`crates/gpui_runtime/src/application.rs:94`), the shared `rank` (`crates/gpui_platform/src/gpu.rs:397`), and `enumerate_gpus` / `active_gpu` (`crates/gpui_authoring/src/app.rs:2116`, `:2124`) over `GpuAdapterInfo` (`crates/gpui_platform/src/gpu.rs:314`) | [`zero-copy-import.md`](zero-copy-import.md) and [`upstream/README.md`](upstream/README.md) PR 5 | the canonical ref | [`0008`](../../decisions/0008-gpu-preference-and-enumeration.md); issue [`0010`](../../issues/0010-application-gpu-preference.md) and [`0012`](../../issues/0012-gpu-enumeration-and-negotiation.md) closed; `App::dmabuf_capabilities` is the capability tier |
 | the superseded route: `CustomRenderPrimitive::Texture`, `ImportedTextureHandle` and `paint_imported_texture` | [`foreign-texture.md`](foreign-texture.md) | the canonical ref, superseded by `0005`; the surface path is the public one | `crates/gpui_engine/src/custom_render.rs:41`, `:14`; Path B's `Inline` is unbuilt |
 | the wgpu arm, the offscreen target and the readback | [`foreign-texture.md`](foreign-texture.md) §7 | the canonical ref | 3 rows — the sRGB round trip, the ordering, the device identity — skipped with a logged warning where the machine has no adapter |
@@ -74,9 +74,8 @@ not block anything in §4.
 ## 4. What is next, in order
 
 Reshaped by [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md), which moves
-external pixels onto the existing `PaintSurface` / `surface()`. M1, M2, M3 and M5 are done; M4 and M9
-are unstarted; M6 is built on Windows and Linux but not published; M7 is partial; M8 is done, but for
-the capability tier.
+external pixels onto the existing `PaintSurface` / `surface()`. M1, M2, M3, M5, M8 and M9 are done;
+M4 is unstarted; M6 is built on Windows and Linux but not published; M7 is partial.
 
 **M1 — the producer's reach. Done.** [`producer-reach.md`](producer-reach.md) and
 [`0006`](../../decisions/0006-renderer-owned-device.md) (which supersedes 0004). `GpuRenderer::device`
@@ -129,9 +128,11 @@ by default, and `App::enumerate_gpus` / `active_gpu` with `Custom` naming one ad
 closed: `App::dmabuf_capabilities` reports, per format, the DRM modifiers the renderer's device will
 import. Runtime switching stays refused, as recorded.
 
-**M9 — the surface's transfer function. Open.** Issue
-[`0013`](../../issues/0013-transfer-function-and-srgb-sampling.md): the colour pipeline models a
-matrix and a range but not the transfer function, so an sRGB producer is sampled as linear.
+**M9 — the surface's transfer function. Done.** Issue
+[`0013`](../../issues/0013-transfer-function-and-srgb-sampling.md): the traced answer is that GPUI's
+targets are non-sRGB `_UNORM` holding display-encoded values, so an sRGB source was already correct
+and a **linear** one was the gap. `DmaBufHandle::with_transfer` declares the curve; the shader encodes
+only the linear case.
 
 ## 5. The gates
 

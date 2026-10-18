@@ -32,7 +32,7 @@ prose.
 | [`rendering/surfaces.md`](../rendering/surfaces.md) | the design of record for external pixels — the unification under `PaintSurface`/`surface()`, and host vs. guest modes |
 | [`rendering/surface-plan.md`](../rendering/surface-plan.md) | the implementation plan for `surfaces.md`, and the probes it is gated on |
 | [`rendering/surface-seam.md`](../rendering/surface-seam.md) | the settled rule: the engine owns a *total* pixel description, and a producer resolves every video-domain unknown |
-| [`rendering/zero-copy-import.md`](../rendering/zero-copy-import.md) | the importer as a whole — the semantic/physical split, the zero-VRAM layout guard, the colour pipeline, and the multi-GPU rules (built; the transfer-function axis is 0013) |
+| [`rendering/zero-copy-import.md`](../rendering/zero-copy-import.md) | the importer as a whole — the semantic/physical split, the zero-VRAM layout guard, the colour pipeline including the transfer-function axis, and the multi-GPU rules |
 | [`rendering/producer-reach.md`](../rendering/producer-reach.md) | the other half of Path A — how a producer gets the device — what each platform lends now, and what is left |
 | [`rendering/verification.md`](../rendering/verification.md) | the matrix, and the platform each check needs |
 | [`rendering/milestones.md`](../rendering/milestones.md) | the handoff: what is built, what is next in what order, and the gates a resumer runs |
@@ -46,7 +46,7 @@ prose.
 | [`decisions/0005-external-rendering-unifies-under-surface.md`](../../decisions/0005-external-rendering-unifies-under-surface.md) | decision 0005 — external pixels unify under the existing `PaintSurface`, not a second primitive |
 | [`decisions/0006-renderer-owned-device.md`](../../decisions/0006-renderer-owned-device.md) | decision 0006 — the renderer owns the device and the canvas lends it; supersedes 0004 |
 | [`decisions/0007-dmabuf-importer-native-layout-guard.md`](../../decisions/0007-dmabuf-importer-native-layout-guard.md) | decision 0007 — a linear dma-buf is imported only at a layout the driver itself produces; closes 0011 |
-| [`decisions/0008-gpu-preference-and-enumeration.md`](../../decisions/0008-gpu-preference-and-enumeration.md) | decision 0008 — the GPU is process-wide, chosen once from an application `GpuPreference`; steps 1–2 implemented (the preference and enumeration), capability negotiation remains |
+| [`decisions/0008-gpu-preference-and-enumeration.md`](../../decisions/0008-gpu-preference-and-enumeration.md) | decision 0008 — the GPU is process-wide, chosen once from an application `GpuPreference`; steps 1–3 implemented (the preference, enumeration and the dma-buf import capability) |
 | [`decisions/0009-gpu-preference-platform-backends.md`](../../decisions/0009-gpu-preference-platform-backends.md) | decision 0009 (draft) — how the preference and enumeration reach Windows and macOS: a two-part `GpuId`, DXGI/DXCore and `MTLCopyAllDevices`, and a per-backend default; steps 1–3 in force, neither backend run on hardware yet |
 | [`decisions/windows-path-a-probe.md`](../../decisions/windows-path-a-probe.md) | the first measurement 0002 rests on |
 | [`decisions/shared-surface.md`](../../decisions/shared-surface.md) | the shared-buffer probe that reopens 0002 — Windows adoption and the macOS pool, token and fence measured; macOS adoption open |
@@ -62,17 +62,10 @@ prose.
 | [`issues/0009-windows-probe-vm.md`](../../issues/0009-windows-probe-vm.md) | closed — the probe VM gives the Windows devices CI has not got |
 | [`issues/0011-linear-dmabuf-plane-layouts.md`](../../issues/0011-linear-dmabuf-plane-layouts.md) | closed — a linear dma-buf was sampled at the driver's plane layout, not the handle's |
 | [`issues/0012-gpu-enumeration-and-negotiation.md`](../../issues/0012-gpu-enumeration-and-negotiation.md) | closed — the preference and enumeration landed, and the capability tier reports the dma-buf formats and modifiers the renderer's device imports |
+| [`issues/0013-transfer-function-and-srgb-sampling.md`](../../issues/0013-transfer-function-and-srgb-sampling.md) | closed — the surface path declares a transfer function: sRGB and the video curves pass through, and linear light is encoded for the non-sRGB target |
 
-## Not done — gaps in the built path
-
-These are not new projects: they are holes in the path this milestone built.
-
-| here | is |
-| --- | --- |
-| [`issues/0013-transfer-function-and-srgb-sampling.md`](../../issues/0013-transfer-function-and-srgb-sampling.md) | open — the surface path has no transfer function, so an sRGB producer is sampled as linear |
-
-The GPU selection work is settled and built (`0008`, `0012`), with `0009` carrying the Windows and
-macOS halves. The transfer function (`0013`) is what remains.
+The GPU selection work and the transfer function are settled and built (`0008`, `0012`, `0013`),
+with `0009` carrying the Windows and macOS halves.
 
 ## Follow-on work — in its own repositories
 

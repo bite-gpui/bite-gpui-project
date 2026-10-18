@@ -74,7 +74,7 @@ let context = match ctx_ref.as_mut() {
 };
 ```
 
-(`crates/gpui_wgpu/src/wgpu_renderer.rs:409`-`:414`). So an application that already has a
+(`crates/gpui_wgpu/src/wgpu_renderer.rs:411`-`:414`). So an application that already has a
 device, adapter and queue it wants to use can build the `WgpuContext`, put it in the slot
 from its own factory, and the renderer adopts it;
 `check_compatible_with_surface` is the guard that the adapter still presents to this

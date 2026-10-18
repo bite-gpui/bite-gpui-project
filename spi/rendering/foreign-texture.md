@@ -52,10 +52,10 @@ hooks it replaced; it was drawn by
 **one** renderer rather than two — DirectX's `draw_surfaces` returned an explicit unsupported
 error (`crates/gpui_windows/src/directx_renderer.rs:919`) and wgpu's arm was `{}` under the
 comment that surfaces "are macOS-only for video playback and are not implemented by the WGPU
-renderer" (`crates/gpui_wgpu/src/wgpu_renderer.rs:1979`) — and that one rendered **YCbCr**,
+renderer" (`crates/gpui_wgpu/src/wgpu_renderer.rs:1981`) — and that one rendered **YCbCr**,
 not RGBA: Metal's `surface_fragment` returns `ycbcrToRGBTransform * ycbcr`
 (`crates/gpui_apple/src/shaders.metal:885`), and wgpu's `fs_surface` does the same over two
-planes, `t_y` and `t_cb_cr` (`crates/gpui_wgpu/src/shaders.wgsl:1423`). The surface's Windows and
+planes, `t_y` and `t_cb_cr` (`crates/gpui_wgpu/src/shaders.wgsl:1425`). The surface's Windows and
 Linux arms have since landed ([`surfaces.md`](surfaces.md) §1).
 
 So the proposal **reuses that variant's machinery — its batch, its ordering, its content-mask
@@ -243,7 +243,7 @@ property of the view, and the usage flags must include `TextureUsages::TEXTURE_B
 
 **Not a Windows special case, after all.** The surface format is the renderer's choice, and the
 wgpu renderer picks a non-sRGB one on every platform — `preferred_formats = [Bgra8Unorm,
-Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:537`) — so a Windows window running
+Rgba8Unorm]` (`crates/gpui_wgpu/src/wgpu_renderer.rs:474`) — so a Windows window running
 `WgpuRenderer` shows the same `*_UNORM` surface convention the rule above states, and the default
 `DirectXRenderer`'s `B8G8R8A8_UNORM` target
 (`crates/gpui_windows/src/directx_renderer.rs:34`) is that convention on the renderer that supports

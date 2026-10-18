@@ -80,7 +80,7 @@ highlights. The `gpui_va` suite has both cases (`a_limited_range_surface_convert
 
 ### Matrix — built as a declared axis
 
-`YuvColorSpace { matrix, range }` (`crates/gpui_engine/src/dmabuf.rs:128`, fields at `:98` and `:110`)
+`YuvColorSpace { matrix, range }` (`crates/gpui_engine/src/dmabuf.rs:149`, fields at `:98` and `:110`)
 is carried on the handle and declared with `with_color_space` (`:251`). The luma weights:
 
 | matrix | `Y'` |

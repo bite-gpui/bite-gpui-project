@@ -129,7 +129,7 @@ Two constraints that shape it:
   with* the pass by the engine layer; the renderer has to invoke it from inside the frame
   it owns, which is what the token in §2 is for.
 - **`PrimitiveBatch::Surfaces` is empty today**
-  (`crates/gpui_wgpu/src/wgpu_renderer.rs:1981`), so both paths land in the same place in
+  (`crates/gpui_wgpu/src/wgpu_renderer.rs:1794`), so both paths land in the same place in
   that file.
 
 ## 6. Ordering, and the two cases that are not supported

@@ -8,7 +8,7 @@
 
 The chosen GPU — and anything about what it can do — is observable only *after* a window exists:
 
-- `window.gpu_specs()` (`crates/gpui_wgpu/src/wgpu_renderer.rs:1255`) — a name, a device type and
+- `window.gpu_specs()` (`crates/gpui_wgpu/src/wgpu_renderer.rs:1257`) — a name, a device type and
   driver strings, after the
   window, and nothing about what the device can *do*;
 - `Adapter::gpu_id` (`gpui_interop`'s `adapter.rs`) — inside a `gpu_canvas`,

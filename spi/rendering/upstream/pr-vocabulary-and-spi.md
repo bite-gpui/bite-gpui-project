@@ -39,7 +39,7 @@ a backend each rather than a new surface each.
   to `None` and the backends build the renderer they build today.
 - **The surface vocabulary.** `SurfaceSource` (`crates/gpui_engine/src/scene.rs:851`) and the arms it
   carries — `DirectXSource` (`:802`; a texture the renderer makes a view of, a view the producer made,
-  or a texture shared across devices) and `DmaBufHandle` (`crates/gpui_engine/src/dmabuf.rs:154`) —
+  or a texture shared across devices) and `DmaBufHandle` (`crates/gpui_engine/src/dmabuf.rs:175`) —
   `SurfaceFormat` (`crates/gpui_engine/src/surface_format.rs:114`), and the `PaintSurface` primitive
   (`crates/gpui_engine/src/scene.rs:908`) a surface becomes.
 - **The device door.** `GpuRenderer` (`crates/gpui_engine/src/renderer.rs:36`) is the trait a renderer

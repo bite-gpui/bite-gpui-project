@@ -202,7 +202,7 @@ RFC's "≈16.0 GB/s at 4K120" is its own formula miscounted — `W × H × 4 × 
    `crates/gpui_authoring/src/platform/test/window.rs:529`) and one override
    (`crates/gpui_apple/src/metal_renderer.rs:1944`). The *production* resize path
    already has a name: `WgpuRenderer::update_drawable_size`
-   (`crates/gpui_wgpu/src/wgpu_renderer.rs:1382`). So neither "lift the gate" nor "drop
+   (`crates/gpui_wgpu/src/wgpu_renderer.rs:1384`). So neither "lift the gate" nor "drop
    it" was needed — the contract gets the production name, which is also what makes a
    factory-installed renderer behave exactly as the backend's own.
 4. **Where does the factory live — `Application` or the window?** **The window.**
