@@ -221,7 +221,7 @@ proposal.
 
 ## 7. The commits each PR would carry
 
-§2 reads against the fork's actual history — `bite_v1.24.x`, tip `60930dd831` (no tag on this line yet). Each PR is the fork's commit group replayed as one:
+§2 reads against the fork's actual history — `bite_v1.24.x`, tip `8555dadc98` (tag `bite_1.24.400`). Each PR is the fork's commit group replayed as one:
 
 | PR | fork commits (`bite_v1.24.x`) |
 | --- | --- |

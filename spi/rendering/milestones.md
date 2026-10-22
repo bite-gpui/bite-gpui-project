@@ -3,7 +3,7 @@
 - **Status:** the handoff. What is built, where it is, what is next in what order, and the gates a
   resumer runs. Written 2026-09-29 against `bite_v1.23.1-pre` (`e867ece9f9`), re-pointed onto the
   canonical `bite_v1.24.x` on 2026-10-17 and re-derived again when the branch advanced to
-  `60930dd831` (the 1.24 line has no tag yet); a citation's line numbers move
+  `8555dadc98` (tag `bite_1.24.400`); a citation's line numbers move
   whenever that ref does, and `script/check-citations` prints what each one now points at.
 - **Read with:** the chapter order in [`README.md`](README.md) for the design — this document is the
   state — and [`producer-reach.md`](producer-reach.md), which is the one gap large enough to have a
@@ -13,7 +13,7 @@
 
 | what | where |
 | --- | --- |
-| the canonical ref, and what every citation resolves against | `bite_v1.24.x`, tip `60930dd831` (no tag on this line yet) |
+| the canonical ref, and what every citation resolves against | `bite_v1.24.x`, tip `8555dadc98` (tag `bite_1.24.400`) |
 | what the canonical ref already carries | the layer stack; the surface re-cut (`SurfaceSource`/`PaintSurface`, `surface()`, `draw_surfaces` on all three renderers, `GpuCanvas`); the renderer-owned device door (`0006`); the Linux dma-buf importer with its native-layout guard (`0007`); and the GPU preference and enumeration (`0008`) |
 | the design of record for external pixels | [`surfaces.md`](surfaces.md) — the surface unification [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) decides — and its plan and probes in [`surface-plan.md`](surface-plan.md) |
 | the design of record for external pixels | [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) — the surface unification; its source, the *External Surfaces, Platform Interop, and Headless Rendering in GPUI* design record, is filed with the work |
