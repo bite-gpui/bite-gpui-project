@@ -37,7 +37,7 @@ six implementations:
 | --- | --- | --- | --- |
 | `MetalRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1727` | `crates/gpui_macos/src/window.rs:668` |
 | `MetalHeadlessRenderer` | `gpui_apple` | `crates/gpui_apple/src/metal_renderer.rs:1817` | `crates/gpui_apple/src/metal_renderer.rs:1802` |
-| `WgpuRenderer` | `gpui_wgpu` | `crates/gpui_wgpu/src/wgpu_renderer.rs:3571` | `crates/gpui_linux/src/linux/x11/window.rs:273` |
+| `WgpuRenderer` | `gpui_wgpu` | `crates/gpui_wgpu/src/wgpu_renderer.rs:3573` | `crates/gpui_linux/src/linux/x11/window.rs:273` |
 | `DirectXRenderer` | `gpui_windows` | `crates/gpui_windows/src/directx_renderer.rs:2584` | `crates/gpui_windows/src/window.rs:67` |
 | `HeadlessRenderer` | `gpui_linux` | `crates/gpui_linux/src/linux/headless/window.rs:258` | `crates/gpui_linux/src/linux/headless/window.rs:57` |
 | `TestRenderer` | `gpui_authoring` | `crates/gpui_authoring/src/platform/test/window.rs:593` | `crates/gpui_authoring/src/platform/test/window.rs:25` |
