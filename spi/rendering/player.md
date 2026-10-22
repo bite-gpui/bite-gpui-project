@@ -2,8 +2,8 @@
 
 - **Status:** built and run — the player and its decoder now live in their own repository,
   `bite-gpui/gpui_video` (`crates/gpui_video/examples/player.rs`, and the `gpui_va` crate). It is
-  not on the canonical `bite_v1.23.x`.
-- **Ref:** this work is not on the canonical `bite_v1.23.x`, so the citations below name files
+  not on the canonical `bite_v1.24.x`.
+- **Ref:** this work is not on the canonical `bite_v1.24.x`, so the citations below name files
   and symbols rather than `path:line`. Where a claim is about the canonical ref it says so.
 - **Reads with:** [`surface-seam.md`](surface-seam.md) (the rule the player keeps re-meeting),
   [`frame-formats.md`](frame-formats.md) (the vocabulary the decoder resolves), and

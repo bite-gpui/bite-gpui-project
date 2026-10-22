@@ -2,8 +2,8 @@
 
 - **Status:** the handoff. What is built, where it is, what is next in what order, and the gates a
   resumer runs. Written 2026-09-29 against `bite_v1.23.1-pre` (`e867ece9f9`), re-pointed onto the
-  canonical `bite_v1.23.x` on 2026-10-17 and re-derived again when the branch advanced to
-  `a3b0e8f46c` (the last tag, `bite_1.23.302`, is `5c0bc06887`); a citation's line numbers move
+  canonical `bite_v1.24.x` on 2026-10-17 and re-derived again when the branch advanced to
+  `60930dd831` (the 1.24 line has no tag yet); a citation's line numbers move
   whenever that ref does, and `script/check-citations` prints what each one now points at.
 - **Read with:** the chapter order in [`README.md`](README.md) for the design — this document is the
   state — and [`producer-reach.md`](producer-reach.md), which is the one gap large enough to have a
@@ -13,13 +13,13 @@
 
 | what | where |
 | --- | --- |
-| the canonical ref, and what every citation resolves against | `bite_v1.23.x`, tip `a3b0e8f46c` (the last tag, `bite_1.23.302`, is `5c0bc06887`) |
+| the canonical ref, and what every citation resolves against | `bite_v1.24.x`, tip `60930dd831` (no tag on this line yet) |
 | what the canonical ref already carries | the layer stack; the surface re-cut (`SurfaceSource`/`PaintSurface`, `surface()`, `draw_surfaces` on all three renderers, `GpuCanvas`); the renderer-owned device door (`0006`); the Linux dma-buf importer with its native-layout guard (`0007`); and the GPU preference and enumeration (`0008`) |
 | the design of record for external pixels | [`surfaces.md`](surfaces.md) — the surface unification [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) decides — and its plan and probes in [`surface-plan.md`](surface-plan.md) |
 | the design of record for external pixels | [`0005`](../../decisions/0005-external-rendering-unifies-under-surface.md) — the surface unification; its source, the *External Surfaces, Platform Interop, and Headless Rendering in GPUI* design record, is filed with the work |
 | Path A, whole | on the canonical ref, sixteen commits, PR [#6](https://github.com/bite-gpui/bite-gpui/pull/6) |
 | the downstream crate | [`gpui_interop`](https://github.com/bite-gpui/gpui_interop) — its own repository, the bridge and the input gateway; issue [`0006`](../../issues/0006-surface-interop.md) |
-| the checkout the work is in | the `bite-gpui` clone on `bite_v1.23.x`, beside the `gpui_interop` repository |
+| the checkout the work is in | the `bite-gpui` clone on `bite_v1.24.x`, beside the `gpui_interop` repository |
 | the other repositories, and what each is for | [`../../references.md`](../../references.md) |
 
 `#6` merged as `fcde78d01a`, and it was the whole path: the Direct3D arm was stacked on it
@@ -69,7 +69,7 @@ not block anything in §4.
   without one, which is a decision about what a GPU-less runner is for rather than a wiring change.
   Issue [`0003`](../../issues/0003-scheduled-builds.md) holds the wider version of the question.
 - **The canonical ref's citations move when it advances.** Anything that lands on
-  `bite_v1.23.x` re-derives every citation in this repository.
+  `bite_v1.24.x` re-derives every citation in this repository.
 
 ## 4. What is next, in order
 
@@ -142,7 +142,7 @@ only the linear case.
 
 ## 5. The gates
 
-**`.meta`.** `script/check-citations` — 450 citations, 0 unresolved (2026-10-17). It
+**`.meta`.** `script/check-citations` — 450 citations, 0 unresolved (2026-10-22). It
 resolves against the canonical ref, so a document may not cite `path:line` for a file that exists
 only on a branch: name it, as `producer-reach.md` does for `crates/gpui_engine/src/custom_render.rs`
 and the two `imported_texture.rs` files. `.meta` is its own repository; never `git add` the zed

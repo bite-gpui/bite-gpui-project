@@ -53,7 +53,7 @@ half becomes are described in
   ([`../decisions/windows-device-loss-probe.md`](../decisions/windows-device-loss-probe.md)).
 - **The sequence (question 3) is decided.** Branch first, per
   [`../spi/rendering/upstream/README.md`](../spi/rendering/upstream/README.md): rebase
-  `bite_v1.23.x` onto `v1.24`, `v1.25-pre` and `main`; carry the rendering commits onto a branch off
+  `bite_v1.24.x` onto `v1.24`, `v1.25-pre` and `main`; carry the rendering commits onto a branch off
   `main`; then open the PRs. Nothing is executed yet.
 - **P7 is measured (question 5), and its runner is built.** A worker thread's offscreen frame crosses
   as a shareable surface; the contract gained `SceneRenderer::offscreen_surface_handle`, and the row

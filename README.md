@@ -43,7 +43,7 @@ being committed to any of them.
   record, not decisions themselves.
 - **Every claim about the code cites it** — `crate/file.rs:line`. Line numbers go stale,
   so they are resolved against **one ref**, not against whatever a checkout happens to be
-  on: `bite_v1.23.x`, whose current tip is recorded alongside the work in
+  on: `bite_v1.24.x`, whose current tip is recorded alongside the work in
   [`spi/rendering/milestones.md`](spi/rendering/milestones.md) §1.
   `script/check-citations` prints every citation with the line it currently points at;
   `--drift` narrows to the blank-line cases and reports where the named symbols moved.

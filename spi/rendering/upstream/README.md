@@ -24,7 +24,7 @@
 
 **Logged, not executed.** The plan to turn these PRs into reality:
 
-1. **Rebase `bite_v1.23.x` forward** onto upstream's `v1.24`, then `v1.25-pre`, then `main` — the stack
+1. **Rebase `bite_v1.24.x` forward** onto upstream's `v1.24`, then `v1.25-pre`, then `main` — the stack
    as it is, on the newer bases, so the rendering work sits on a base a PR can target.
 2. **Branch an upstreaming branch off upstream `main`** and carry the rendering commits onto it —
    cherry-pick / migrate / transplant, per commit, the way the stack is built.
@@ -54,7 +54,7 @@ confirms rather than merely permits.
 
 ## 2. The PRs, and what each carries
 
-Six, in the order §4 gives. Each is a capability plus the commits §7 lists, grounded in `bite_v1.23.x`;
+Six, in the order §4 gives. Each is a capability plus the commits §7 lists, grounded in `bite_v1.24.x`;
 the fork's organization — the crate split, type names, caches — is the reference implementation, not the
 ask (§6). Where a commit straddles two of these, step 2's cherry-pick splits it.
 
@@ -221,17 +221,16 @@ proposal.
 
 ## 7. The commits each PR would carry
 
-§2 reads against the fork's actual history — `bite_v1.23.x`, tip `a3b0e8f46c` (the last tag,
-`bite_1.23.302`, is `5c0bc06887`). Each PR is the fork's commit group replayed as one:
+§2 reads against the fork's actual history — `bite_v1.24.x`, tip `60930dd831` (no tag on this line yet). Each PR is the fork's commit group replayed as one:
 
-| PR | fork commits (`bite_v1.23.x`) |
+| PR | fork commits (`bite_v1.24.x`) |
 | --- | --- |
-| **1** vocabulary + SPI/API | `cff2fcddfa`, `9cb292ec77`; `81e8b9376d`; `409ae7ddb5`; `fdfdc9d2e0`; `2acda37306`, `830386d69b`; `342b9c1be0` |
-| **2** Linux | `a3e28b47ad`, `baabca38d5`, `ebc28c5fb9`, `fdfbeb8359`, `eae8044988`, `b90c8051d5`, `2386d06048`, `19f03f96b3`, `0cbb0f7840` |
-| **3** Windows | `bed0cd2ba4`, `b22b082fba`, `1abb3787fa`, `2c3e26e4aa`, `e654076fb2`, `744c237bec`, `05ef5463f0` |
-| **4** Mac/Apple | `2ff6730480`, `a443f7399f`, `5fa4836b08`, `cc5f1805b0`, `180869931e` |
-| **5** GPU selection | `400f655e96` (the preference), `cbc5a3d978` (enumeration), `a3b0e8f46c` (the env read); the capability tier unbuilt |
-| **6** offscreen + headless | `e72542da71`, `3c424fa55d`, `e051519534`, `d321449ef6`, `ed0fe22c4f`; headless partial |
+| **1** vocabulary + SPI/API | `b059d435a2`, `58e977392b`; `1f5d13dce9`; `9e6130229b`; `18c32b3cdb`; `9728ed5f7f`, `e764bf22a9`; `33cfe38492` |
+| **2** Linux | `bb7df13bf9`, `f7c2efc587`, `506dca928b`, `0d4bae8dac`, `1b4b9b3ad3`, `c4a7db780f`, `47648a50d2`, `89aa7eb141`, `a9ed0e062a` |
+| **3** Windows | `e1781ee5e3`, `caf7fbc361`, `a08beddb9c`, `fe93d5679d`, `65c76776e6`, `443e2cfa1d`, `f56518e0b0` |
+| **4** Mac/Apple | `64063005ff`, `b4c00e18c1`, `b51fb5bc9c`, `24539a776a`, `b050fdaacd` |
+| **5** GPU selection | `c8e91e5505` (the preference), `4bcdc4cd2e` (enumeration), `fa3948b822` (the env read); the capability tier unbuilt |
+| **6** offscreen + headless | `41d8853b12`, `ab8fb47d5b`, `950c152a7b`, `438f68c543`, `1feb3d39ed`; headless partial |
 
 The fork's own grouping, which these are cut from — **core** (the renderer seam and the
 imported-texture path), **#2** the surface vocabulary and `GpuCanvas`, **#3** Linux, **#4** Windows,
