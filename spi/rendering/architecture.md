@@ -1,6 +1,6 @@
 # The rendering slice: how pixels produced outside GPUI reach a window
 
-- **Status:** the surface path is on the canonical ref `bite_v1.24.x` — `PaintSurface`,
+- **Status:** the surface path is on the canonical ref `bite_v1.25.x` — `PaintSurface`,
   `draw_surfaces` on all three renderers, `GpuCanvas` and its renderer-owned device door.
   The **remainder** — the `SurfaceProducer` seam, the `gpui_va`/`gpui_video` crates, the player,
   and the downstream `gpui_interop` crate — is built in its own repositories, **`gpui_interop`**
@@ -202,7 +202,7 @@ fork's build against that plan is §7 there.
 ## 7. Merge status
 
 ```
-  bite_v1.24.x                    <- the canonical ref the docs anchor citations to; it carries
+  bite_v1.25.x                    <- the canonical ref the docs anchor citations to; it carries
         |                            the surface path: PaintSurface, draw_surfaces on all three
         |                            renderers, GpuCanvas and its renderer-owned device door
         |
@@ -212,6 +212,6 @@ fork's build against that plan is §7 there.
         v
 ```
 
-The *surface* path is on the canonical `bite_v1.24.x`. The video/interop remainder is built in the
+The *surface* path is on the canonical `bite_v1.25.x`. The video/interop remainder is built in the
 `gpui_interop` and `gpui_video` repositories against that ref; where these docs describe the
 producer seam, the video crates or the player, those live there and are named rather than cited.

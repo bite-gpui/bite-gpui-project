@@ -40,7 +40,7 @@ six implementations:
 | `WgpuRenderer` | `gpui_wgpu` | `crates/gpui_wgpu/src/wgpu_renderer.rs:3571` | `crates/gpui_linux/src/linux/x11/window.rs:273` |
 | `DirectXRenderer` | `gpui_windows` | `crates/gpui_windows/src/directx_renderer.rs:2584` | `crates/gpui_windows/src/window.rs:67` |
 | `HeadlessRenderer` | `gpui_linux` | `crates/gpui_linux/src/linux/headless/window.rs:258` | `crates/gpui_linux/src/linux/headless/window.rs:57` |
-| `TestRenderer` | `gpui_authoring` | `crates/gpui_authoring/src/platform/test/window.rs:585` | `crates/gpui_authoring/src/platform/test/window.rs:25` |
+| `TestRenderer` | `gpui_authoring` | `crates/gpui_authoring/src/platform/test/window.rs:593` | `crates/gpui_authoring/src/platform/test/window.rs:25` |
 
 Two of the platforms do not own their renderer at all any more. `gpui_macos` reaches
 Metal through a re-export (`crates/gpui_macos/src/gpui_macos.rs:18`), and both Linux
@@ -73,7 +73,7 @@ window wants from a renderer is a property any *onscreen* renderer has.
 | `max_texture_size` | x11 `crates/gpui_linux/src/linux/x11/window.rs:801`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:618` |
 | `destroy` | x11 `crates/gpui_linux/src/linux/x11/window.rs:906`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:867`, macos `crates/gpui_macos/src/window.rs:1406` |
 | `device_lost` / `recover` / `needs_redraw` | x11 `crates/gpui_linux/src/linux/x11/window.rs:1783`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:2110`, windows `crates/gpui_windows/src/events.rs:1324` |
-| `gpu_specs` | x11 `crates/gpui_linux/src/linux/x11/window.rs:2007`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:2313`, web `crates/gpui_web/src/window.rs:1007`, windows `crates/gpui_windows/src/window.rs:1073` |
+| `gpu_specs` | x11 `crates/gpui_linux/src/linux/x11/window.rs:2007`, wayland `crates/gpui_linux/src/linux/wayland/window.rs:2407`, web `crates/gpui_web/src/window.rs:1007`, windows `crates/gpui_windows/src/window.rs:1078` |
 | `layer`, `layer_ptr`, `set_presents_with_transaction` | macos `crates/gpui_macos/src/window.rs:3109` (defined `crates/gpui_apple/src/metal_renderer.rs:506`) |
 | `set_background_appearance` | windows `crates/gpui_windows/src/window.rs:1064` |
 

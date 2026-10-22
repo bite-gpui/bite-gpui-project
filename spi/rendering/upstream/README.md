@@ -24,8 +24,9 @@
 
 **Logged, not executed.** The plan to turn these PRs into reality:
 
-1. **Rebase `bite_v1.24.x` forward** onto upstream's `v1.24`, then `v1.25-pre`, then `main` — the stack
-   as it is, on the newer bases, so the rendering work sits on a base a PR can target.
+1. **Rebase the line forward** onto upstream's `v1.25` (done — that is `bite_v1.25.x`) and then
+   `main` — the stack as it is, on the newer bases, so the rendering work sits on a base a PR can
+   target.
 2. **Branch an upstreaming branch off upstream `main`** and carry the rendering commits onto it —
    cherry-pick / migrate / transplant, per commit, the way the stack is built.
 3. **Run the tests, refine the comments, open the PRs.**
@@ -54,7 +55,7 @@ confirms rather than merely permits.
 
 ## 2. The PRs, and what each carries
 
-Six, in the order §4 gives. Each is a capability plus the commits §7 lists, grounded in `bite_v1.24.x`;
+Six, in the order §4 gives. Each is a capability plus the commits §7 lists, grounded in `bite_v1.25.x`;
 the fork's organization — the crate split, type names, caches — is the reference implementation, not the
 ask (§6). Where a commit straddles two of these, step 2's cherry-pick splits it.
 
@@ -70,9 +71,9 @@ hooks, so they go.
 `CustomRenderPrimitive` route
 ([`0005`](../../../decisions/0005-external-rendering-unifies-under-surface.md)) is not an ask.
 
-**Commits:** `cff2fcddfa` + `9cb292ec77` (the seam and its test), `81e8b9376d` (the token),
-`409ae7ddb5` (the vocabulary), `fdfdc9d2e0` (the device), `2acda37306` + `830386d69b` (`GpuCanvas`),
-`342b9c1be0` (the facade tokens).
+**Commits:** `29bba3424c` + `0a26fe14c5` (the seam and its test), `c916d1f4dc` (the token),
+`493592a555` (the vocabulary), `9fee3ce8d8` (the device), `bcaf568da8` + `2d69f7691c` (`GpuCanvas`),
+`cafaa0b629` (the facade tokens).
 
 **Body:** [`pr-vocabulary-and-spi.md`](pr-vocabulary-and-spi.md).
 
@@ -82,8 +83,8 @@ hooks, so they go.
 the two-plane NV12 sample); the wgpu arm's `draw_surfaces` and its imported-texture fragment; the Linux
 facade re-exports and the wgpu headless renderer.
 
-**Commits:** `a3e28b47ad`, `baabca38d5`, `ebc28c5fb9`, `fdfbeb8359`, `eae8044988`, `b90c8051d5`,
-`2386d06048`, `19f03f96b3`, `0cbb0f7840`.
+**Commits:** `4133514795`, `9d5ea87403`, `6813500537`, `f2771c04f2`, `dd2727c0dd`, `58cacb9784`,
+`30c527f632`, `9429812ca1`, `72b3661059`.
 
 ### PR 3 — Windows: D3D11 textures and D3D12 shared buffers
 
@@ -94,8 +95,8 @@ and the renderer-owned **consumer** half of a Direct3D 12 / `wgpu` shared NT han
 (`DirectXSource::Shared`), cached per handle — so a producer on a second device hands over a handle and
 nothing device-specific. A bad or mismatched view drops the frame, never panics.
 
-**Commits:** `bed0cd2ba4`, `b22b082fba`, `1abb3787fa`, `2c3e26e4aa`, `e654076fb2`, `744c237bec` (the arm
-and the shared-texture consumer), `05ef5463f0` (the CI row).
+**Commits:** `5c29591591`, `c2955d8036`, `a4fefffb6f`, `9609e99bcc`, `4e4415fd60`, `d5d9ba0ee0` (the arm
+and the shared-texture consumer), `b23b6d1d48` (the CI row).
 
 **Note — the fork diverges from upstream's producer route.** The ask names
 `DirectXWindowExt::d3d11_device()`; the fork replaced it with `GpuRenderer` plus
@@ -115,7 +116,7 @@ same-device arm; the `Shared` half is the capability §6 describes.
 **Adds:** the macOS window through the renderer; the Metal arm taking `SurfaceSource::CoreVideo`; the
 `MetalTextureExt` producer half, with the exact sRGB round trip; the macOS backend's device.
 
-**Commits:** `2ff6730480`, `a443f7399f`, `5fa4836b08`, `cc5f1805b0`, `180869931e`.
+**Commits:** `1b647e8a22`, `711698e134`, `f3cc13a9a9`, `56c0c9c392`, `2e9468661e`.
 
 ### PR 5 — GPU enumeration and selection (selection and enumeration built, capability not)
 
@@ -126,7 +127,7 @@ and `GpuAdapterInfo`, with `Custom` naming one adapter. **Capability is not:** t
 what a device will import or export, beyond `GpuSpecs` *reporting*
 (`crates/gpui_platform/src/gpu.rs`). A separate PR for the API, and one per platform.
 
-**Commits:** `400f655e96` (the preference), `cbc5a3d978` (enumeration), `a3b0e8f46c` (the environment
+**Commits:** `36523f8a52` (the preference), `95204431ac` (enumeration), `b4a88e5fee` (the environment
 read moves to the platform).
 
 ### PR 6 — offscreen and headless (partial)
@@ -140,8 +141,8 @@ on some platforms (the Linux headless window, the wgpu and Metal headless render
 the per-platform scheduling and the selection half are not. A separate PR for the API, and one per
 platform.
 
-**Commits:** `e72542da71` (the contract), `3c424fa55d` + `e051519534` (Direct3D), `d321449ef6` (Metal),
-`ed0fe22c4f` (the test renderer's readback); the headless constructors are partial.
+**Commits:** `f9d6d66583` (the contract), `f97ecc828e` + `503649acd0` (Direct3D), `d1d96a2ab9` (Metal),
+`7cd9a0f6a6` (the test renderer's readback); the headless constructors are partial.
 
 **Body:** [`pr-offscreen.md`](pr-offscreen.md).
 
@@ -221,16 +222,16 @@ proposal.
 
 ## 7. The commits each PR would carry
 
-§2 reads against the fork's actual history — `bite_v1.24.x`, tip `8555dadc98` (tag `bite_1.24.400`). Each PR is the fork's commit group replayed as one:
+§2 reads against the fork's actual history — `bite_v1.25.x`, tip `f02141ce91` (no tag on this line yet). Each PR is the fork's commit group replayed as one:
 
-| PR | fork commits (`bite_v1.24.x`) |
+| PR | fork commits (`bite_v1.25.x`) |
 | --- | --- |
-| **1** vocabulary + SPI/API | `b059d435a2`, `58e977392b`; `1f5d13dce9`; `9e6130229b`; `18c32b3cdb`; `9728ed5f7f`, `e764bf22a9`; `33cfe38492` |
-| **2** Linux | `bb7df13bf9`, `f7c2efc587`, `506dca928b`, `0d4bae8dac`, `1b4b9b3ad3`, `c4a7db780f`, `47648a50d2`, `89aa7eb141`, `a9ed0e062a` |
-| **3** Windows | `e1781ee5e3`, `caf7fbc361`, `a08beddb9c`, `fe93d5679d`, `65c76776e6`, `443e2cfa1d`, `f56518e0b0` |
-| **4** Mac/Apple | `64063005ff`, `b4c00e18c1`, `b51fb5bc9c`, `24539a776a`, `b050fdaacd` |
-| **5** GPU selection | `c8e91e5505` (the preference), `4bcdc4cd2e` (enumeration), `fa3948b822` (the env read); the capability tier unbuilt |
-| **6** offscreen + headless | `41d8853b12`, `ab8fb47d5b`, `950c152a7b`, `438f68c543`, `1feb3d39ed`; headless partial |
+| **1** vocabulary + SPI/API | `29bba3424c`, `0a26fe14c5`; `c916d1f4dc`; `493592a555`; `9fee3ce8d8`; `bcaf568da8`, `2d69f7691c`; `cafaa0b629` |
+| **2** Linux | `4133514795`, `9d5ea87403`, `6813500537`, `f2771c04f2`, `dd2727c0dd`, `58cacb9784`, `30c527f632`, `9429812ca1`, `72b3661059` |
+| **3** Windows | `5c29591591`, `c2955d8036`, `a4fefffb6f`, `9609e99bcc`, `4e4415fd60`, `d5d9ba0ee0`, `b23b6d1d48` |
+| **4** Mac/Apple | `1b647e8a22`, `711698e134`, `f3cc13a9a9`, `56c0c9c392`, `2e9468661e` |
+| **5** GPU selection | `36523f8a52` (the preference), `95204431ac` (enumeration), `b4a88e5fee` (the env read); the capability tier unbuilt |
+| **6** offscreen + headless | `f9d6d66583`, `f97ecc828e`, `503649acd0`, `d1d96a2ab9`, `7cd9a0f6a6`; headless partial |
 
 The fork's own grouping, which these are cut from — **core** (the renderer seam and the
 imported-texture path), **#2** the surface vocabulary and `GpuCanvas`, **#3** Linux, **#4** Windows,

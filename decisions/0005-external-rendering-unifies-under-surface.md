@@ -22,7 +22,7 @@ no second scene primitive.** Five consequences:
 
 1. **One primitive, and it already exists.** `Primitive::Surface(PaintSurface)`
    (`crates/gpui_engine/src/scene.rs:244`, struct at `:908`), the `Surface` element and `surface()`
-   (`crates/gpui_authoring/src/elements/surface.rs:21`, `:61`), `SurfaceSource`
+   (`crates/gpui_authoring/src/elements/surface.rs:28`, `:68`), `SurfaceSource`
    (`crates/gpui_engine/src/scene.rs:851`), `GpuCanvasContext::paint_surface` (`crates/gpui_authoring/src/elements/gpu_canvas.rs:46`) and each
    renderer's `draw_surfaces` (`crates/gpui_windows/src/directx_renderer.rs:919`) are the seam. They
    are **extended, not replaced**. The element was macOS-only when this was decided, because
@@ -56,7 +56,7 @@ new entry point calls.
 | --- | --- | --- |
 | `PixelBuffer`, and `render_scene` split from `read_pixels` | `crates/gpui_engine/src/renderer.rs:57`, `:140`, `:148`, `:153` | **kept verbatim** — this is the design's upstream PR 6, already built |
 | `CustomRenderPrimitive::to_quad_record` — the geometry, content-mask and corner-SDF encoding into the quad record | `crates/gpui_engine/src/custom_render.rs:101` | **kept** — it is the record the surface fragment reads, so the HLSL/SDF path survives |
-| the Direct3D arm: SRV creation, the imported-texture sampler, the per-primitive draw | `crates/gpui_windows/src/directx_renderer.rs:1126` | **retargeted** into `draw_surfaces` (`:918`), the stub it replaces |
+| the Direct3D arm: SRV creation, the imported-texture sampler, the per-primitive draw | `crates/gpui_windows/src/directx_renderer.rs:919` | **retargeted** into `draw_surfaces` (`:918`), the stub it replaces |
 | `GpuRenderer::device` — the renderer-owned device door | `crates/gpui_engine/src/renderer.rs:36`, `:42` | **retargeted** — `0006` replaces 0004's window-lent `device_any`; the canvas lends it as `GpuCanvasContext::device::<R>` (`crates/gpui_authoring/src/elements/gpu_canvas.rs:87`) |
 | `ImportedTextureExt` / `DirectXTextureExt` / `MetalTextureExt` (token builders on a texture) | `crates/gpui_windows/src/imported_texture.rs:43`, re-exported at `crates/gpui/src/platform_entry.rs:39` | **retargeted** into `From<…> for SurfaceSource` converters; the format/usage validation they do becomes the converter's |
 | `CustomRenderPrimitive::Texture`, `ImportedTextureHandle`, `Primitive::Custom`, `scene.custom`, `paint_imported_texture`, `painted_imported_textures` | `crates/gpui_engine/src/custom_render.rs:41`, `:14`; `crates/gpui_engine/src/scene.rs:245`; `crates/gpui_authoring/src/window.rs:5054`, `:3085` | **superseded** — the surface path replaces them; `CustomRenderPrimitive` keeps only its `Inline` (Path B) arm |

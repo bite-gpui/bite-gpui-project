@@ -27,7 +27,7 @@ kind of error that is only caught much later.
 
 - **Every claim about the code cites it, as `crate/file.rs:line`.** No assertion
   about behaviour without a `path:line` a reader can check in seconds.
-- **One canonical ref.** All line numbers resolve against `bite_v1.24.x`, not
+- **One canonical ref.** All line numbers resolve against `bite_v1.25.x`, not
   against whatever a checkout happens to be on. Changing that ref invalidates every
   citation and means a full re-derivation pass.
 - **Do not restate a fact specified once elsewhere.** Naming, versions and the crate
@@ -58,7 +58,7 @@ Three facts determine whether it works, and each is easy to get wrong:
    beside each other (`repositories.md` names them).
 
 2. **The canonical ref is a remote-tracking branch in a fresh clone.** The script now
-   falls back from the bare name `bite_v1.24.x` to `origin/bite_v1.24.x`, so a
+   falls back from the bare name `bite_v1.25.x` to `origin/bite_v1.25.x`, so a
    fresh clone resolves without a local branch. Do not "fix" this by removing the
    fallback.
 

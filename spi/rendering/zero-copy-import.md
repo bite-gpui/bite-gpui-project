@@ -1,6 +1,6 @@
 # Zero-copy import: the producer, the buffer, and the guard
 
-- **Status:** built and measured on `bite_v1.24.x`. The **transfer-function** axis is open
+- **Status:** built and measured on `bite_v1.25.x`. The **transfer-function** axis is open
   ([`0013`](../../issues/0013-transfer-function-and-srgb-sampling.md)); everything else below is
   implemented and exercised on an Intel HD 520 and an NVIDIA 930M.
 - **Companions:** [`surfaces.md`](surfaces.md) — the unified path and the OS trinity;

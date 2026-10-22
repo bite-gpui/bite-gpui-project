@@ -9,7 +9,7 @@ gives it — is a window-level pointer lock, and that lies below the seam the ga
 would sit beside; [`../rendering/surfaces.md`](../rendering/surfaces.md) §4, host and guest modes;
 [`input-policy-seam.md`](input-policy-seam.md), the other parked input document.
 
-**Line references** are to the canonical ref `bite_v1.24.x` (the engine sources,
+**Line references** are to the canonical ref `bite_v1.25.x` (the engine sources,
 under `crates/gpui_platform`, `crates/gpui_types`, `crates/gpui_authoring`), and to the
 `gpui_interop` repository for the crate side.
 
